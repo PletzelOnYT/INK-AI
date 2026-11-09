@@ -9,6 +9,7 @@ on:
       - "models/ink-glyph-completion-v1.json"
       - "models/ink-glyph-completion-v2.json"
       - "models/ink-cnn-v2.json"
+      - "models/ink-cnn-v3.json"
       - "models/ink-stroke-sequence-v1.json"
       - ".github/workflows/verify.yml"
   workflow_dispatch:
@@ -21,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify Python training code compiles
-        run: python3 -m py_compile src/train.py src/train_stroke_sequence.py
+        run: python3 -m py_compile src/train.py src/train_stroke_sequence.py src/train_recognition_v3.py
       - name: Extract and syntax-check the embedded JavaScript and worker
         run: |
           python3 - <<'PY'
