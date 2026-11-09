@@ -131,17 +131,45 @@ function sample(output,random,variation){
  const stop=sig(output[5*K+1])>0.56;
  return {dx,dy,draw,stop};
 }
+// Class likelihood of the user's *real ordered prefix*, evaluated by the
+// generative model itself; no retrieved reference images or templates.
+function likelihood(output,actual){
+ const k=kCount,dx=actual[0],dy=actual[1];
+ let maxLogit=-Infinity;
+ for(let i=0;i<k;i++)maxLogit=Math.max(maxLogit,output[i]);
+ let norm=0;
+ for(let i=0;i<k;i++)norm+=Math.exp(output[i]-maxLogit);
+ let maxDensity=-Infinity;
+ const values=[];
+ for(let i=0;i<k;i++){
+  const sx=Math.max(-5,Math.min(1,output[3*k+i]));
+  const sy=Math.max(-5,Math.min(1,output[4*k+i]));
+  const mx=output[k+i],my=output[2*k+i];
+  const z=-Math.log(2*Math.PI)-sx-sy-
+    .5*((dx-mx)*(dx-mx)*Math.exp(-2*sx)+
+       (dy-my)*(dy-my)*Math.exp(-2*sy));
+  const joint=output[i]-maxLogit-Math.log(norm)+z;
+  values.push(joint);maxDensity=Math.max(maxDensity,joint);
+ }
+ let sum=0;for(const v of values)sum+=Math.exp(v-maxDensity);
+ const draw=sig(output[5*k]),actualDraw=actual[2]>0.5;
+ return maxDensity+Math.log(sum)+
+   Math.log(Math.max(1e-5,actualDraw?draw:1-draw));
+}
 function completeGlyph(prefix,label,seed,variation){
  const index=characters.indexOf(label);
  if(index<0)throw Error("Unknown handwritten glyph: "+label);
  const charEmbedding=embedding.subarray(index*embedSize,(index+1)*embedSize);
  const states=layers.map(()=>new Float32Array(hiddenSize));
- let last=null,x=0,y=0;
- for(const token of prefix){
+ let last=null,x=0,y=0,score=0;
+ for(let j=0;j<prefix.length;j++){
+  const token=prefix[j];
   if(token.length!==3||!token.every(Number.isFinite))throw Error("Invalid pen prefix");
+  if(j>0)score+=likelihood(last,token);
   x+=token[0];y+=token[1];
   last=step(token,states,charEmbedding);
  }
+ score/=Math.max(1,prefix.length-1);
  const rand=rng(hash(seed,label,variation?19:0));
  let active=[[x,y]],paths=[],moves=0,penUps=0;
  for(let j=0;j<maxSteps;j++){
@@ -167,7 +195,7 @@ function completeGlyph(prefix,label,seed,variation){
  }
  if(active.length>1)paths.push(active);
  // Never emit empty previews or arbitrary shapes disconnected from input.
- return {paths,moves,penUps};
+ return {paths,moves,penUps,prefixScore:score};
 }
 self.onmessage=e=>{
  const m=e.data;
@@ -213,10 +241,12 @@ self.onmessage=e=>{
     const result=completeGlyph(prefix,choice.char,serial*317+j*571,false);
     if(result.moves>2&&result.paths.length)results.push({
       label:choice.char,paths:result.paths,
-      penUps:result.penUps,confidence:choice.confidence||0
+      penUps:result.penUps,confidence:choice.confidence||0,
+      score:result.prefixScore+0.25*Math.log((choice.confidence||0)+.03)
     });
     j++;
    }
+   results.sort((a,b)=>b.score-a.score);
    self.postMessage({type:"completion",serial,epoch,
        alternatives:results,neural:true,engine:"stroke-gru-mdn"});
   }else throw Error("Unknown neural generation command");
