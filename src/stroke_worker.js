@@ -171,6 +171,11 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
   if(endY<expectedBottom)score-=11+18*(expectedBottom-endY);
   else score+=Math.min(.6,(endY-startY)*2.5);
   if(label==="h"&&endX<startX-.035)score-=2;
+  // Do not let an h shoulder turn into a long horizontal appendage.
+  // This critic never invents geometry: it only rejects a neural rollout
+  // that extends far beyond the rightmost ink the writer has already made.
+  const excess=Math.max(0,endX-(maxX+Math.max(.17,(maxX-minX)*.55)));
+  score-=Math.min(9,excess*14);
  }
  if(label==="h"&&tall&&arcStarted){
   if(down<.065)score-=10;
@@ -209,6 +214,7 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
  // the Gaussian noise and makes the assistant flicker/jitter.
  const rand=rng(hash(seed,label,variation?19:0));
  let active=[[x,y]],paths=[],moves=0,penUps=0,stopReached=false;
+ let logSum=0,logCount=0,bestEarly=null;
  for(let j=0;j<limitSteps;j++){
   if(!last)break;
   const predicted=sample(last,rand,variation);
@@ -218,6 +224,11 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
   const length=Math.hypot(dx,dy);
   if(draw&&length>.12){dx*=.12/length;dy*=.12/length}
   if(!draw&&length>.8){dx*=.8/length;dy*=.8/length}
+  // Measure how likely EACH proposed pen movement is under the learned
+  // conditional trajectory distribution. Previously every random rollout
+  // inherited the identical likelihood score of the user's input prefix.
+  const logp=likelihood(last,[dx,dy,draw?1:0]);
+  if(Number.isFinite(logp)){logSum+=Math.max(-18,Math.min(12,logp));logCount++}
   const nx=x+dx,ny=y+dy;
   if(nx<-.08||nx>1.08||ny<-.08||ny>1.08)break;
   x=nx;y=ny;
@@ -228,12 +239,39 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
    active=[[x,y]];penUps++;
   }
   last=step([dx,dy,draw?1:0],states,charEmbedding);
+  // An MDN can keep sampling long after the useful stroke is finished.
+  // Evaluate prefixes of the REAL generated vectors and retain a high-
+  // quality natural stopping point; never extrapolate a procedural line.
+  if(j>=5&&j%2===1&&moves>=4&&active.length>=3){
+   const visible=[...paths,active];
+   const check=continuationQuality(prefix,visible,label,penUps,false);
+   if(check.length>=.055&&check.score>-.9){
+    const evidence=logCount?logSum/logCount:0;
+    const selection=check.score+.06*Math.min(check.length,.5);
+    if(!bestEarly||selection>bestEarly.selection){
+     bestEarly={paths:visible.map(p=>p.map(q=>q.slice())),
+       moves,penUps,quality:check,
+       rolloutLogLikelihood:evidence,selection,stopReached:false};
+    }
+   }
+  }
   if(predicted.stop&&j>=4){stopReached=true;break}
  }
  if(active.length>1)paths.push(active);
+ const fullQuality=continuationQuality(prefix,paths,label,penUps,stopReached);
+ const avgLog=logCount?logSum/logCount:-18;
+ // Prefer a sufficiently better learned stopping point to an overlong tail.
+ // Keep the full rollout when its quality is comparable.
+ const truncated=bestEarly&&bestEarly.selection>fullQuality.score+1.0;
+ const selected=truncated?bestEarly:null;
  // Never emit empty previews or arbitrary shapes disconnected from input.
- return {paths,moves,penUps,prefixScore:score,stopReached,
-  quality:continuationQuality(prefix,paths,label,penUps,stopReached)};
+ return {paths:selected?selected.paths:paths,
+  moves:selected?selected.moves:moves,
+  penUps:selected?selected.penUps:penUps,prefixScore:score,
+  stopReached:selected?false:stopReached,
+  quality:selected?selected.quality:fullQuality,
+  rolloutLogLikelihood:selected?selected.rolloutLogLikelihood:avgLog,
+  truncated:Boolean(truncated)};
 }
 // Keep two independently trained recurrent nets in the SAME worker.
 // A prefix-fine-tuned checkpoint can improve average free-roll error yet
@@ -300,7 +338,12 @@ function generateCandidates(m,isFallback=false){
      const result=completeGlyph(prefix,choice.char,
        gestureSeed+j*571+attempt*997,attempt>0,steps);
      if(result.moves<2||!result.paths.length)continue;
+     // Geometry acceptance and neural probability are independent gates.
+     // A high likelihood must not rescue a physically invalid continuation.
+     if(result.quality.score<-.9)continue;
+     const consistency=Math.max(-6,Math.min(9,result.rolloutLogLikelihood));
      const value=result.quality.score+
+       .18*consistency+
        Math.min(1.8,result.prefixScore*.04)+
        .17*Math.log((choice.confidence||0)+.03);
      if(value<-.9)continue;
@@ -308,7 +351,9 @@ function generateCandidates(m,isFallback=false){
        label:choice.char,paths:result.paths,
        penUps:result.penUps,confidence:choice.confidence||0,
        score:value,reason:result.quality.reason,
-       quality:result.quality.score,variant:attempt
+       quality:result.quality.score,variant:attempt,
+       rolloutLogLikelihood:result.rolloutLogLikelihood,
+       truncated:result.truncated
      });
     }
     candidates.sort((a,b)=>b.score-a.score);
