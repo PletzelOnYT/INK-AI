@@ -25,8 +25,6 @@ window.__inkAcceptedCorrections=0;
 window.__inkCorrectionConfidence=0;
 window.__inkContextWord="";
 window.__inkAutocorrectReady=true;
-const correctionStatus=document.getElementById("correctionStatus");
-const acceptCorrectionButton=document.getElementById("acceptCorrection");
 let glyphEpoch=0,correctionChoices=[],correctionIndex=0,correctionBox=null;
 let suggestionVersion=0;
 
@@ -37,10 +35,6 @@ function clearGhost(){
  window.__inkGhostPoints=0;window.__inkGhostSegments=0;
  window.__inkAssistLabel="";window.__inkGhostSource="none";
  window.__inkSuggestionChoices=[];window.__inkCorrectionConfidence=0;
- acceptCorrectionButton.disabled=true;
- correctionStatus.textContent=assistEnabled?
-  "Write a letter to see a complete correction. Tab changes the suggestion.":
-  "Turn on Assist to correct whole letters. G accepts a suggestion.";
 }
 function queueGhost(){
  // Predictions use the whole written character after pointerup; never infer
@@ -108,9 +102,13 @@ function drawCorrectionGlyph(context,char,box,preview){
  const [x0,y0,x1,y1]=box,w=x1-x0+1,h=y1-y0+1;
  const cx=(x0+x1)/2,cy=(y0+y1)/2;
  context.save();
- context.fillStyle=preview?"rgba(255,255,255,.93)":"#fff";
- context.fillRect(x0-4,y0-4,w+8,h+8);
- context.fillStyle=preview?"rgba(28,89,205,.77)":"#111";
+ // Keep the original ink visible behind a soft gray, translucent preview.
+ // Only an accepted correction clears the old glyph and draws permanent ink.
+ if(!preview){
+  context.fillStyle="#fff";
+  context.fillRect(x0-4,y0-4,w+8,h+8);
+ }
+ context.fillStyle=preview?"rgba(72,72,72,0.28)":"#111";
  const fontSize=Math.max(25,Math.min(220,h*1.27));
  context.font="600 "+fontSize+"px Arial, Helvetica, sans-serif";
  context.textBaseline="middle";context.textAlign="center";
@@ -139,12 +137,6 @@ function setGhostChoice(index){
  const option=correctionChoices[correctionIndex];
  ghostCandidate={...option,box:correctionBox.slice()};
  renderGhost();
- correctionStatus.textContent="Suggested: "+option.label+
-  " · "+Math.round(option.confidence*100)+"% recognition confidence"+
-  (option.wordMatch&&option.contextWord.length>=3?
-    " · English word: "+option.contextWord:"")+
-  " · Tab alternatives · G to accept";
- acceptCorrectionButton.disabled=false;
 }
 function offerCorrection(regions,predictions,recognized){
  if(!assistEnabled||pointer!==null||tool!=="pen"){clearGhost();return}
@@ -190,7 +182,6 @@ function acceptGhost(){
  window.__inkAcceptedCorrections++;
  clearGhost();paint();schedule(65);
 }
-acceptCorrectionButton.addEventListener("click",acceptGhost);
 window.addEventListener("keydown",e=>{
  if(e.key==="Tab"&&assistEnabled&&correctionChoices.length>1){
   e.preventDefault();setGhostChoice(correctionIndex+1);return;

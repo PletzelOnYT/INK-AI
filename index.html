@@ -28,11 +28,6 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 
 
 #pad{background:#fff;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
-.correction-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:42px;padding:9px 16px;border:1px solid #303030;border-radius:11px;background:#171717;color:#c7c7c7;font-size:14px}
-.correction-bar button{flex-shrink:0;border:1px solid #5b73a8;background:#274b96;color:#fff;border-radius:9px;padding:9px 16px;font:inherit;cursor:pointer}
-.correction-bar button:disabled{opacity:.35;cursor:default}
-.correction-bar kbd{font:inherit;font-weight:700}
-@media(max-width:650px){.correction-bar{align-items:flex-start;flex-direction:column;gap:9px}}
 #guess{min-height:95px;padding:18px 20px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;color:#fff;font-size:clamp(24px,3vw,43px);font-weight:570;line-height:1.25;letter-spacing:-.02em}
 #guess[data-muted="true"]{color:#8e8e8e;font-size:clamp(15px,2vw,23px);font-weight:400;letter-spacing:0}
 @media(max-width:650px){main{padding:10px 0;gap:8px;justify-content:start}#pad{border-radius:0}#guess{min-height:80px}}
@@ -43,15 +38,11 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
   <div class="tools" role="toolbar" aria-label="Drawing tools">
     <button id="pen" class="tool" type="button" aria-label="Pen" title="Pen" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 4 4 4-12 12H4v-4L16 4Z"/><path d="m14 6 4 4"/></svg></button>
     <button id="eraser" class="tool" type="button" aria-label="Eraser" title="Eraser" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.8 13.3-7.4 7.4H7.1l-3.6-3.6a2 2 0 0 1 0-2.8L14.2 3.6a2 2 0 0 1 2.8 0l3.8 3.8a2 2 0 0 1 0 2.8Z"/><path d="m9.5 8.3 7.2 7.2M13.4 20.7H21"/></svg></button>
-    <button id="assist" class="tool" type="button" aria-label="Full character auto-correct" title="Recognize and correct entire handwritten letters · G accepts" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/><path d="m19 17 .8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"/></svg></button>
+    <button id="assist" class="tool" type="button" aria-label="Full character auto-correct" title="Auto-correct handwritten letters" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/><path d="m19 17 .8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"/></svg></button>
   </div>
   <div class="board">
     <canvas id="pad" width="1200" height="550" data-tool="pen" aria-label="Write or draw here"></canvas>
     <canvas id="ghost" width="1200" height="550" aria-hidden="true"></canvas>
-  </div>
-  <div class="correction-bar" aria-live="polite">
-    <span id="correctionStatus">Turn on Assist to correct whole letters. G accepts a suggestion.</span>
-    <button id="acceptCorrection" type="button" disabled>Accept <kbd>G</kbd></button>
   </div>
   <div id="guess" data-muted="true" aria-live="polite">Loading AI…</div>
 </main>
@@ -10120,8 +10111,6 @@ window.__inkAcceptedCorrections=0;
 window.__inkCorrectionConfidence=0;
 window.__inkContextWord="";
 window.__inkAutocorrectReady=true;
-const correctionStatus=document.getElementById("correctionStatus");
-const acceptCorrectionButton=document.getElementById("acceptCorrection");
 let glyphEpoch=0,correctionChoices=[],correctionIndex=0,correctionBox=null;
 let suggestionVersion=0;
 
@@ -10132,10 +10121,6 @@ function clearGhost(){
  window.__inkGhostPoints=0;window.__inkGhostSegments=0;
  window.__inkAssistLabel="";window.__inkGhostSource="none";
  window.__inkSuggestionChoices=[];window.__inkCorrectionConfidence=0;
- acceptCorrectionButton.disabled=true;
- correctionStatus.textContent=assistEnabled?
-  "Write a letter to see a complete correction. Tab changes the suggestion.":
-  "Turn on Assist to correct whole letters. G accepts a suggestion.";
 }
 function queueGhost(){
  // Predictions use the whole written character after pointerup; never infer
@@ -10203,9 +10188,13 @@ function drawCorrectionGlyph(context,char,box,preview){
  const [x0,y0,x1,y1]=box,w=x1-x0+1,h=y1-y0+1;
  const cx=(x0+x1)/2,cy=(y0+y1)/2;
  context.save();
- context.fillStyle=preview?"rgba(255,255,255,.93)":"#fff";
- context.fillRect(x0-4,y0-4,w+8,h+8);
- context.fillStyle=preview?"rgba(28,89,205,.77)":"#111";
+ // Keep the original ink visible behind a soft gray, translucent preview.
+ // Only an accepted correction clears the old glyph and draws permanent ink.
+ if(!preview){
+  context.fillStyle="#fff";
+  context.fillRect(x0-4,y0-4,w+8,h+8);
+ }
+ context.fillStyle=preview?"rgba(72,72,72,0.28)":"#111";
  const fontSize=Math.max(25,Math.min(220,h*1.27));
  context.font="600 "+fontSize+"px Arial, Helvetica, sans-serif";
  context.textBaseline="middle";context.textAlign="center";
@@ -10234,12 +10223,6 @@ function setGhostChoice(index){
  const option=correctionChoices[correctionIndex];
  ghostCandidate={...option,box:correctionBox.slice()};
  renderGhost();
- correctionStatus.textContent="Suggested: "+option.label+
-  " · "+Math.round(option.confidence*100)+"% recognition confidence"+
-  (option.wordMatch&&option.contextWord.length>=3?
-    " · English word: "+option.contextWord:"")+
-  " · Tab alternatives · G to accept";
- acceptCorrectionButton.disabled=false;
 }
 function offerCorrection(regions,predictions,recognized){
  if(!assistEnabled||pointer!==null||tool!=="pen"){clearGhost();return}
@@ -10285,7 +10268,6 @@ function acceptGhost(){
  window.__inkAcceptedCorrections++;
  clearGhost();paint();schedule(65);
 }
-acceptCorrectionButton.addEventListener("click",acceptGhost);
 window.addEventListener("keydown",e=>{
  if(e.key==="Tab"&&assistEnabled&&correctionChoices.length>1){
   e.preventDefault();setGhostChoice(correctionIndex+1);return;
@@ -10295,7 +10277,6 @@ window.addEventListener("keydown",e=>{
     !(e.target instanceof HTMLInputElement)&&
     !(e.target instanceof HTMLTextAreaElement))acceptGhost();
 });
-
 function paint(){
  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
  ctx.lineJoin="round";ctx.lineCap="round";

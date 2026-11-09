@@ -39,5 +39,11 @@ assert.equal(rank(math,"he","","=")[0].label,"=",
  "Do not change math symbols to dictionary letters");
 assert.ok(html.includes('type==="corrected-character"'));
 assert.ok(html.includes('window.__inkAcceptedCorrections++'));
-assert.ok(html.includes('acceptCorrectionButton.addEventListener("click",acceptGhost)'));
+assert.ok(!html.includes('id="acceptCorrection"'));
+assert.ok(!html.includes('class="correction-bar"'));
+assert.ok(!html.includes('correctionStatus'));
+assert.ok(html.includes('rgba(72,72,72,0.28)'));
+assert.ok(!html.includes('rgba(28,89,205,.77)'));
+assert.ok(!html.includes('rgba(255,255,255,.93)'));
+assert.ok(html.includes('e.key.toLowerCase()==="g"'));
 console.log("PASS: embedded offline CNN, 10k words, conservative context correction, whole-letter G acceptance");
