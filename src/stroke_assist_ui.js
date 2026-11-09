@@ -271,6 +271,15 @@ function stableCharacterOptions(incoming){
   const confidence=Math.max(.001,Math.min(1,Number(candidate.confidence)||0));
   glyphClassMemory.set(candidate.char,(glyphClassMemory.get(candidate.char)||0)+confidence);
  }
+ // The board-level recognizer can see the WHOLE multi-stroke character,
+ // while this assist query sees only a tighter partial-glyph crop. When the
+ // recognized text clearly contains one glyph (as in the user's h screenshot),
+ // include that identity so the completion model doesn't substitute n/r/l.
+ const whole=window.__inkLastGuess;
+ if(window.__inkDetectedRegions===1&&typeof whole==="string"&&
+    whole.length===1&&!/\s/.test(whole)){
+  glyphClassMemory.set(whole,(glyphClassMemory.get(whole)||0)+.84);
+ }
  return [...glyphClassMemory.entries()].sort((a,b)=>b[1]-a[1])
   .slice(0,4).map(([char,score])=>({char,confidence:score}));
 }
