@@ -82,6 +82,22 @@ try:
     ]
     res=draw(crossed);print("LETTER X:",res,flush=True)
     assert res["regions"]==1 and res["guess"]=="X",res
+    # Two independently written O-like loops can touch on the canvas.
+    # Their actual pen-up boundaries distinguish them from one wide glyph.
+    from math import sin,cos,pi
+    left=[[220+50*cos(2*pi*i/20),240+51*sin(2*pi*i/20)] for i in range(21)]
+    right=[[316+50*cos(2*pi*i/20),240+51*sin(2*pi*i/20)] for i in range(21)]
+    res=draw([left,right]);print("TWO TOUCHING HANDWRITTEN O LOOPS:",res,flush=True)
+    assert res["regions"]==2, res
+    assert browser.execute_script("return window.__inkStrokeAwareSplits")>=1
+    # Crossed strokes of one large H still belong to a single glyph.
+    large_h=[
+        [[200,160],[200,280]],
+        [[330,160],[330,280]],
+        [[200,222],[330,222]]
+    ]
+    res=draw(large_h);print("THREE-STROKE CAPITAL H:",res,flush=True)
+    assert res["regions"]==1,res
     # Conversely independent, widely spaced pen strokes may form characters.
     multi=[
         [[145,160],[145,250]],
