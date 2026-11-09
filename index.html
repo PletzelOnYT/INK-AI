@@ -566,10 +566,14 @@ function paint(){
   if(!points?.length)continue;
   ctx.strokeStyle=stroke.tool==="eraser"?"#fff":"#111";
   ctx.lineWidth=stroke.tool==="eraser"?46:(stroke.width||12);
-  ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
-  if(points.length===1)ctx.lineTo(points[0][0]+.01,points[0][1]+.01);
-  for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);
-  ctx.stroke();
+  if(stroke.type==="vector-completion"&&points.length>=2){
+   smoothStroke(ctx,points);
+  }else{
+   ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
+   if(points.length===1)ctx.lineTo(points[0][0]+.01,points[0][1]+.01);
+   for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);
+   ctx.stroke();
+  }
  }
  queueGhost();
 }
