@@ -4,7 +4,7 @@ on:
     branches: [main]
     paths:
       - "src/train_recognition_v3.py"
-      - ".github/workflows/train-recognition-v3.yml"
+      - "tests/recognition-v3-data-unit.py"
   workflow_dispatch:
 permissions:
   contents: write
