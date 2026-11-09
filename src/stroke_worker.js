@@ -151,7 +151,12 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
  const horizontallyFlat=length>.16&&Math.abs(dx)>.15&&
    Math.abs(dy)<.075&&tailRange<.105;
  let score=0;
- if(horizontallyFlat)score-=12;
+ // Straight tails are wrong for rounded letters, but perfectly valid for
+ // horizontal symbols, serifs, and crossbars. Do not "fix h" by breaking =/-.
+ const curvedLetters="abcdeghjmnopqrsuyBCDGJOPQRSU";
+ const horizontalShapes="-_=+±≠≤≥EFHILTtTf#";
+ if(horizontallyFlat&&curvedLetters.includes(label))score-=12;
+ else if(horizontallyFlat&&!horizontalShapes.includes(label))score-=2;
  if(length>.85)score-=3*(length-.85);
  if(!stopReached)score-=.18; // do not prefer endless uncontrolled tails
  if(changes>8)score-=.4*(changes-8);
@@ -170,6 +175,11 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
  if(label==="h"&&tall&&arcStarted){
   if(down<.065)score-=10;
   if(length>.14&&down<up*.30)score-=3;
+  // In a lowercase h the right leg normally returns to the baseline of the
+  // existing ascender. Avoid a tail hanging far below the original stem.
+  const baselineError=Math.abs(endY-maxY);
+  score-=Math.min(10,baselineError*7);
+  if(endY>maxY+.16)score-=10;
  }
  // Avoid strange detached left-going extensions after a finished letter.
  if(endX<minX-.12||endX>Math.max(maxX,startX)+.70)score-=4;
