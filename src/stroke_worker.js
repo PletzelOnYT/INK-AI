@@ -286,6 +286,7 @@ function generateCandidates(m,isFallback=false){
    if(!Array.isArray(prefix)||prefix.length<2||prefix.length>120)
     throw Error("Insufficient genuine pen coordinates");
    const options=(m.options||[]).filter(o=>characters.includes(o.char))
+     .sort((a,b)=>Number(b.char===m.preferred)-Number(a.char===m.preferred))
      .slice(0,live?2:4);
    const results=[];
    // Multiple independent genuine GRU rollouts. Select trajectories using
@@ -313,10 +314,11 @@ function generateCandidates(m,isFallback=false){
     if(strongest){
      results.push(strongest);
      // Only announce coherent neural geometry, never a rejected flat tail.
-     if(results.length===1)self.postMessage({
-       type:"preview",serial,epoch,alternatives:results.slice(),
-       neural:true,engine:"stroke-gru-mdn"
-     });
+     if(results.length===1&&(!m.preferred||strongest.label===m.preferred))
+       self.postMessage({
+        type:"preview",serial,epoch,alternatives:results.slice(),
+        neural:true,engine:"stroke-gru-mdn"
+       });
     }
    }
    // An optional second class-consistent sample makes Tab useful if the
@@ -360,12 +362,26 @@ self.onmessage=e=>{
    useNetwork(mainNetworkState);
    let results=generateCandidates(m);
    let usedFallback=false;
-   if(!results.length&&backupNetworkState){
+   const hasPreferred=()=>!m.preferred||results.some(r=>r.label===m.preferred);
+   if((!results.length||!hasPreferred())&&backupNetworkState){
     try{
      useNetwork(backupNetworkState);
-     results=generateCandidates(m,true);
-     usedFallback=results.length>0;
+     const options=m.preferred?
+       (m.options||[]).filter(x=>x.char===m.preferred):
+       m.options;
+     const backup=generateCandidates({...m,options},true);
+     if(backup.length){
+      results=[...backup,...results.filter(x=>!backup.some(b=>b.label===x.label))];
+      usedFallback=true;
+     }
     }finally{useNetwork(mainNetworkState)}
+   }
+   // Never show a visibly different glyph when whole-board OCR has already
+   // identified the intended character; keep other models for Tab only.
+   if(m.preferred){
+    if(!hasPreferred())results=[];
+    else results.sort((a,b)=>Number(b.label===m.preferred)-
+                         Number(a.label===m.preferred)||b.score-a.score);
    }
    self.postMessage({type:"completion",serial:m.serial,epoch:m.epoch,
       alternatives:results,neural:true,engine:"stroke-gru-mdn",
