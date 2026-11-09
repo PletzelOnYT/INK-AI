@@ -9,6 +9,7 @@ on:
       - "models/ink-glyph-completion-v1.json"
       - "models/ink-glyph-completion-v2.json"
       - "models/ink-cnn-v2.json"
+      - "models/ink-stroke-sequence-v1.json"
       - ".github/workflows/verify.yml"
   workflow_dispatch:
 permissions:
@@ -20,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Verify Python training code compiles
-        run: python3 -m py_compile src/train.py
+        run: python3 -m py_compile src/train.py src/train_stroke_sequence.py
       - name: Extract and syntax-check the embedded JavaScript and worker
         run: |
           python3 - <<'PY'
@@ -36,10 +37,10 @@ jobs:
           node tests/worker-smoke.mjs
           node tests/recognition-v2-metrics.mjs
           node --check /tmp/ink-worker-check.js
-          if test -s models/ink-glyph-completion-v1.json; then
-            node tests/glyph-model-smoke.mjs
-            node --check /tmp/ink-glyph-worker.js
-          fi
+          node tests/glyph-model-smoke.mjs
+          node --check /tmp/ink-stroke-worker.js
+          node --check src/stroke_worker.js
+          node --check src/stroke_assist_ui.js
 
       - name: Run real Chrome smoke test (includes missing-model fallback)
         run: |
@@ -47,5 +48,5 @@ jobs:
           command -v google-chrome || command -v chromium
           python3 tests/browser-smoke.py
           python3 tests/recognition-regression-browser.py
-          if test -s models/ink-human-glyph-references.json; then python3 tests/glyph-completion-browser.py; fi
+          if test -s models/ink-stroke-sequence-v1.json; then python3 tests/glyph-completion-browser.py; fi
           if test -s models/ink-cnn-v1.json; then python3 tests/neural-browser-smoke.py; fi
