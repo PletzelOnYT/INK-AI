@@ -11225,7 +11225,11 @@ canvas.addEventListener("pointermove",e=>{
 function finish(e){
  if(pointer!==e.pointerId)return;
  if(current){current.points.push(pos(e));strokes.push(current)}
- pointer=null;current=null;paint();schedule(180);
+ pointer=null;current=null;
+ // Drop a speculative live preview on release; the next stationary
+ // proposal must pass the independent recognition critic before G accepts it.
+ if(assistEnabled&&tool==="pen")clearGhost();
+ paint();schedule(180);
 }
 canvas.addEventListener("pointerup",finish);
 canvas.addEventListener("pointercancel",finish);
