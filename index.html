@@ -277,6 +277,7 @@ document.getElementById("eraser").addEventListener("click",()=>chooseTool("erase
 // No Quick Draw sketches, no movement extrapolation, no third-party inference.
 const GLYPH_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-glyph-completion-v2.json";
 const GLYPH_V1_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-glyph-completion-v1.json";
+const GLYPH_REFERENCES_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-human-glyph-references.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 window.__inkGlyphReady=false;
@@ -284,10 +285,44 @@ window.__inkAssistModel="handwriting-only";
 window.__inkGlyphVersion=0;
 window.__inkGlyphParameters=0;
 window.__inkLastGlyphError="";
+window.__inkHumanExamples=0;
+window.__inkAssistLabel="";
+window.__inkGhostSource="none";
+window.__inkGhostSegments=0;
+window.__inkGhostStrokeWidth=0;
+let humanReferences=null,humanReferencesLoading=false,ghostOptions=[],ghostChoice=0;
+async function loadHumanReferences(){
+ if(!assistEnabled||!glyphWorker||humanReferencesLoading)return;
+ humanReferencesLoading=true;
+ try{
+  if(!humanReferences){
+   const sources=location.protocol==="file:"?[GLYPH_REFERENCES_URL]:
+      ["models/ink-human-glyph-references.json",GLYPH_REFERENCES_URL];
+   let error=null;
+   for(const source of sources){
+    try{
+     const response=await fetch(source,{cache:"default"});
+     if(!response.ok)throw Error("HTTP "+response.status);
+     humanReferences=await response.json();
+     if(humanReferences.format!=="ink-human-glyph-examples-v1")
+       throw Error("Wrong handwriting examples format");
+     break;
+    }catch(e){error=e;humanReferences=null}
+   }
+   if(!humanReferences)throw error||Error("Human handwriting examples unavailable");
+  }
+  glyphWorker.postMessage({cmd:"references",references:humanReferences});
+ }catch(_){
+  // Optional examples; do not disable trained network if no bank is published.
+ }finally{humanReferencesLoading=false}
+}
 function clearGhost(){
- ghostCandidate=null;
+ ghostCandidate=null;ghostOptions=[];ghostChoice=0;
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
  window.__inkGhostPoints=0;
+ window.__inkGhostSegments=0;
+ window.__inkAssistLabel="";
+ window.__inkGhostSource="none";
 }
 function queueGhost(){
  if(!assistEnabled||tool!=="pen"){clearGhost();return}
@@ -371,16 +406,21 @@ function createGlyphWorker(){
    glyphReady=true;glyphBusy=false;window.__inkGlyphReady=true;
    window.__inkGlyphVersion=m.version;window.__inkGlyphParameters=m.parameters;
    assistButton.title=m.version===2?
-    "INK AI V2 · 1.1M parameters · handwriting completion ready":
-    "INK AI V1 active · upgraded model training · G to accept";
+    "INK AI V2 · real handwriting-assisted auto-completion · Tab alternatives · G accept":
+    "INK AI V1 · handwriting completion · G accept";
+   loadHumanReferences();
    queueGhost();
+  }else if(m.type==="references-ready"){
+   window.__inkHumanExamples=m.count||0;
+   if(assistEnabled&&tool==="pen")queueGhost();
   }else if(m.type==="completion"){
    glyphBusy=false;
    if(assistEnabled&&tool==="pen"&&m.epoch===glyphEpoch&&
       m.serial===glyphSerial&&ghostPending?.serial===m.serial){
-    ghostCandidate={frame:ghostPending.frame,partial:ghostPending.partial,
-       prediction:m.prediction,label:m.label};
-    renderGhost();
+    ghostOptions=(m.alternatives?.length?m.alternatives:
+      [{label:m.label,prediction:m.prediction,source:m.source}]);
+    ghostChoice=0;
+    setGhostChoice(0);
    }
    const dirty=glyphDirty;glyphDirty=false;
    if(dirty||pointer!==null)queueGhost();
@@ -623,11 +663,38 @@ function smoothStroke(g,points){
  }
  g.stroke();
 }
+// Show the first credible completion with actual missing vector strokes.
+// When the full-glyph recognizer mistakes an unfinished stroke for I/l/1,
+// try other learned character hypotheses instead of showing nothing.
+function setGhostChoice(index){
+ if(!ghostPending||!ghostOptions.length)return;
+ let best=null;
+ for(let attempt=0;attempt<ghostOptions.length;attempt++){
+  const ix=(index+attempt)%ghostOptions.length;
+  const o=ghostOptions[ix];
+  const candidate={frame:ghostPending.frame,partial:ghostPending.partial,
+      prediction:o.prediction,label:o.label,source:o.source};
+  const vectors=skeletonizeGlyph(candidate);
+  if(vectors.paths.length>0&&vectors.visual>=3){
+   best={candidate,ix,vectors};break;
+  }
+ }
+ if(!best){
+  ghostCandidate=null;ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
+  window.__inkGhostPoints=0;window.__inkGhostSegments=0;
+  return;
+ }
+ ghostChoice=best.ix;ghostCandidate=best.candidate;
+ ghostCandidate.vectors=best.vectors;
+ window.__inkAssistLabel=best.candidate.label;
+ window.__inkGhostSource=best.candidate.source||"trained-generator";
+ renderGhost();
+}
 function renderGhost(){
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
  window.__inkGhostPoints=0;
  if(!ghostCandidate||!assistEnabled||tool!=="pen")return;
- const vectors=skeletonizeGlyph(ghostCandidate);
+ const vectors=ghostCandidate.vectors||skeletonizeGlyph(ghostCandidate);
  ghostCandidate.vectors=vectors;
  ghostCtx.save();
  ghostCtx.strokeStyle="rgba(58,58,58,.30)";
@@ -651,7 +718,10 @@ function acceptGhost(){
  clearGhost();paint();schedule(75);
 }
 window.addEventListener("keydown",e=>{
- if(e.key.toLowerCase()==="g"&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.repeat&&
+ if(e.key==="Tab"&&assistEnabled&&ghostOptions.length>1){
+  e.preventDefault();setGhostChoice((ghostChoice+1)%ghostOptions.length);return;
+ }
+ if((e.key.toLowerCase()==="g"||e.key==="Enter")&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.repeat&&
   !(e.target instanceof HTMLInputElement)&&!(e.target instanceof HTMLTextAreaElement)){
   acceptGhost();
  }
