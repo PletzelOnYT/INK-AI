@@ -38,3 +38,28 @@ const strong=Array.from(response.prediction).filter(v=>v>65).length;
 assert.ok(strong>5,"Neural model predicted almost no ink ("+strong+" pixels)");
 for(const v of response.prediction)assert.ok(v>=0&&v<=255);
 console.log("PASS: real trained handwritten glyph neural model predicts missing strokes",strong,"pixels");
+
+
+// When the upgraded checkpoint is present, verify that the browser uses the
+// actual residual layers, not the old model or a simulated "knowledge" score.
+if(fs.existsSync("models/ink-glyph-completion-v2.json")){
+ const v2=JSON.parse(fs.readFileSync("models/ink-glyph-completion-v2.json","utf8"));
+ assert.equal(v2.format,"ink-glyph-completion-residual-v2");
+ assert.ok(v2.parameter_count>=1000000 && v2.parameter_count<2000000);
+ assert.equal(v2.layers.length,4);
+ assert.ok(v2.training?.trained_from_scratch);
+ ctx.self.onmessage({data:{cmd:"init",model:v2}});
+ const current=received.filter(x=>x.type==="ready").at(-1);
+ assert.equal(current.version,2);
+ assert.equal(current.parameters,v2.parameter_count);
+ ctx.self.onmessage({data:{cmd:"complete",partial,serial:20,epoch:7,
+   options:[{char:"I",confidence:.49},{char:"l",confidence:.32},{char:"1",confidence:.19}]
+ }});
+ const v2result=received.find(x=>x.type==="completion"&&x.serial===20);
+ assert.ok(v2result);
+ assert.equal(v2result.prediction.length,1024);
+ assert.ok(["I","l","1"].includes(v2result.label));
+ const strong=Array.from(v2result.prediction).filter(n=>n>65).length;
+ assert.ok(strong>3);
+ console.log("PASS: actual 1M+ parameter residual handwriting model + ambiguous top-3 inference",v2.parameter_count, "parameters");
+}
