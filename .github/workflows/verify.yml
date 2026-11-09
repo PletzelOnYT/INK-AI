@@ -8,6 +8,7 @@ on:
       - "tests/**"
       - "models/ink-glyph-completion-v1.json"
       - "models/ink-glyph-completion-v2.json"
+      - "models/ink-cnn-v2.json"
       - ".github/workflows/verify.yml"
   workflow_dispatch:
 permissions:
