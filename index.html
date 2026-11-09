@@ -4,653 +4,277 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>INK AI — handwriting intelligence</title>
+<title>INK AI</title>
 <style>
-:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#080808;color:#f4f4f4}
-*{box-sizing:border-box}body{margin:0}button,input,textarea,select{font:inherit}
-button{cursor:pointer;background:#f4f4f4;color:#090909;border:1px solid #f4f4f4;border-radius:8px;padding:11px 14px;font-weight:650}
-button:hover{background:#ccc}button:disabled{opacity:.35;cursor:not-allowed}
-button.quiet{background:#121212;color:white;border-color:#3b3b3b}
-button.quiet:hover{background:#242424}
-.container{max-width:1300px;margin:0 auto;padding:26px 28px 70px}
-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:25px;border-bottom:1px solid #292929}
-.brand{font-size:23px;font-weight:850;letter-spacing:-1.2px}
-.brand i{font-style:normal;color:#aaa;font-weight:350}
-.pill{font-size:11px;letter-spacing:1.3px;border:1px solid #555;border-radius:30px;padding:7px 10px;color:#ccc;white-space:nowrap}
-h1{font-size:clamp(35px,4vw,55px);letter-spacing:-2px;line-height:1.05;margin:30px 0 12px}p{color:#aaa;line-height:1.55}
-.lead{max-width:720px;margin:0 0 28px}.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr);gap:17px}
-.panel{border:1px solid #303030;background:#0e0e0e;border-radius:14px;min-width:0;overflow:hidden}
-.panelHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:18px 19px;border-bottom:1px solid #252525}
-.panelHead h2{font-size:12px;letter-spacing:1.1px;text-transform:uppercase;color:#d1d1d1;margin:0}
-.meta{font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:#929292}
-#pad{display:block;width:100%;height:auto;touch-action:none;background:white;cursor:crosshair}
-.canvasWrap{position:relative;background:white}
-.canvasWrap:after{content:'DRAW HERE';position:absolute;top:13px;right:18px;pointer-events:none;color:#bbb;font:11px ui-monospace,Consolas,monospace;letter-spacing:1.1px}
-.actions{padding:13px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.actions .right{margin-left:auto}.help{padding:0 17px 16px;font-size:12px;margin:0}
-.segment{display:flex;border:1px solid #444;border-radius:9px;padding:3px;gap:3px}
-.segment button{padding:8px 11px;background:transparent;color:#aaa;border:none;font-size:12px}
-.segment button.active{background:white;color:black}
-.result{font-size:clamp(28px,3vw,44px);line-height:1.45;min-height:155px;overflow-wrap:anywhere;white-space:pre-wrap;font-weight:580;letter-spacing:-1px;padding:24px 20px 8px}
-.hint{color:#777;font-weight:400;font-size:19px;letter-spacing:0}
-.stats{display:flex;gap:12px;align-items:center;padding:7px 20px 18px;color:#777;font-size:11px;flex-wrap:wrap}
-.edit{border-top:1px solid #252525;padding:19px}
-.edit label{font-size:12px;color:#aaa;display:block;margin:0 0 8px}
-.edit textarea{display:block;width:100%;background:#171717;color:#fff;border:1px solid #404040;border-radius:8px;padding:13px;min-height:95px;resize:vertical;outline:none;font-size:15px}
-.edit textarea:focus{border-color:#aaa}.edit button{width:100%;margin-top:10px}
-.foot{font-size:12px;color:#777;margin:12px 0 0}
-.section{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin-top:17px}
-.tinyCard{padding:18px;border:1px solid #303030;border-radius:12px;background:#0e0e0e;min-width:0}
-.tinyCard b{font-size:25px;display:block;letter-spacing:-.9px}
-.tinyCard span{font-size:11px;color:#858585}
-.panelMore{padding:18px}.panelMore button{margin:3px}
-#status{color:#bbb}#status[data-error="true"]{color:white}
-#charList{margin-top:10px;max-height:170px;overflow:auto;font:12px/1.75 ui-monospace,Consolas,monospace;color:#bbb;word-break:break-word}
-.sep{border-top:1px solid #2a2a2a;margin:16px 0}
-details{font-size:13px;color:#aaa}
-summary{cursor:pointer;color:#dedede}
-a{color:white}#notice{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#fafafa;color:#111;border-radius:9px;padding:13px 18px;box-shadow:0 12px 60px #000;opacity:0;pointer-events:none;transition:opacity .2s;font-size:13px;z-index:20;max-width:90vw}
-#notice.show{opacity:1}
-
-/* Transparent loading telemetry: model bytes and neural initialization are separate phases. */
-.modelLoading{border:1px solid #343434;background:#0e0e0e;border-radius:12px;padding:16px 18px;margin:0 0 19px}
-.modelLoadingTop{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
-.modelLoadingTop strong{font-size:12px;font-weight:650;letter-spacing:.3px}
-.modelLoadingTop output{font:700 16px ui-monospace,SFMono-Regular,Consolas,monospace;font-variant-numeric:tabular-nums}
-.modelTrack{height:9px;background:#252525;border-radius:12px;overflow:hidden;border:1px solid #393939}
-.modelFill{height:100%;width:0%;background:#fff;transition:width .12s ease-out}
-.modelLoading.indeterminate .modelFill{width:35%;animation:inkLoadingSlide 1.25s ease-in-out infinite}
-@keyframes inkLoadingSlide{0%{transform:translateX(-110%)}100%{transform:translateX(300%)}}
-.modelLoadingDetail{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#929292;font:11px ui-monospace,Consolas,monospace;margin-top:10px}
-.modelLoading[data-state="ready"] .modelFill{width:100%}
-.modelLoading[data-state="error"] .modelFill{background:#929292}
-@media(max-width:900px){.grid{grid-template-columns:1fr}.section{grid-template-columns:1fr 1fr}.container{padding:18px 13px 45px}}
-@media(max-width:520px){.section{grid-template-columns:1fr}header .pill{white-space:normal}.result{min-height:105px}}
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;background:#080808}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;overflow-x:hidden}
+main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:15px;padding:20px 0}
+#pad{display:block;width:100%;aspect-ratio:2.18/1;background:#fff;border-radius:14px;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+#guess{min-height:95px;padding:18px 20px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;color:#fff;font-size:clamp(24px,3vw,43px);font-weight:570;line-height:1.25;letter-spacing:-.02em}
+#guess[data-muted="true"]{color:#8e8e8e;font-size:clamp(15px,2vw,23px);font-weight:400;letter-spacing:0}
+@media(max-width:650px){main{padding:10px 0;gap:8px;justify-content:start}#pad{aspect-ratio:1.14/1;border-radius:9px}#guess{min-height:80px}}
 </style>
 </head>
 <body>
-<div class="container">
-<header><div class="brand">INK <i>AI</i></div><div class="pill" id="status" role="status" aria-live="polite">CONNECTING TO YOUR GITHUB MODEL</div></header>
-<h1>Write anything.<br>See what the AI reads.</h1>
-<p class="lead">Live handwriting recognition for numbers, lowercase and uppercase letters, punctuation, and sentences. Trained from scratch on real handwriting; weights hosted exclusively in <a href="https://github.com/PletzelOnYT/INK-AI" target="_blank" rel="noopener">PletzelOnYT/INK-AI</a>.</p>
-<section id="modelLoading" class="modelLoading" data-state="pending" aria-label="Model loading progress">
-<div class="modelLoadingTop"><strong id="modelStep">Checking your GitHub model…</strong><output id="modelPercent" aria-live="polite">0%</output></div>
-<div class="modelTrack" id="modelTrack" role="progressbar" aria-label="Model download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="modelFill" id="modelFill"></div></div>
-<div class="modelLoadingDetail"><span id="modelDetail">Waiting for model download</span><span><a href="https://github.com/PletzelOnYT/INK-AI/actions" target="_blank" rel="noopener">Training status</a></span></div>
-</section>
-<div class="grid">
-<section class="panel">
-<div class="panelHead"><h2>01 / Handwriting surface</h2><span class="meta">PEN · TOUCH · MOUSE</span></div>
-<div class="canvasWrap"><canvas width="1200" height="480" id="pad" aria-label="Handwriting drawing area"></canvas></div>
-<div class="actions">
-<div class="segment" role="group" aria-label="Reading mode"><button class="active" data-mode="text">Text / sentence</button><button data-mode="symbol">One symbol</button></div>
-<button class="quiet" id="undo">Undo</button><button class="quiet" id="clear">Clear</button><button class="quiet right" id="saveImage">Save PNG</button>
-</div>
-<p class="help">It reads on its own after every stroke. Write left to right; use larger gaps between words. No recognition button is needed.</p>
-</section>
-<aside class="panel">
-<div class="panelHead"><h2>02 / Live reading</h2><span class="meta" id="reading">WAITING</span></div>
-<div class="result" id="output" aria-live="polite"><span class="hint">Draw something to begin.</span></div>
-<div class="stats"><span id="confidence">—</span><span id="glyphCount">0 characters</span><span id="speed">—</span></div>
-<div class="edit">
-<label for="correct">Correct the AI's reading to fine-tune it</label>
-<textarea id="correct" placeholder="The correct letters / words go here…" spellcheck="false"></textarea>
-<button id="fineTune" disabled>Fine-tune on this correction</button>
-<p class="foot" id="trainMessage">Fine-tuning changes only your copy of the classifier. No API keys, accounts, or external AI providers.</p>
-</div>
-</aside>
-</div>
-<div class="section">
-<div class="tinyCard"><b id="trainingCount">—</b><span>reference examples / training presentations</span></div>
-<div class="tinyCard"><b id="labelCount">—</b><span>supported letters, digits, and symbols</span></div>
-<div class="tinyCard"><b id="tunedCount">0</b><span>personalized corrections on this browser</span></div>
-</div>
-<div class="panel" style="margin-top:17px">
-<div class="panelHead"><h2>03 / Your model, your repository</h2><span class="meta">NO THIRD-PARTY INFERENCE</span></div>
-<div class="panelMore">
-<p style="margin-top:0">The drawing interface downloads its own trained weights from this GitHub repository only. Recognition runs in a dedicated browser worker. No canvas data is sent to GitHub. The Python/PyTorch trainer builds the weights; this HTML performs inference without installing PyTorch.</p>
-<button id="reload" class="quiet">Reload GitHub model</button><button id="export" class="quiet">Export personal tuning</button><button id="import" class="quiet">Import tuning</button><input id="importFile" type="file" accept="application/json" hidden>
-<div class="sep"></div>
-<details><summary>How the AI works and what it cannot do</summary>
-<p>The convolutional neural network uses EMNIST samples from real people and may include HASYv2 examples. The workflow also augments handwriting and creates synthetic punctuation. Similar glyphs such as <b>I / l / 1 / |</b> are intrinsically ambiguous; sentence context can help, but results are not guaranteed. Handwritten connected cursive can defeat character segmentation. Corrections remain in this browser until exported; automatic GitHub writes require a secure authenticated backend, which is intentionally not embedded in public HTML.</p>
-<div class="meta" id="details"></div><div id="charList"></div>
-</details>
-</div>
-</div>
-</div>
-<div id="notice" role="status"></div>
-
+<main>
+  <canvas id="pad" width="1200" height="550" aria-label="Write or draw here"></canvas>
+  <div id="guess" data-muted="true" aria-live="polite">Loading AI…</div>
+</main>
 <script>
 "use strict";
-(()=> {
-const REPO="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
-const MODEL_PATH="models/ink-cnn-v1.json";
-const STORAGE="ink-ai-personal-f2-v1";
-const $=(id)=>document.getElementById(id);
-const c=$("pad"),ctx=c.getContext("2d",{willReadFrequently:true});
-let strokes=[],drawing=null,pointer=null,mode="text",worker=null,loaded=false,labels=[],activeVersion=0,activeTimer=0,lastRegions=[],lastPredictions=[],lastRead="",lastValue="",corrections=0,pending=new Map(),idCounter=0,modelRetryTimer=null,modelBackend="fallback",basicTemplates=[];
-ctx.lineCap="round";ctx.lineJoin="round";
-function toast(t){let el=$("notice");el.textContent=t;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),3000)}
-function status(t,error=false){$("status").textContent=t;$("status").dataset.error=error?"true":"false"}
-function modelProgress(pct,step,detail,state="loading"){
- const node=$("modelLoading"),bar=$("modelTrack");
- node.dataset.state=state;node.classList.toggle("indeterminate",pct===null&&state==="loading");
- $("modelStep").textContent=step;
- $("modelDetail").textContent=detail;
- if(pct===null){
-  $("modelPercent").textContent=state==="pending"?"WAITING":"…";bar.removeAttribute("aria-valuenow");
- }else{
-  const number=Math.max(0,Math.min(100,Math.round(pct)));
-  $("modelPercent").textContent=number+"%";
-  $("modelFill").style.width=number+"%";
-  bar.setAttribute("aria-valuenow",String(number));
- }
-}
-function prettyBytes(n){if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";return (n/1048576).toFixed(2)+" MB"}
-async function fetchModelWithProgress(url,refresh=false){
- modelProgress(0,"Connecting to GitHub…","Requesting trained model weights");
- let response;
- try{response=await fetch(url,{cache:refresh?"reload":"default"})}
- catch(e){throw new Error("Cannot connect to GitHub: "+(e?.message||e))}
- if(!response.ok)throw new Error("model not published (HTTP "+response.status+")");
- const rawLength=response.headers.get("content-length");
- const total=rawLength&&Number(rawLength)>0?Number(rawLength):0;
- const mime=response.headers.get("content-type")||"";
- let text;
- if(response.body&&typeof response.body.getReader==="function"){
-  const reader=response.body.getReader();
-  let pieces=[],received=0;
-  try{
-   while(true){
-    const {done,value}=await reader.read();
-    if(done)break;
-    if(value){
-     pieces.push(value);received+=value.byteLength;
-     const pct=total?Math.min(100,100*received/total):null;
-     const details=total?prettyBytes(received)+" / "+prettyBytes(total):prettyBytes(received)+" downloaded (size not reported)";
-     modelProgress(pct,"Downloading model weights…",details);
-    }
-   }
-  }finally{reader.releaseLock()}
-  const merged=new Uint8Array(received);let off=0;
-  for(const part of pieces){merged.set(part,off);off+=part.byteLength}
-  text=new TextDecoder("utf-8").decode(merged);
- }else{
-  modelProgress(null,"Downloading model weights…","Browser does not expose stream progress");
-  text=await response.text();
- }
- modelProgress(100,"Download complete","Parsing "+prettyBytes(new TextEncoder().encode(text).byteLength)+" of model data");
- let result;
- try{result=JSON.parse(text)}catch(e){throw new Error("Downloaded file is not valid model JSON")}
- return result;
-}
-function download(name,blob){const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1200)}
-function drawAll(){
- ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);
- ctx.strokeStyle="#0b0b0b";ctx.lineCap="round";ctx.lineJoin="round";
- for(const s of [...strokes,...(drawing?[drawing]:[])]){
-  ctx.lineWidth=s.w;
-  const p=s.points;if(!p.length)continue;ctx.beginPath();ctx.moveTo(p[0][0],p[0][1]);
-  if(p.length===1){ctx.lineTo(p[0][0]+.01,p[0][1]+.01)}
-  else for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0],p[i][1]);
+(() => {
+const MODEL_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
+const canvas=document.getElementById("pad"), ctx=canvas.getContext("2d",{willReadFrequently:true}), guess=document.getElementById("guess");
+let strokes=[],current=null,pointer=null,worker=null,loaded=false,requestId=0,readVersion=0,readTimer=0,lastTap=0;
+const requests=new Map();
+window.__inkReady=false;
+window.__inkEngine="cnn";
+function display(text,muted=false){guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
+function paint(){
+ ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.strokeStyle="#111";ctx.lineWidth=12;ctx.lineJoin="round";ctx.lineCap="round";
+ for(const stroke of (current?[...strokes,current]:strokes)){
+  const points=stroke;
+  if(!points.length)continue;
+  ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
+  if(points.length===1)ctx.lineTo(points[0][0]+.01,points[0][1]+.01);
+  for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);
   ctx.stroke();
  }
 }
-drawAll();
-function position(e){const r=c.getBoundingClientRect();return [
- Math.min(c.width,Math.max(0,(e.clientX-r.left)*c.width/r.width)),
- Math.min(c.height,Math.max(0,(e.clientY-r.top)*c.height/r.height))]}
-c.addEventListener("pointerdown",e=>{
- e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;c.setPointerCapture(e.pointerId);
- drawing={points:[position(e)],w:Math.max(5,Math.min(17,11*(.72+(e.pressure||.5)*.58)))};
-});
-c.addEventListener("pointermove",e=>{
- if(e.pointerId!==pointer||!drawing)return;e.preventDefault();drawing.points.push(position(e));drawAll();
-});
-function endStroke(e){
- if(e.pointerId!==pointer)return;pointer=null;
- if(drawing){drawing.points.push(position(e));strokes.push(drawing);drawing=null}
- drawAll();scheduleRead(260);
+paint();
+function pos(e){
+ const box=canvas.getBoundingClientRect();
+ return [Math.max(0,Math.min(canvas.width,(e.clientX-box.left)*canvas.width/box.width)),
+         Math.max(0,Math.min(canvas.height,(e.clientY-box.top)*canvas.height/box.height))];
 }
-c.addEventListener("pointerup",endStroke);c.addEventListener("pointercancel",endStroke);
-$("undo").onclick=()=>{strokes.pop();drawAll();scheduleRead(150)};
-$("clear").onclick=()=>{strokes=[];drawing=null;drawAll();lastRegions=[];lastPredictions=[];lastRead="";lastValue="";$("output").innerHTML='<span class="hint">Draw something to begin.</span>';$("correct").value="";$("reading").textContent="WAITING";$("glyphCount").textContent="0 characters";scheduleRead(70)};
-$("saveImage").onclick=()=>c.toBlob(blob=>blob&&download("INK-AI-drawing.png",blob),"image/png");
-for(const b of document.querySelectorAll("[data-mode]"))b.onclick=()=>{
- mode=b.dataset.mode;for(const el of document.querySelectorAll("[data-mode]"))el.classList.toggle("active",el===b);
- scheduleRead(70);
-};
-$("reload").onclick=()=>loadModel(true);
-$("export").onclick=()=>{
- const item=localStorage.getItem(STORAGE);download("INK-AI-personal-finetuning.json",new Blob([item||"{}"],{type:"application/json"}));
-};
-$("import").onclick=()=>$("importFile").click();
-$("importFile").onchange=async e=>{
- const f=e.target.files?.[0];if(!f)return;
- try{const obj=JSON.parse(await f.text());if(obj.format!=="ink-personal-v1"||!Array.isArray(obj.samples))throw Error("Unsupported tuning backup");
- localStorage.setItem(STORAGE,JSON.stringify(obj));toast("Personal tuning imported.");await loadModel(true);
- }catch(err){toast("Import failed: "+err.message)}
- e.target.value="";
-};
-// Every model input is 32x32: centered ink with a padded border.
-function feature(box,pixels){
- const [x0,y0,x1,y1]=box,w=x1-x0+1,h=y1-y0+1;
- const off=document.createElement("canvas");off.width=32;off.height=32;
- const t=off.getContext("2d",{willReadFrequently:true});t.fillStyle="#fff";t.fillRect(0,0,32,32);
- const crop=document.createElement("canvas");crop.width=Math.max(1,w);crop.height=Math.max(1,h);
- crop.getContext("2d").putImageData(pixels,-x0,-y0);
- // putImageData ignores transforms; transfer only the cropped subrectangle.
- const cw=Math.max(1,Math.round(w*26/Math.max(w,h))),ch=Math.max(1,Math.round(h*26/Math.max(w,h)));
- t.imageSmoothingEnabled=true;t.imageSmoothingQuality="high";
- t.drawImage(crop,0,0,w,h,(32-cw)/2,(32-ch)/2,cw,ch);
- const a=t.getImageData(0,0,32,32).data,bytes=new Float32Array(1024);
- for(let i=0;i<1024;i++)bytes[i]=1-(a[i*4]+a[i*4+1]+a[i*4+2])/765;
- return Array.from(bytes);
+function reset(){
+ strokes=[];current=null;pointer=null;paint();++readVersion;
+ clearTimeout(readTimer);display(loaded?"Draw something":"Loading AI…",true);
 }
-
-// A usable, lightweight recognizer is included in this HTML so a missing
-// GitHub model never disables the drawing app. This is clearly marked
-// as a basic synthetic-font fallback, NOT real-handwriting AI.
-const BASIC_CHARS=Array.from("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
- .concat(Array.from({length:94},(_,i)=>String.fromCharCode(i+33)).filter(c=>!/[A-Za-z0-9]/.test(c)))
- .concat(Array.from("×÷±∞√≠≤≥"));
-function makeBasicTemplates(){
- if(basicTemplates.length)return;
- const t=document.createElement("canvas");t.width=t.height=96;
- const g=t.getContext("2d",{willReadFrequently:true});
- const families=["Arial","Georgia","Times New Roman","Courier New","Trebuchet MS","Comic Sans MS","serif","monospace"];
- for(const char of BASIC_CHARS){
-  for(const family of families){
-   for(const variant of ["normal","italic","bold"]){
-    g.fillStyle="white";g.fillRect(0,0,96,96);
-    g.fillStyle="black";g.textBaseline="alphabetic";
-    g.font=variant+" 65px "+JSON.stringify(family);
-    const m=g.measureText(char);
-    const x=(96-m.width)/2;
-    const y=48+(m.actualBoundingBoxAscent-m.actualBoundingBoxDescent)/2;
-    g.fillText(char,x,y);
-    const p=g.getImageData(0,0,96,96),data=p.data;
-    let minX=96,minY=96,maxX=-1,maxY=-1;
-    for(let yy=0;yy<96;yy++)for(let xx=0;xx<96;xx++){
-     const j=(yy*96+xx)*4;
-     if(data[j]<190){minX=Math.min(minX,xx);minY=Math.min(minY,yy);maxX=Math.max(maxX,xx);maxY=Math.max(maxY,yy)}
-    }
-    if(maxX<0)continue;
-    const normalized=feature([minX,minY,maxX,maxY],p);
-    basicTemplates.push({char,ink:Uint8Array.from(normalized,n=>Math.round(n*255))});
-   }
-  }
+canvas.addEventListener("pointerdown",e=>{
+ e.preventDefault();
+ if(pointer!==null)return;
+ const now=performance.now();
+ if(now-lastTap<330){lastTap=0;reset();return}
+ lastTap=now;
+ pointer=e.pointerId;current=[pos(e)];
+ try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+});
+canvas.addEventListener("pointermove",e=>{
+ if(pointer!==e.pointerId||!current)return;
+ e.preventDefault();current.push(pos(e));paint();
+});
+function finish(e){
+ if(pointer!==e.pointerId)return;
+ if(current){current.push(pos(e));strokes.push(current)}
+ pointer=null;current=null;paint();schedule(180);
+}
+canvas.addEventListener("pointerup",finish);
+canvas.addEventListener("pointercancel",finish);
+window.addEventListener("keydown",e=>{
+ if(e.key==="Escape"){reset();return}
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){
+  e.preventDefault();strokes.pop();paint();schedule(100);
  }
- labels=BASIC_CHARS;
- $("labelCount").textContent=String(labels.length);
- $("trainingCount").textContent=basicTemplates.length.toLocaleString();
- $("details").textContent="Basic fallback uses browser-generated fonts; not human handwriting. Real-handwriting CNN automatically replaces it when GitHub publishes the model.";
- $("charList").textContent="Basic symbols: "+labels.join(" ");
-}
-function readBasic(images){
- let memory;
- try{memory=JSON.parse(localStorage.getItem(STORAGE)||"null")?.samples||[]}catch{memory=[]}
- return images.map(image=>{
-  const ink=Uint8Array.from(image,n=>Math.round(n*255));
-  const best=new Map();
-  for(const item of basicTemplates){
-   let d=0;
-   for(let j=0;j<1024;j+=2){const diff=ink[j]-item.ink[j];d+=diff*diff}
-   const old=best.get(item.char);
-   if(old===undefined||d<old)best.set(item.char,d);
-  }
-  for(const sample of memory){
-   if(!labels.includes(sample.label)||!Array.isArray(sample.image)||sample.image.length!==1024)continue;
-   let d=0;
-   for(let j=0;j<1024;j+=2){
-    const diff=ink[j]-Math.round(sample.image[j]*255);d+=diff*diff;
-   }
-   d*=.62; // Personalized examples are preferred over synthetic fonts.
-   const old=best.get(sample.label);
-   if(old===undefined||d<old)best.set(sample.label,d);
-  }
-  const sorted=Array.from(best,([char,d])=>({char,d})).sort((a,b)=>a.d-b.d).slice(0,5);
-  const maxScore=sorted[0]?.d||1;
-  const weight=sorted.map(x=>Math.exp(-(x.d-maxScore)/280000));
-  const sum=weight.reduce((a,b)=>a+b,0)||1;
-  return {top:sorted.map((x,i)=>({char:x.char,confidence:weight[i]/sum}))};
- });
-}
-function groups(values,maxGap,minLen=1){
- let out=[],start=-1,last=-1;
- for(let i=0;i<=values.length;i++){
-  if(i<values.length&&values[i]>0){if(start<0)start=i;last=i}
-  else if(start>=0&&((i-last)>maxGap||i===values.length)){
-   if(last-start+1>=minLen)out.push([start,last]);
+});
+function groupRuns(series,gap=2,minSpan=1){
+ const ranges=[];let start=-1,last=-1;
+ for(let i=0;i<=series.length;i++){
+  if(i<series.length&&series[i]>0){if(start<0)start=i;last=i}
+  else if(start>=0&&(i===series.length||i-last>gap)){
+   if(last-start+1>=minSpan)ranges.push([start,last]);
    start=-1;last=-1;
   }
  }
- return out;
+ return ranges;
 }
 function segment(){
- const {width:W,height:H}=c,p=ctx.getImageData(0,0,W,H);
- let binary=new Uint8Array(W*H),row=new Uint16Array(H);
- for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-  const i=y*W+x,k=i*4;const ink=(p.data[k]+p.data[k+1]+p.data[k+2])<620;
-  if(ink){binary[i]=1;row[y]++}
+ const w=canvas.width,h=canvas.height,pixels=ctx.getImageData(0,0,w,h);
+ const data=pixels.data,ink=new Uint8Array(w*h),rows=new Uint16Array(h);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const off=(y*w+x)*4,idx=y*w+x;
+  if(data[off]+data[off+1]+data[off+2]<620){ink[idx]=1;rows[y]++}
  }
- let lines=groups(row,20,2),regions=[];
- for(let li=0;li<lines.length;li++){
-  const [top,bottom]=lines[li],cols=new Uint16Array(W);
-  for(let y=top;y<=bottom;y++)for(let x=0;x<W;x++)cols[x]+=binary[y*W+x];
-  let spans=groups(cols,2,2);
-  if(mode==="symbol")continue;
-  // Split only unusually wide connected blobs using projection valleys;
-  // avoid splitting normal M/W by demanding at least two deep gaps.
-  let widths=spans.map(([a,b])=>b-a+1).sort((a,b)=>a-b);
-  const med=widths.length?widths[Math.floor(widths.length/2)]:30;
-  let refined=[];
-  for(const [a,b] of spans){
-   const big=b-a+1;const lineH=bottom-top+1;
-   if(big>Math.max(1.9*med,1.45*lineH)&&big>52){
-    let valleys=[];
-    for(let x=a+12;x<b-11;x++)if(cols[x]<=Math.max(2,.10*lineH)&&cols[x]<=cols[x-1]&&cols[x]<=cols[x+1])valleys.push(x);
-    const cuts=[];let last=a;
-    for(const x of valleys)if(x-last>Math.max(14,med*.6)&&b-x>12){cuts.push(x);last=x}
-    if(cuts.length){let st=a;for(const x of cuts){refined.push([st,x]);st=x+1}refined.push([st,b]);continue}
+ const lines=groupRuns(rows,25,2);
+ const found=[];
+ for(let line=0;line<lines.length;line++){
+  const [top,bottom]=lines[line],cols=new Uint16Array(w);
+  for(let y=top;y<=bottom;y++)for(let x=0;x<w;x++)cols[x]+=ink[y*w+x];
+  const spans=groupRuns(cols,2,2);
+  const widths=spans.map(s=>s[1]-s[0]+1).sort((a,b)=>a-b);
+  const median=widths.length?widths[Math.floor(widths.length/2)]:30;
+  const gaps=spans.slice(1).map((s,i)=>s[0]-spans[i][1]-1).sort((a,b)=>a-b);
+  const common=gaps.length?gaps[Math.floor(gaps.length*.35)]:8;
+  const spaceGap=Math.max(22,Math.min(125,Math.max(median*.78,common*2.1)));
+  for(let i=0;i<spans.length;i++){
+   const [x0,x1]=spans[i];
+   let y0=bottom,y1=top;
+   for(let y=top;y<=bottom;y++)for(let x=x0;x<=x1;x++){
+    if(ink[y*w+x]){y0=Math.min(y0,y);y1=Math.max(y1,y)}
    }
-   refined.push([a,b]);
-  }
-  spans=refined.filter(v=>v[1]>=v[0]);
-  let gaps=spans.slice(1).map((s,i)=>s[0]-spans[i][1]-1).filter(g=>g>=0);
-  const sorted=gaps.slice().sort((a,b)=>a-b);
-  const nominal=sorted.length?sorted[Math.floor(sorted.length*.35)]:8;
-  const medianW=widths.length?med:35;
-  const spaceThreshold=Math.max(19,Math.min(100,Math.max(medianW*.74,nominal*2.2)));
-  let prev=null;
-  for(let si=0;si<spans.length;si++){
-   const [l,r]=spans[si];let yy0=bottom,yy1=top;
-   for(let y=top;y<=bottom;y++)for(let x=l;x<=r;x++)if(binary[y*W+x]){yy0=Math.min(y,yy0);yy1=Math.max(y,yy1)}
-   if(yy1<yy0)continue;
-   const gap=prev===null?0:l-prev;
-   regions.push({box:[l,yy0,r,yy1],line:li,space:prev!==null&&gap>spaceThreshold,gap});
-   prev=r;
+   if(y1<y0)continue;
+   found.push({box:[x0,y0,x1,y1],line,space:i>0&&x0-spans[i-1][1]-1>spaceGap});
   }
  }
- if(mode==="symbol"){
-  let minx=W,miny=H,maxx=-1,maxy=-1;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(binary[y*W+x]){minx=Math.min(minx,x);miny=Math.min(miny,y);maxx=Math.max(maxx,x);maxy=Math.max(maxy,y)}
-  if(maxx>=0)regions=[{box:[minx,miny,maxx,maxy],line:0,space:false,gap:0}];
- }
- return {regions,pixels:p};
+ return {regions:found,pixels};
 }
-function ask(cmd,data){return new Promise((resolve,reject)=>{
- if(!worker){reject(new Error("Model isn't loaded"));return}
- const id=++idCounter;pending.set(id,{resolve,reject});worker.postMessage({id,cmd,...data});
- setTimeout(()=>{const p=pending.get(id);if(p){pending.delete(id);p.reject(Error("Inference timed out"))}},30000);
-})}
-function scheduleRead(ms=320){
- activeVersion++;clearTimeout(activeTimer);if(!loaded)return;
- $("reading").textContent="AUTO · QUEUED";
- activeTimer=setTimeout(()=>{if(pointer===null)recognize(activeVersion)},ms);
+function normalize(box,pixels){
+ const [x0,y0,x1,y1]=box,w=x1-x0+1,h=y1-y0+1;
+ const cropped=document.createElement("canvas");cropped.width=w;cropped.height=h;
+ cropped.getContext("2d").putImageData(pixels,-x0,-y0);
+ const out=document.createElement("canvas");out.width=32;out.height=32;
+ const t=out.getContext("2d",{willReadFrequently:true});
+ t.fillStyle="white";t.fillRect(0,0,32,32);
+ const ratio=26/Math.max(w,h),tw=Math.max(1,Math.round(w*ratio)),th=Math.max(1,Math.round(h*ratio));
+ t.imageSmoothingQuality="high";
+ t.drawImage(cropped,0,0,w,h,(32-tw)/2,(32-th)/2,tw,th);
+ const bytes=t.getImageData(0,0,32,32).data;
+ const values=new Float32Array(1024);
+ for(let i=0;i<1024;i++)values[i]=1-(bytes[4*i]+bytes[4*i+1]+bytes[4*i+2])/765;
+ return Array.from(values);
+}
+function schedule(delay){
+ ++readVersion;clearTimeout(readTimer);
+ if(!loaded){display("Loading AI…",true);return}
+ readTimer=setTimeout(()=>{if(pointer===null)recognize(readVersion)},delay);
+}
+function request(cmd,payload){
+ return new Promise((resolve,reject)=>{
+  if(!worker){reject(Error("AI not loaded"));return}
+  const id=++requestId;
+  requests.set(id,{resolve,reject});
+  worker.postMessage({id,cmd,...payload});
+  setTimeout(()=>{const r=requests.get(id);if(r){requests.delete(id);reject(Error("Recognition timed out"))}},30000);
+ });
 }
 async function recognize(version){
- if(!loaded||version!==activeVersion)return;
- let started=performance.now();
+ if(!loaded||version!==readVersion)return;
  const {regions,pixels}=segment();
- if(!regions.length){
-  lastRegions=[];lastPredictions=[];$("output").innerHTML='<span class="hint">Draw something to begin.</span>';
-  $("reading").textContent="WAITING";$("glyphCount").textContent="0 characters";return;
- }
- $("reading").textContent="READING…";
+ if(!regions.length){display("Draw something",true);return}
  try{
-  const images=regions.map(r=>feature(r.box,pixels));
-  const result=modelBackend==="fallback"?{predictions:readBasic(images)}:await ask("read",{images});
-  if(version!==activeVersion)return;
-  lastRegions=regions;lastPredictions=result.predictions;
-  let text="",lastLine=regions[0].line,probs=[];
+  const images=regions.map(r=>normalize(r.box,pixels));
+  const {predictions}=await request("read",{images});
+  if(version!==readVersion)return;
+  let result="",lastLine=regions[0].line;
   for(let i=0;i<regions.length;i++){
-   const reg=regions[i],pred=result.predictions[i];
-   if(i&&reg.line!==lastLine){text+="\n";lastLine=reg.line}
-   else if(i&&reg.space&&mode==="text")text+=" ";
-   let ch=pred.top[0].char;
-   // Isolated single-stroke uppercase I cannot always be distinguished
-   // visually from lowercase l / digit 1; use modest word context.
-   if(mode==="text"&&/^([iIl1|])$/.test(ch)){
-    let before=text.slice(text.lastIndexOf(" ")+1);
-    const next=regions[i+1];
-    if(ch==="i"&&(!before||before.endsWith("\n"))&&(!next||next.space||next.line!==reg.line))ch="I";
-    if(/[0-9]$/.test(before)&&pred.top.some(x=>x.char==="1"))ch="1";
+   if(i&&regions[i].line!==lastLine){result+="\n";lastLine=regions[i].line}
+   else if(i&&regions[i].space)result+=" ";
+   const options=predictions[i].top,raw=options[0].char;
+   const before=result.slice(result.lastIndexOf(" ")+1);
+   const next=predictions[i+1]?.top?.[0]?.char||"";
+   // Distinguish likely words from numeric sequences when I/l/1 look alike.
+   let value=raw;
+   if(raw==="1" && ((/[A-Za-z]/.test(before))||(/[A-Za-z]/.test(next)&&next!=="I"))){
+    value=/[a-z]/.test(before+next)?"l":"I";
    }
-   text+=ch;probs.push(pred.top[0].confidence);
+   result+=value;
   }
-  lastRead=text;
-  $("output").textContent=text;
-  $("confidence").textContent="Avg. character confidence "+Math.round(probs.reduce((a,b)=>a+b,0)/probs.length*100)+"%";
-  $("glyphCount").textContent=regions.length+" segments";
-  $("speed").textContent=Math.round(performance.now()-started)+" ms";
-  $("reading").textContent="LIVE";
-  const correction=$("correct");
-  if(document.activeElement!==correction||correction.value===lastValue)correction.value=text;
-  lastValue=text;
-  $("fineTune").disabled=false;
- }catch(e){if(version===activeVersion){$("reading").textContent="ERROR";toast(e.message)}}
+  display(result);
+ }catch(e){if(version===readVersion)display("Recognition unavailable",true)}
 }
-$("fineTune").onclick=async()=>{
- if(!loaded||!lastRegions.length)return;
- const intended=$("correct").value;
- const glyphs=Array.from(intended).filter(x=>!/\s/.test(x));
- if(glyphs.length!==lastRegions.length){toast("I detected "+lastRegions.length+" character segments, but your correction has "+glyphs.length+". Use Symbol mode for a single glyph.");return}
- for(const ch of glyphs)if(!labels.includes(ch)){toast("Symbol "+ch+" is not in this trained model yet.");return}
- $("fineTune").disabled=true;
- try{
-  const {pixels}=segment(),images=lastRegions.map(r=>feature(r.box,pixels));
-  const current=JSON.parse(localStorage.getItem(STORAGE)||"null");
-  const previous=current&&current.format==="ink-personal-v1"?current.samples:[];
-  const additions=glyphs.map((ch,i)=>({label:ch,image:images[i]}));
-  const samples=[...previous,...additions].slice(-350);
-  let weights=null;
-  if(modelBackend==="cnn"){
-   await ask("tune",{samples:additions,steps:9});
-   weights=await ask("getTuning",{});
-  }
-  localStorage.setItem(STORAGE,JSON.stringify({format:"ink-personal-v1",modelVersion:"ink-cnn-int8-v1",
-      samples,...(weights?{final:weights.weights,bias:weights.bias}:{})}));
-  corrections=samples.length;$("tunedCount").textContent=corrections;
-  $("trainMessage").textContent=modelBackend==="fallback"?
-   "Correction saved as a personal handwriting example. Full neural fine-tuning activates when the GitHub model is published.":
-   "Fine-tuned classification weights saved. New handwriting corrections improve your private copy of the model.";
-  toast("Fine-tuned on "+glyphs.length+" character(s).");scheduleRead(100);
- }catch(e){toast("Fine-tuning failed: "+e.message)}
- finally{$("fineTune").disabled=false}
-};
 function createWorker(){
- if(worker)worker.terminate();
- const source=String.raw`
+ const source=String.raw
 "use strict";
-let labels=[],layers=[],f2=null,base=null;
-function decode(a){
- const raw=atob(a.weights),q=new Int8Array(raw.length);
- for(let i=0;i<q.length;i++)q[i]=raw.charCodeAt(i);
- const w=new Float32Array(q.length);
- for(let i=0;i<w.length;i++)w[i]=q[i]*a.scale;
- return {shape:a.shape,w,b:new Float32Array(a.bias)};
+let labels=[],c1,c2,c3,f1,f2;
+function unpack(layer){
+ const raw=atob(layer.weights);
+ const w=new Float32Array(raw.length),b=new Float32Array(layer.bias);
+ for(let i=0;i<raw.length;i++){const value=raw.charCodeAt(i);w[i]=(value>127?value-256:value)*layer.scale}
+ return {shape:layer.shape,w,b};
 }
-function pool(a,channels,W){
- let V=W/2,out=new Float32Array(channels*V*V);
- for(let c=0;c<channels;c++)for(let y=0;y<V;y++)for(let x=0;x<V;x++){
-  let off=c*W*W+y*2*W+x*2;
-  out[c*V*V+y*V+x]=Math.max(0,a[off],a[off+1],a[off+W],a[off+W+1]);
- }return out;
-}
-function conv(a,L,W){
- const [O,I,K]=L.shape;const out=new Float32Array(O*W*W),pad=(K-1)/2;
- for(let o=0;o<O;o++)for(let y=0;y<W;y++)for(let x=0;x<W;x++){
-  let z=L.b[o];const kernelStart=o*I*K*K;
-  for(let i=0;i<I;i++)for(let ky=0;ky<K;ky++){
-   let sy=y+ky-pad;if(sy<0||sy>=W)continue;
-   for(let kx=0;kx<K;kx++){
-    let sx=x+kx-pad;if(sx<0||sx>=W)continue;
-    z+=a[i*W*W+sy*W+sx]*L.w[kernelStart+i*K*K+ky*K+kx];
+function conv(input,L,size){
+ const [outChannels,inChannels,kernel]=L.shape,output=new Float32Array(outChannels*size*size),pad=(kernel-1)/2;
+ for(let o=0;o<outChannels;o++)for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+  let total=L.b[o];
+  for(let i=0;i<inChannels;i++)for(let ky=0;ky<kernel;ky++){
+   const sy=y+ky-pad;if(sy<0||sy>=size)continue;
+   for(let kx=0;kx<kernel;kx++){
+    const sx=x+kx-pad;if(sx<0||sx>=size)continue;
+    const wi=((o*inChannels+i)*kernel+ky)*kernel+kx;
+    total+=input[(i*size+sy)*size+sx]*L.w[wi];
    }
   }
-  out[o*W*W+y*W+x]=z;
- }return out;
-}
-function dense(a,L,act=false){
- const [O,I]=L.shape,out=new Float32Array(O);
- for(let o=0;o<O;o++){
-  let z=L.b[o],base=o*I;
-  for(let i=0;i<I;i++)z+=a[i]*L.w[base+i];
-  out[o]=act?Math.max(0,z):z;
- }return out;
-}
-function forward(image){
- let a=Float32Array.from(image);
- a=pool(conv(a,layers[0],32),12,32);
- a=pool(conv(a,layers[1],16),24,16);
- a=pool(conv(a,layers[2],8),32,8);
- const embedding=dense(a,layers[3],true);
- const logits=dense(embedding,f2);
- return {embedding,logits};
-}
-function rank(logits){
- let mx=Math.max(...logits),probs=logits.map(x=>Math.exp((x-mx)/1.25)),sum=probs.reduce((a,b)=>a+b,0);
- let top=Array.from(probs,(x,i)=>({char:labels[i],confidence:x/sum}));
- top.sort((a,b)=>b.confidence-a.confidence);return top.slice(0,5);
-}
-function tune(samples,steps=9){
- const rate=.08;
- for(let epoch=0;epoch<steps;epoch++)for(const item of samples){
-  const y=labels.indexOf(item.label);if(y<0)continue;
-  const {embedding,logits}=forward(item.image);
-  const max=Math.max(...logits),probs=Float32Array.from(logits,x=>Math.exp(x-max));
-  let z=0;for(const p of probs)z+=p;
-  for(let i=0;i<probs.length;i++){
-   const diff=((i===y?1:0)-probs[i]/z)*rate;
-   f2.b[i]+=diff;
-   const start=i*embedding.length;
-   for(let j=0;j<embedding.length;j++)f2.w[start+j]+=diff*embedding[j];
-  }
+  output[(o*size+y)*size+x]=total;
  }
+ return output;
 }
-onmessage=e=>{
+function pool(input,channels,size){
+ const next=size/2,result=new Float32Array(channels*next*next);
+ for(let c=0;c<channels;c++)for(let y=0;y<next;y++)for(let x=0;x<next;x++){
+  const i=c*size*size+(y*2)*size+x*2;
+  result[(c*next+y)*next+x]=Math.max(0,input[i],input[i+1],input[i+size],input[i+size+1]);
+ }
+ return result;
+}
+function dense(input,L,relu){
+ const [count,length]=L.shape,result=new Float32Array(count);
+ for(let o=0;o<count;o++){
+  let value=L.b[o];
+  const offset=o*length;
+  for(let i=0;i<length;i++)value+=L.w[offset+i]*input[i];
+  result[o]=relu?Math.max(0,value):value;
+ }
+ return result;
+}
+function predict(image){
+ let a=pool(conv(Float32Array.from(image),c1,32),12,32);
+ a=pool(conv(a,c2,16),24,16);
+ a=pool(conv(a,c3,8),32,8);
+ const logits=dense(dense(a,f1,true),f2,false);
+ let high=-Infinity;
+ for(let i=0;i<logits.length;i++)high=Math.max(high,logits[i]);
+ const probabilities=Array.from(logits,v=>Math.exp((v-high)/1.25));
+ const sum=probabilities.reduce((a,b)=>a+b,0);
+ return {top:probabilities.map((p,i)=>({char:labels[i],confidence:p/sum}))
+     .sort((a,b)=>b.confidence-a.confidence).slice(0,5)};
+}
+self.onmessage=e=>{
  const {id,cmd}=e.data;
  try{
-  let result;
   if(cmd==="init"){
-   const model=e.data.model;labels=model.labels;layers=[];
-   for(let i=0;i<model.layers.length;i++){
-     layers.push(decode(model.layers[i]));
-     postMessage({phase:"initializing",done:i+1,total:model.layers.length});
-   }
-   f2=layers[4];base={w:new Float32Array(f2.w),b:new Float32Array(f2.b)};
-   const custom=e.data.custom;
-   if(custom&&custom.final&&custom.bias&&custom.final.length===f2.w.length&&custom.bias.length===f2.b.length){
-    f2.w.set(custom.final);f2.b.set(custom.bias);
-   }
-   result={classes:labels.length};
+   const m=e.data.model;
+   if(m.format!=="ink-cnn-int8-v1"||m.layers?.length!==5)throw Error("Unsupported model");
+   labels=m.labels;
+   [c1,c2,c3,f1,f2]=m.layers.map(unpack);
+   self.postMessage({id,result:{classes:labels.length}});
   }else if(cmd==="read"){
-   result={predictions:e.data.images.map(im=>({top:rank(forward(im).logits)}))};
-  }else if(cmd==="tune"){
-   tune(e.data.samples,e.data.steps);result={done:true};
-  }else if(cmd==="getTuning"){
-   result={weights:Array.from(f2.w),bias:Array.from(f2.b)};
-  }else if(cmd==="reset"){
-   f2.w.set(base.w);f2.b.set(base.b);result={done:true};
-  }else throw Error("Unknown command "+cmd);
-  postMessage({id,result});
- }catch(ex){postMessage({id,error:String(ex.message||ex)})}
+   self.postMessage({id,result:{predictions:e.data.images.map(predict)}});
+  }else throw Error("Unsupported command");
+ }catch(error){self.postMessage({id,error:String(error?.message||error)})}
 };
-`;
- const blob=new Blob([source],{type:"text/javascript"});
- worker=new Worker(URL.createObjectURL(blob));
+;
+ const url=URL.createObjectURL(new Blob([source],{type:"text/javascript"}));
+ worker=new Worker(url);
+ URL.revokeObjectURL(url);
  worker.onmessage=e=>{
-  if(e.data?.phase==="initializing"){
-   modelProgress(Math.round(e.data.done/e.data.total*100),"Preparing neural network…",
-    "Decoded "+e.data.done+" of "+e.data.total+" model layers");
-   return;
-  }
-  const {id,result,error}=e.data,p=pending.get(id);if(!p)return;
-  pending.delete(id);if(error)p.reject(Error(error));else p.resolve(result);
+  const {id,result,error}=e.data;
+  const pending=requests.get(id);if(!pending)return;
+  requests.delete(id);
+  if(error)pending.reject(Error(error));else pending.resolve(result);
  };
- worker.onerror=e=>{status("INFERENCE WORKER ERROR",true);console.error(e)};
+ worker.onerror=()=>{loaded=false;window.__inkReady=false;display("AI could not start",true)};
 }
-
-let lastTrainingPoll=0;
-async function refreshTrainingStatus(){
- if(Date.now()-lastTrainingPoll<180000)return;
- lastTrainingPoll=Date.now();
+async function load(){
+ display("Loading AI…",true);
  try{
-  const u="https://api.github.com/repos/PletzelOnYT/INK-AI/actions/runs?per_page=20";
-  const response=await fetch(u,{cache:"no-store"});
-  if(!response.ok)return;
-  const data=await response.json();
-  const runs=data.workflow_runs||[];
-  const bootstrap=runs.find(r=>r.name==="Build first usable neural checkpoint");
-  const full=runs.find(r=>r.name==="Train INK AI handwriting model");
-  const fmt=(x)=>!x?"not scheduled":x.status==="completed"?(x.conclusion||"completed"):x.status;
-  if(modelBackend==="fallback"&&$("modelLoading").dataset.state==="pending"){
-    $("modelDetail").textContent="Initial neural checkpoint: "+fmt(bootstrap)+" · Full neural training: "+fmt(full)+". Basic recognition is available.";
-  }
- }catch(_){/* Optional status telemetry; never block basic recognition. */}
-}
-async function loadModel(refresh=false){
- clearTimeout(modelRetryTimer);modelRetryTimer=null;
- // Keep basic recognition available while the model checks/downloads.
- makeBasicTemplates();
- loaded=true;
- if(modelBackend!=="cnn")status("BASIC RECOGNITION ACTIVE · CHECKING MODEL");
- modelProgress(0,"Checking for the trained neural model…",
-  "Basic recognition already works; checking GitHub for improved weights");
- try{
-  let model;
-  const urls=location.protocol==="file:"?[REPO]:[MODEL_PATH,REPO];
-  let lastError=null;
-  for(const url of urls){
-   try{model=await fetchModelWithProgress(url,refresh);break}
-   catch(err){
-    lastError=err;
-    // Hosted pages may not have the relative model file; retry your own GitHub raw URL.
-    if(url===REPO||!(err.message||"").includes("HTTP 404"))break;
-   }
-  }
-  if(!model)throw lastError||new Error("Model not available");
-  if(model.format!=="ink-cnn-int8-v1"||!Array.isArray(model.layers)||model.layers.length!==5)throw Error("incompatible model weights");
-  labels=model.labels;
-  for(const item of pending.values())item.reject(Error("Model reloading"));pending.clear();
-  modelProgress(0,"Initializing neural network…","Preparing 5 model layers for recognition");
+  const response=await fetch(MODEL_URL,{cache:"no-store"});
+  if(!response.ok)throw Error("HTTP "+response.status);
+  const model=await response.json();
+  if(model.format!=="ink-cnn-int8-v1"||model.layers?.length!==5)throw Error("Bad model data");
   createWorker();
-  const custom=JSON.parse(localStorage.getItem(STORAGE)||"null");
-  const r=await ask("init",{model,custom});
-  if(custom?.samples?.length && (!custom.final || custom.final.length!==model.layers[4].shape.reduce((a,b)=>a*b,1))){
-   await ask("tune",{samples:custom.samples.slice(-200),steps:3});
-  }
-  modelBackend="cnn";
-  $("labelCount").textContent=r.classes;
-  $("trainingCount").textContent=(model.training?.training_presentations||0).toLocaleString();
-  corrections=custom?.samples?.length||0;$("tunedCount").textContent=corrections;
-  $("details").textContent="Source: "+(model.training?.data||"unknown")+" | EMNIST held-out accuracy: "+(100*(model.training?.emnist_test_accuracy||0)).toFixed(1)+"%";
-  $("charList").textContent="Supported: "+labels.join(" ");
-  loaded=true;status("LIVE · YOUR OWN MODEL");
-  modelProgress(100,"Model ready — 100%","Live recognition is active","ready");
-  scheduleRead(90);
- }catch(err){
-  // A GitHub 404 means training is unfinished, NOT that the app is broken.
-  // Never erase drawings, disable fine-tuning, or stop fallback recognition.
-  loaded=true;modelBackend="fallback";
-  const notPublished=/HTTP 404|not published/i.test(String(err.message||err));
-  status("BASIC RECOGNITION ACTIVE · NEURAL UPGRADE PENDING");
-  modelProgress(null,notPublished?"Neural training in progress — not downloading yet":"Basic recognition active; neural model unavailable",
-    notPublished?"The model file does not exist yet. Basic recognition works; GitHub will be checked again in 45 seconds.":"Neural model error: "+String(err.message||err),
-    "pending");
-  if(notPublished)refreshTrainingStatus();
-  modelRetryTimer=setTimeout(()=>loadModel(true),45000);
-  $("reading").textContent="BASIC · LIVE";
-  $("trainMessage").textContent="You can draw, read and save corrections in basic mode. GitHub's trained CNN will automatically replace it when published.";
-  scheduleRead(90);
+  await request("init",{model});
+  loaded=true;window.__inkReady=true;
+  display("Draw something",true);
+  if(strokes.length)schedule(80);
+ }catch(error){
+  display("AI unavailable — check connection",true);
+  // GitHub access or publication may be temporary. Keep the canvas usable.
+  setTimeout(()=>{if(!loaded)load()},15000);
  }
 }
-window.addEventListener("keydown",e=>{
- if(document.activeElement.tagName==="TEXTAREA")return;
- if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();$("undo").click()}
- if(e.key==="Escape")$("clear").click();
-});
-loadModel();
+load();
 })();
 </script>
 </body>
