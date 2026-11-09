@@ -9,7 +9,8 @@ const checkpoints=[
  "models/ink-stroke-sequence-v1.json",
  "models/ink-stroke-sequence-v2.json",
  "models/ink-stroke-prefix-v1.json",
- "models/ink-stroke-prefix-domain-v2.json"
+ "models/ink-stroke-prefix-domain-v2.json",
+ "models/ink-stroke-penlift-v3.json"
 ].filter(fs.existsSync);
 assert.ok(checkpoints.length>=1);
 for(const checkpoint of checkpoints){
@@ -37,7 +38,7 @@ for(const checkpoint of checkpoints){
   }
  }
  let passed=false;let best=null;
- if(checkpoint.includes("prefix")){
+ if(checkpoint.includes("prefix")||checkpoint.includes("penlift")){
   const backup=JSON.parse(fs.readFileSync("models/ink-stroke-sequence-v1.json","utf8"));
   ctx.self.onmessage({data:{cmd:"fallback",model:backup}});
   assert.ok(received.some(x=>x.type==="fallback-ready"),"Validated neural backup did not load");
@@ -77,7 +78,7 @@ for(const checkpoint of checkpoints){
     });
  }
  assert.ok(passed,"A partially written h should yield at least one learned downward tail; not just suppress all suggestions");
- if(checkpoint.includes("prefix")){
+ if(checkpoint.includes("prefix")||checkpoint.includes("penlift")){
   received.length=0;
   ctx.self.onmessage({data:{cmd:"generate",serial:915,epoch:5,seed:16,
     prefix,live:false,maxSteps:52,preferred:"h",options:[
