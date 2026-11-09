@@ -128,7 +128,7 @@ const MODEL_PATH="models/ink-cnn-v1.json";
 const STORAGE="ink-ai-personal-f2-v1";
 const $=(id)=>document.getElementById(id);
 const c=$("pad"),ctx=c.getContext("2d",{willReadFrequently:true});
-let strokes=[],drawing=null,pointer=null,mode="text",worker=null,loaded=false,labels=[],activeVersion=0,activeTimer=0,lastRegions=[],lastPredictions=[],lastRead="",lastValue="",corrections=0,pending=new Map(),idCounter=0,modelRetryTimer=null;
+let strokes=[],drawing=null,pointer=null,mode="text",worker=null,loaded=false,labels=[],activeVersion=0,activeTimer=0,lastRegions=[],lastPredictions=[],lastRead="",lastValue="",corrections=0,pending=new Map(),idCounter=0,modelRetryTimer=null,modelBackend="fallback",basicTemplates=[];
 ctx.lineCap="round";ctx.lineJoin="round";
 function toast(t){let el=$("notice");el.textContent=t;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),3000)}
 function status(t,error=false){$("status").textContent=t;$("status").dataset.error=error?"true":"false"}
@@ -247,6 +247,75 @@ function feature(box,pixels){
  for(let i=0;i<1024;i++)bytes[i]=1-(a[i*4]+a[i*4+1]+a[i*4+2])/765;
  return Array.from(bytes);
 }
+
+// A usable, lightweight recognizer is included in this HTML so a missing
+// GitHub model never disables the drawing app. This is clearly marked
+// as a basic synthetic-font fallback, NOT real-handwriting AI.
+const BASIC_CHARS=Array.from("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+ .concat(Array.from({length:94},(_,i)=>String.fromCharCode(i+33)).filter(c=>!/[A-Za-z0-9]/.test(c)))
+ .concat(Array.from("×÷±∞√≠≤≥"));
+function makeBasicTemplates(){
+ if(basicTemplates.length)return;
+ const t=document.createElement("canvas");t.width=t.height=96;
+ const g=t.getContext("2d",{willReadFrequently:true});
+ const families=["Arial","Georgia","Times New Roman","Courier New","Trebuchet MS","Comic Sans MS","serif","monospace"];
+ for(const char of BASIC_CHARS){
+  for(const family of families){
+   for(const variant of ["normal","italic","bold"]){
+    g.fillStyle="white";g.fillRect(0,0,96,96);
+    g.fillStyle="black";g.textBaseline="alphabetic";
+    g.font=variant+" 65px "+JSON.stringify(family);
+    const m=g.measureText(char);
+    const x=(96-m.width)/2;
+    const y=48+(m.actualBoundingBoxAscent-m.actualBoundingBoxDescent)/2;
+    g.fillText(char,x,y);
+    const p=g.getImageData(0,0,96,96),data=p.data;
+    let minX=96,minY=96,maxX=-1,maxY=-1;
+    for(let yy=0;yy<96;yy++)for(let xx=0;xx<96;xx++){
+     const j=(yy*96+xx)*4;
+     if(data[j]<190){minX=Math.min(minX,xx);minY=Math.min(minY,yy);maxX=Math.max(maxX,xx);maxY=Math.max(maxY,yy)}
+    }
+    if(maxX<0)continue;
+    const normalized=feature([minX,minY,maxX,maxY],p);
+    basicTemplates.push({char,ink:Uint8Array.from(normalized,n=>Math.round(n*255))});
+   }
+  }
+ }
+ labels=BASIC_CHARS;
+ $("labelCount").textContent=String(labels.length);
+ $("trainingCount").textContent="—";
+ $("details").textContent="Basic fallback uses browser-generated fonts; not human handwriting. Real-handwriting CNN automatically replaces it when GitHub publishes the model.";
+ $("charList").textContent="Basic symbols: "+labels.join(" ");
+}
+function readBasic(images){
+ let memory;
+ try{memory=JSON.parse(localStorage.getItem(STORAGE)||"null")?.samples||[]}catch{memory=[]}
+ return images.map(image=>{
+  const ink=Uint8Array.from(image,n=>Math.round(n*255));
+  const best=new Map();
+  for(const item of basicTemplates){
+   let d=0;
+   for(let j=0;j<1024;j+=2){const diff=ink[j]-item.ink[j];d+=diff*diff}
+   const old=best.get(item.char);
+   if(old===undefined||d<old)best.set(item.char,d);
+  }
+  for(const sample of memory){
+   if(!labels.includes(sample.label)||!Array.isArray(sample.image)||sample.image.length!==1024)continue;
+   let d=0;
+   for(let j=0;j<1024;j+=2){
+    const diff=ink[j]-Math.round(sample.image[j]*255);d+=diff*diff;
+   }
+   d*=.62; // Personalized examples are preferred over synthetic fonts.
+   const old=best.get(sample.label);
+   if(old===undefined||d<old)best.set(sample.label,d);
+  }
+  const sorted=Array.from(best,([char,d])=>({char,d})).sort((a,b)=>a.d-b.d).slice(0,5);
+  const maxScore=sorted[0]?.d||1;
+  const weight=sorted.map(x=>Math.exp(-(x.d-maxScore)/280000));
+  const sum=weight.reduce((a,b)=>a+b,0)||1;
+  return {top:sorted.map((x,i)=>({char:x.char,confidence:weight[i]/sum}))};
+ });
+}
 function groups(values,maxGap,minLen=1){
  let out=[],start=-1,last=-1;
  for(let i=0;i<=values.length;i++){
@@ -330,7 +399,7 @@ async function recognize(version){
  $("reading").textContent="READING…";
  try{
   const images=regions.map(r=>feature(r.box,pixels));
-  const result=await ask("read",{images});
+  const result=modelBackend==="fallback"?{predictions:readBasic(images)}:await ask("read",{images});
   if(version!==activeVersion)return;
   lastRegions=regions;lastPredictions=result.predictions;
   let text="",lastLine=regions[0].line,probs=[];
@@ -374,12 +443,17 @@ $("fineTune").onclick=async()=>{
   const previous=current&&current.format==="ink-personal-v1"?current.samples:[];
   const additions=glyphs.map((ch,i)=>({label:ch,image:images[i]}));
   const samples=[...previous,...additions].slice(-350);
-  await ask("tune",{samples:additions,steps:9});
-  const weights=await ask("getTuning",{});
+  let weights=null;
+  if(modelBackend==="cnn"){
+   await ask("tune",{samples:additions,steps:9});
+   weights=await ask("getTuning",{});
+  }
   localStorage.setItem(STORAGE,JSON.stringify({format:"ink-personal-v1",modelVersion:"ink-cnn-int8-v1",
-      samples,final:weights.weights,bias:weights.bias}));
+      samples,...(weights?{final:weights.weights,bias:weights.bias}:{})}));
   corrections=samples.length;$("tunedCount").textContent=corrections;
-  $("trainMessage").textContent="Fine-tuned classification weights saved. New handwriting corrections improve your private copy of the model.";
+  $("trainMessage").textContent=modelBackend==="fallback"?
+   "Correction saved as a personal handwriting example. Full neural fine-tuning activates when the GitHub model is published.":
+   "Fine-tuned classification weights saved. New handwriting corrections improve your private copy of the model.";
   toast("Fine-tuned on "+glyphs.length+" character(s).");scheduleRead(100);
  }catch(e){toast("Fine-tuning failed: "+e.message)}
  finally{$("fineTune").disabled=false}
@@ -498,9 +572,12 @@ onmessage=e=>{
 }
 async function loadModel(refresh=false){
  clearTimeout(modelRetryTimer);modelRetryTimer=null;
- loaded=false;$("fineTune").disabled=true;
- status("CHECKING YOUR GITHUB MODEL");
- modelProgress(0,"Looking for trained model…","Your repository: PletzelOnYT/INK-AI");
+ // Keep basic recognition available while the model checks/downloads.
+ makeBasicTemplates();
+ loaded=true;
+ if(modelBackend!=="cnn")status("BASIC RECOGNITION ACTIVE · CHECKING MODEL");
+ modelProgress(0,"Checking for the trained neural model…",
+  "Basic recognition already works; checking GitHub for improved weights");
  try{
   let model;
   const urls=location.protocol==="file:"?[REPO]:[MODEL_PATH,REPO];
@@ -521,6 +598,10 @@ async function loadModel(refresh=false){
   createWorker();
   const custom=JSON.parse(localStorage.getItem(STORAGE)||"null");
   const r=await ask("init",{model,custom});
+  if(custom?.samples?.length && (!custom.final || custom.final.length!==model.layers[4].shape.reduce((a,b)=>a*b,1))){
+   await ask("tune",{samples:custom.samples.slice(-200),steps:3});
+  }
+  modelBackend="cnn";
   $("labelCount").textContent=r.classes;
   $("trainingCount").textContent=(model.training?.training_presentations||0).toLocaleString();
   corrections=custom?.samples?.length||0;$("tunedCount").textContent=corrections;
@@ -530,18 +611,18 @@ async function loadModel(refresh=false){
   modelProgress(100,"Model ready — 100%","Live recognition is active","ready");
   scheduleRead(90);
  }catch(err){
-  loaded=false;
+  // A GitHub 404 means training is unfinished, NOT that the app is broken.
+  // Never erase drawings, disable fine-tuning, or stop fallback recognition.
+  loaded=true;modelBackend="fallback";
   const notPublished=/HTTP 404|not published/i.test(String(err.message||err));
-  status(notPublished?"MODEL NOT PUBLISHED · AUTO-RETRY ON":"MODEL DOWNLOAD FAILED",true);
-  modelProgress(0,notPublished?"Model still training — waiting for upload":"Unable to load model",
-    notPublished?"No model file on GitHub yet. Automatically checking every 45 seconds.":"Error: "+String(err.message||err),
-    "error");
-  if(notPublished)modelRetryTimer=setTimeout(()=>loadModel(true),45000);
-  $("output").innerHTML=notPublished
-   ?'<span class="hint">Your model is still being trained on GitHub. Recognition will work once <b>models/ink-cnn-v1.json</b> is published. Click “Reload GitHub model” after the training finishes.</span>'
-   :'<span class="hint">Could not download or initialize the model. Check the repository connection and reload.</span>';
-  $("reading").textContent="MODEL UNAVAILABLE";
-  $("trainMessage").textContent=String(err.message||err)+" · Check the GitHub training run and reload the model when it is published.";
+  status("BASIC RECOGNITION ACTIVE · NEURAL UPGRADE PENDING");
+  modelProgress(0,notPublished?"Basic mode is ready — neural model pending":"Basic mode is ready — neural model unavailable",
+    notPublished?"GitHub hasn't published the neural weights. Basic offline recognition works now; rechecking every 45 seconds.":"Neural model error: "+String(err.message||err),
+    "pending");
+  modelRetryTimer=setTimeout(()=>loadModel(true),45000);
+  $("reading").textContent="BASIC · LIVE";
+  $("trainMessage").textContent="You can draw, read and save corrections in basic mode. GitHub's trained CNN will automatically replace it when published.";
+  scheduleRead(90);
  }
 }
 window.addEventListener("keydown",e=>{
