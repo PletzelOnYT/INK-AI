@@ -300,7 +300,17 @@ async function generateGlyph(){
    glyphBusy=false;window.__inkAssistInFlight=false;return;
   }
   const fresh=read.predictions?.[0]?.top?.slice(0,4)||[];
-  const options=stableCharacterOptions(fresh);
+  let options=stableCharacterOptions(fresh);
+  // A full multi-stroke glyph is much more informative than a partial crop.
+  // In the screenshot the board OCR says "h" but the cropped assistant OCR
+  // said L/H/k. Put h FIRST and insist on a neural completion of h.
+  const whole=window.__inkDetectedRegions===1?window.__inkLastGuess:null;
+  const preferred=typeof whole==="string"&&whole.length===1&&
+    !/\s/.test(whole)?whole:null;
+  if(preferred){
+   options=[{char:preferred,confidence:1},
+     ...options.filter(c=>c.char!==preferred)].slice(0,4);
+  }
   if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
   ghostPending={frame:f,serial};
   const isLive=pointer!==null;
@@ -308,7 +318,7 @@ async function generateGlyph(){
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
      prefix:input.prefix,options: isLive? options.slice(0,big?1:2):options,
      live:isLive,maxSteps:isLive?(big?20:26):52,
-     seed:glyphStrokeSeed});
+     preferred,seed:glyphStrokeSeed});
  }catch(err){
   glyphBusy=false;window.__inkAssistInFlight=false;
   window.__inkLastGlyphError=String(err.message||err);
