@@ -44,6 +44,8 @@ jobs:
           node tests/worker-smoke.mjs
           node tests/recognition-v2-metrics.mjs
           node tests/recognition-v3-metrics.mjs
+          node tests/lowercase-refinement-unit.mjs
+          node --check src/recognition_refinement.js
           node --check /tmp/ink-worker-check.js
           node tests/glyph-model-smoke.mjs
           node tests/h-continuation-regression.mjs
