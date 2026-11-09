@@ -6,11 +6,13 @@
 
 ## Experimental Neural Assist (sparkle)
 
-Tap ✨ and start handwriting a character. The system identifies the current partial letter, digit, or symbol with the existing recognizer. A *separately trained neural handwriting-completion network* then predicts possible **missing portions of that same character**. Its suggestion appears as transparent gray ink. As you keep drawing, it updates.
+Tap ✨ and start handwriting a character. The existing recognizer generates candidate labels, and the independently trained V2 network predicts missing portions of the current letter, digit, or symbol. To avoid its old **large fuzzy gray sploches**, the browser now thins predicted glyphs to centerlines, traces the lines, smooths their curves, and displays them as **narrow, transparent pen strokes**.
 
-Press **G** to accept a suggested completion as real, undoable ink, or continue handwriting without accepting. Faint ink is kept in a separate overlay and is never sent to the recognizer until accepted.
+A second improvement is the [human handwriting reference bank](./models/ink-human-glyph-references.json): **15,931 individual EMNIST, HASYv2 and supplemental punctuation examples** selected and stored in this repository. The assistant aligns these real handwritten shapes with the strokes you already drew, then uses them to guide neural completions. This reduces the blurry averaging problem, but cannot guarantee that an unfinished stroke has only one correct interpretation.
 
-**What it is:** A real larger class-conditioned neural completion model, trained and fine-tuned to reconstruct partly missing handwritten characters. The system learns from masked parts of human-written glyph images, not geometric curve extrapolation. It does not have human stroke-order data, so suggestions are reconstructed pixels rather than perfectly predicted pen movements.
+Press **Tab** to cycle through alternative suggested letters/symbols when a partial shape could mean several things, such as `I`, `l`, `1`, `B`, or `P`. Press **G** (or **Enter**) to accept the current ghost suggestion as real **editable vector strokes**. Press **Cmd+Z/Ctrl+Z** to undo, or keep handwriting without accepting. Unaccepted ghost lines never become ink or influence the recognizer.
+
+**What it is:** A real larger class-conditioned neural completion model, trained and fine-tuned to reconstruct partly missing handwritten characters. The system learns from masked parts of human-written glyph images, not geometric curve extrapolation. It does **not** have original human stroke-order data: vector paths are derived from reconstructed images and real glyph examples rather than directly predicted from pen-motion sequences.
 
 **What it is not:** Sketch generation, picture/object completion, a generalized art generator, or a model capable of reliably guessing any intended symbol from a few marks. Unclear partial characters such as `I`, `l`, `1`, `|` may be guessed incorrectly. The suggestion network predicts pixels, so its gray suggestions can be soft-edged rather than perfect human pen strokes.
 
@@ -26,7 +28,7 @@ The complete implementation is a single HTML file containing browser inference c
 
 ## Drawing controls
 
-The **pen** makes black strokes. The **eraser** removes parts of the ink. The **sparkle** turns neural handwriting completion on and off. Press **G** to accept the suggestion, **Escape** to clear the board, or **Ctrl+Z/Cmd+Z** to undo.
+The **pen** makes black strokes. The **eraser** removes parts of the ink. The **sparkle** turns neural handwriting completion on and off. Press **Tab** to see alternative character completions, **G/Enter** to accept a vector stroke suggestion, **Escape** to clear the board, or **Ctrl+Z/Cmd+Z** to undo.
 
 ## Training-data attribution
 
