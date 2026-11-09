@@ -98,7 +98,7 @@ function refinedLetterAt(i,regions,predictions,pixels,strokes,initial){
   const next=predictions[j]?.top?.[0];
   if(!next)continue;
   const letter=next.char;
-  const isLower=(/^[a-eg-npr-tvy]$/.test(letter)&&next.confidence>=.25)||
+  const isLower=(/^[abdeghijknpqrty]$/.test(letter)&&next.confidence>=.25)||
     (letter==="i"&&next.confidence>=.15)||
     dottedStemEvidence(regions[j],pixels);
   if(isLower)neighbors.push(regions[j].box[3]-regions[j].box[1]);
