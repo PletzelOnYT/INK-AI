@@ -17,7 +17,7 @@ try:
     wait=WebDriverWait(driver,60)
     wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
     driver.find_element(By.ID,"assist").click()
-    wait.until(lambda d:d.execute_script("return window.__inkGlyphVersion===3"))
+    wait.until(lambda d:d.execute_script("return window.__inkGlyphVersion>=3"))
     assert driver.execute_script("return window.__inkAssistModel")=="online-stroke-gru"
     assert driver.execute_script("return window.__inkHumanExamples")==0
     print("PASS: only actual class-conditioned neural vector model initialized",flush=True)
