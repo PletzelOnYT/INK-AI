@@ -1,0 +1,16 @@
+{
+  "parameter_count": 1106848,
+  "best": {
+    "validation_loss": 0.8113617869785854,
+    "missing_ink_f1": 0.6664382917729662,
+    "tested": 3500,
+    "stage": "hard-class-fine-tune",
+    "epoch": 5
+  },
+  "training_presentations": 619374,
+  "ambiguous_finetune_samples": 74386,
+  "emnist_train": 100000,
+  "hasy_train": 24247,
+  "synthetic_train": 12000,
+  "model": "models/ink-glyph-completion-v2.json"
+}
