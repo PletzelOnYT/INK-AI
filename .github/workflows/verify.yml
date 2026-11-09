@@ -29,3 +29,5 @@ jobs:
           assert "api.openai.com" not in html
           PY
           node --check /tmp/ink-check.js
+          node tests/worker-smoke.mjs
+          node --check /tmp/ink-worker-check.js
