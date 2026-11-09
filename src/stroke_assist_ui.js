@@ -4,6 +4,7 @@
 const STROKE_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v1.json";
 const STROKE_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v2.json";
 const STROKE_PREFIX_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-prefix-v1.json";
+const STROKE_PREFIX_DOMAIN_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-prefix-domain-v2.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
@@ -159,10 +160,13 @@ function createGlyphWorker(){
   if(m.type==="ready"){
    glyphReady=true;glyphBusy=false;
    window.__inkGlyphReady=true;
-   window.__inkGlyphVersion=m.prefixTuned?5:(m.parameters>=1000000?4:3);
+   window.__inkGlyphVersion=m.prefixDomain?6:(m.prefixTuned?5:(m.parameters>=1000000?4:3));
+   window.__inkPrefixDomain=Boolean(m.prefixDomain);
    window.__inkGlyphParameters=m.parameters;
    window.__inkPrefixTrained=Boolean(m.prefixTuned);
-   assistButton.title=m.prefixTuned?
+   assistButton.title=m.prefixDomain?
+     "Browser-prefix-trained handwriting · Live · Tab alternatives · G accept":
+     m.prefixTuned?
      "Prefix-trained neural handwriting · per-character fallback · Tab alternatives · G accept":
      m.parameters>=1000000?
      "1M neural handwriting strokes · Live · Tab alternatives · G accept":
@@ -241,8 +245,9 @@ async function loadGlyphModel(){
   // *free-running* tail error. Prefer it over a bigger model selected only
   // by teacher-forced likelihood, when that checkpoint has been published.
   const sources=location.protocol==="file:"?
-    [STROKE_PREFIX_URL,STROKE_V2_URL,STROKE_URL]:
-    ["models/ink-stroke-prefix-v1.json",STROKE_PREFIX_URL,
+    [STROKE_PREFIX_DOMAIN_V2_URL,STROKE_PREFIX_URL,STROKE_V2_URL,STROKE_URL]:
+    ["models/ink-stroke-prefix-domain-v2.json",STROKE_PREFIX_DOMAIN_V2_URL,
+     "models/ink-stroke-prefix-v1.json",STROKE_PREFIX_URL,
      "models/ink-stroke-sequence-v2.json",STROKE_V2_URL,
      "models/ink-stroke-sequence-v1.json",STROKE_URL];
   let model=null,lastError=null;
@@ -255,10 +260,15 @@ async function loadGlyphModel(){
       throw Error("Wrong sequence model");
     if(source.includes("v2") && !(candidate.training?.v2&&candidate.parameter_count>=1000000))
       throw Error("Unvalidated larger model");
-    if(source.includes("prefix") && !(
+    if(source.includes("prefix-domain-v2")){
+      if(!(candidate.training?.prefix_domain_v2 &&
+         candidate.training?.fine_tuned_own_model==="models/ink-stroke-prefix-v1.json"))
+       throw Error("Unvalidated browser-domain model");
+    }else if(source.includes("prefix") && !(
        candidate.training?.prefix_tuned &&
-       candidate.training?.fine_tuned_own_model==="models/ink-stroke-sequence-v1.json"))
+       candidate.training?.fine_tuned_own_model==="models/ink-stroke-sequence-v1.json")){
       throw Error("Unvalidated prefix-completion model");
+    }
     model=candidate;break;
    }catch(err){lastError=err;model=null}
   }
