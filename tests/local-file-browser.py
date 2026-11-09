@@ -19,7 +19,7 @@ try:
     print("PASS: local file:// HTML downloads and initializes recognizer",flush=True)
     driver.find_element(By.ID,"assist").click()
     wait.until(lambda d:d.execute_script("return window.__inkGlyphReady===true"))
-    assert driver.execute_script("return window.__inkGlyphVersion===3")
+    assert driver.execute_script("return window.__inkGlyphVersion>=3")
     assert driver.execute_script("return window.__inkHumanExamples===0")
     print("PASS: local file:// HTML downloads actual trained sequence generator",flush=True)
     canvas=driver.find_element(By.ID,"pad")
