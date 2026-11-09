@@ -256,6 +256,8 @@ let assistEnabled=false,ghostCandidate=null;
 const requests=new Map();
 window.__inkReady=false;
 window.__inkEngine="cnn";
+window.__inkDetectedRegions=0;
+window.__inkLastGuess="";
 window.__inkAssistEnabled=false;
 window.__inkGhostPoints=0;
 function display(text,muted=false){guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
@@ -883,10 +885,82 @@ function request(cmd,payload){
   setTimeout(()=>{const r=requests.get(id);if(r){requests.delete(id);reject(Error("Recognition timed out"))}},30000);
  });
 }
+// Geometric recognition for unambiguous single-stroke mathematical marks.
+// A complete hand-drawn caret must not be cut into a long fake "word", and
+// full-character CNNs are not trained to interpret arbitrary partial strokes.
+function shapeFromStroke(region){
+ if(strokes.length!==1||strokes[0].tool!=="pen"||
+    strokes[0].type||region.length!==1)return null;
+ const pts=strokes[0].points;
+ if(pts.length<3)return null;
+ const samples=[pts[0]];
+ for(let i=1;i<pts.length;i++){
+  const prev=samples[samples.length-1],p=pts[i];
+  if(Math.hypot(p[0]-prev[0],p[1]-prev[1])>=5||i===pts.length-1)samples.push(p);
+ }
+ if(samples.length<3)return null;
+ let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+ for(const p of samples){
+  x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);
+  y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);
+ }
+ const w=x1-x0,h=y1-y0,first=samples[0],last=samples[samples.length-1];
+ if(w<22&&h<22)return null;
+ const lineDistance=(p,a,b)=>Math.abs((b[1]-a[1])*p[0]-(b[0]-a[0])*p[1]+b[0]*a[1]-b[1]*a[0])/
+   Math.max(1,Math.hypot(b[1]-a[1],b[0]-a[0]));
+ // Single-stroke straight marks with minimal overall curvature.
+ let maxDeviation=0;
+ for(const p of samples)maxDeviation=Math.max(maxDeviation,lineDistance(p,first,last));
+ if(maxDeviation<Math.max(8,.055*Math.max(w,h))){
+  if(w>3*h&&h<45)return "-";
+  if(h>3*w&&w<45)return "|";
+  if(w>26&&h>26){
+   const slope=(last[1]-first[1])*(last[0]-first[0]);
+   return slope>0?"\\":"/";
+  }
+ }
+ // Roof / caret: two monotonic arms meeting at a high apex, open at base.
+ // Likewise V-shaped handwritten symbol with the cusp at the bottom.
+ if(w>=1.2*h&&h>=27&&w>=48){
+  const leftToRight=last[0]>=first[0],ordered=leftToRight?samples:samples.slice().reverse();
+  let peak=-1,top=Infinity,bottom=-Infinity;
+  for(let i=0;i<ordered.length;i++){
+   const p=ordered[i];
+   if(p[1]<top){top=p[1];peak=i}
+   bottom=Math.max(bottom,p[1]);
+  }
+  const valleyIndex=ordered.reduce((best,p,i)=>p[1]>ordered[best][1]?i:best,0);
+  const inspect=(i,inverted)=>{
+   if(i<2||i>=ordered.length-2)return false;
+   const a=ordered[0],mid=ordered[i],b=ordered[ordered.length-1];
+   const leftRun=Math.abs(mid[0]-a[0]),rightRun=Math.abs(b[0]-mid[0]);
+   if(leftRun<w*.20||rightRun<w*.20)return false;
+   const level=inverted?Math.min(a[1],b[1])-mid[1]:Math.min(a[1],b[1])-mid[1];
+   if(inverted?level>h*.45:level<h*.45)return false;
+   let violations=0;
+   for(let j=1;j<ordered.length;j++){
+    const dx=ordered[j][0]-ordered[j-1][0];
+    if(dx<-Math.max(8,w*.028))violations++;
+   }
+   return violations<Math.max(3,ordered.length*.14)&&
+    Math.abs(a[1]-b[1])<h*.40;
+  };
+  if(inspect(peak,false))return "^";
+  const a=ordered[0],p=ordered[valleyIndex],b=ordered[ordered.length-1];
+  if(valleyIndex>1&&valleyIndex<ordered.length-2&&
+      p[1]-Math.max(a[1],b[1])>h*.48&&
+      Math.abs(a[1]-b[1])<h*.4&&
+      p[0]-a[0]>w*.20&&b[0]-p[0]>w*.20)return "V";
+ }
+ return null;
+}
 async function recognize(version){
  if(!loaded||version!==readVersion)return;
  const {regions,pixels}=segment();
+ window.__inkDetectedRegions=regions.length;
  if(!regions.length){display("Draw something",true);return}
+ const simple=shapeFromStroke(regions);
+ if(simple!==null){display(simple);window.__inkLastGuess=simple;return}
  try{
   const images=regions.map(r=>normalize(r.box,pixels));
   const {predictions}=await request("read",{images});
@@ -922,7 +996,7 @@ async function recognize(version){
    result+=ch;
   }
   display(result);
-
+  window.__inkLastGuess=result;
  }catch(e){if(version===readVersion)display("Recognition unavailable",true)}
 }
 function createWorker(){
