@@ -1,0 +1,63 @@
+name: Train INK AI handwritten character completion
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_glyph_completion.py"
+      - ".github/workflows/train-glyph-completion.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-glyph-completion
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Train on real handwritten letters, numbers and symbols
+        run: |
+          python -u src/train_glyph_completion.py --samples 45000 --epochs 3 --batch 256 --hasy
+      - name: Validate independently trained glyph completion
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path("models/ink-glyph-completion-v1.json").read_text())
+          assert m["format"] == "ink-glyph-completion-mlp-v1"
+          assert m["training"]["trained_from_scratch"] is True
+          assert m["training"]["human_emnist_characters"] >= 30000
+          assert len(m["labels"]) >= 90
+          assert len(m["layers"]) == 3
+          assert m["training"]["held_out_masked_bce"] > 0
+          print(m["training"])
+          PY
+      - name: Publish weights to latest main branch
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          git add models/ink-glyph-completion-v1.json models/glyph-completion-metrics.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish neural handwritten letters numbers and symbols completion"
+            git push origin HEAD:main
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-handwriting-completion-model
+          path: |
+            models/ink-glyph-completion-v1.json
+            models/glyph-completion-metrics.json
+          if-no-files-found: ignore
