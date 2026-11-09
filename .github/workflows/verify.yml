@@ -38,3 +38,4 @@ jobs:
           python3 -m pip install --quiet selenium
           command -v google-chrome || command -v chromium
           python3 tests/browser-smoke.py
+          if test -s models/ink-cnn-v1.json; then python3 tests/neural-browser-smoke.py; fi
