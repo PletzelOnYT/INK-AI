@@ -255,6 +255,7 @@ self.onmessage=e=>{
       outputWeight.shape[1]!==hiddenSize)throw Error("Corrupt trajectory head");
    self.postMessage({type:"ready",engine:"stroke-gru-mdn",
      parameters:o.parameter_count,classes:characters.length,
+     prefixTuned:Boolean(o.training?.prefix_tuned),
      realSamples:o.training.real_training_glyphs});
   }else if(m.cmd==="generate"){
    if(!network)throw Error("Neural generator is not initialized");
