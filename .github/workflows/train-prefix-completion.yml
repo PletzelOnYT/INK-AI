@@ -1,0 +1,81 @@
+name: Fine-tune real handwriting from incomplete prefixes
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_prefix_completion.py"
+      - "tests/prefix-training-unit.py"
+      - ".github/workflows/train-prefix-completion.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-prefix-handwriting-training
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install training packages
+        run: python -m pip install -r requirements.txt
+      - name: Verify genuine prefix scheduled sampling
+        run: |
+          python -m py_compile src/train_prefix_completion.py
+          python -u tests/prefix-training-unit.py
+      - name: Train from real partial letters with free-running rollout
+        run: |
+          python -u src/train_prefix_completion.py \
+            --epochs 3 --per-epoch 13000 --batch 96 --tail-steps 22
+      - name: Accept only measurable generalization to unseen writers
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path("models/stroke-prefix-metrics.json").read_text())
+          assert m["writer_disjoint_independent_glyphs"]>=1000
+          assert m["presentations"]>10000
+          if m["eligible"]:
+            w=json.loads(Path("models/ink-stroke-prefix-v1.json").read_text())
+            assert w["format"]=="ink-online-stroke-mdn-v1"
+            assert w["training"]["prefix_tuned"] is True
+            assert w["training"]["fine_tuned_own_model"]=="models/ink-stroke-sequence-v1.json"
+            assert m["improvement_fraction"]>=.025
+            assert m["pen_accuracy_delta"]>=-.035
+            print("PREFIX RECURRENT MODEL APPROVED:",m["improvement_fraction"],flush=True)
+          else:
+            assert not Path("models/ink-stroke-prefix-v1.json").exists()
+            print("FREE-ROLL REGRESSED: retain prior checkpoint",flush=True)
+          PY
+      - name: Publish only real trained and held-out validated weights
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/stroke-prefix-metrics.json
+          if test -s models/ink-stroke-prefix-v1.json; then
+            git add models/ink-stroke-prefix-v1.json
+          fi
+          git commit -m "Publish tested prefix-conditioned handwritten-ink fine-tuning"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-prefix-conditioning-validation
+          path: |
+            models/ink-stroke-prefix-v1.json
+            models/stroke-prefix-metrics.json
+          if-no-files-found: ignore
