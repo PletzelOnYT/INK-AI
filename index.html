@@ -118,17 +118,64 @@ function segment(){
   const off=(y*w+x)*4,idx=y*w+x;
   if(data[off]+data[off+1]+data[off+2]<620){ink[idx]=1;rows[y]++}
  }
- const lines=groupRuns(rows,25,2);
+ let lines=groupRuns(rows,22,2);
+ // Dots above lowercase i/j or detached crossbars should stay on the same
+ // handwriting line, rather than being mistaken for a new text line.
+ function projections(top,bottom){
+  const cols=new Uint16Array(w);
+  for(let y=top;y<=bottom;y++)for(let x=0;x<w;x++)cols[x]+=ink[y*w+x];
+  return cols;
+ }
+ let merged=[];
+ for(const line of lines){
+  const last=merged[merged.length-1];
+  if(last){
+   const gap=line[0]-last[1]-1;
+   if(gap>22&&gap<=62){
+    const topCols=projections(last[0],last[1]);
+    const lowCols=projections(line[0],line[1]);
+    const upper=groupRuns(topCols,2,1),lower=groupRuns(lowCols,2,1);
+    const lowHeight=line[1]-line[0]+1,topHeight=last[1]-last[0]+1;
+    const smallTop=topHeight<Math.min(33,lowHeight*.48)&&upper.length<=Math.max(1,lower.length);
+    const aligned=upper.length>0&&upper.every(a=>lower.some(b=>
+      (a[0]+a[1])/2>=b[0]-13&&(a[0]+a[1])/2<=b[1]+13));
+    if(smallTop&&aligned){last[1]=line[1];continue}
+   }
+  }
+  merged.push([...line]);
+ }
+ lines=merged;
  const found=[];
  for(let line=0;line<lines.length;line++){
-  const [top,bottom]=lines[line],cols=new Uint16Array(w);
-  for(let y=top;y<=bottom;y++)for(let x=0;x<w;x++)cols[x]+=ink[y*w+x];
-  const spans=groupRuns(cols,2,2);
-  const widths=spans.map(s=>s[1]-s[0]+1).sort((a,b)=>a-b);
-  const median=widths.length?widths[Math.floor(widths.length/2)]:30;
+  const [top,bottom]=lines[line],cols=projections(top,bottom);
+  const initial=groupRuns(cols,2,2);
+  const widths=initial.map(s=>s[1]-s[0]+1).sort((a,b)=>a-b);
+  const typical=widths.length?widths[Math.floor(widths.length/2)]:30;
+  const lineHeight=bottom-top+1;
+  const spans=[];
+  // When two handwritten letters touch, try a deep vertical valley, but
+  // only for blobs much wider than a normally proportioned single letter.
+  for(const [start,end] of initial){
+   const wide=end-start+1;
+   if(wide>Math.max(60,1.45*lineHeight) && (initial.length<=2||wide>1.8*typical)){
+    let candidates=[];
+    for(let x=start+15;x<=end-15;x++){
+     if(cols[x]<=Math.max(2,lineHeight*.11)&&cols[x]<=cols[x-1]&&cols[x]<=cols[x+1])candidates.push(x);
+    }
+    const cuts=[],minWidth=Math.max(16,Math.min(36,lineHeight*.34));
+    let previous=start;
+    for(const x of candidates){
+     if(x-previous>minWidth&&end-x>minWidth){cuts.push(x);previous=x}
+    }
+    if(cuts.length){
+     let a=start;for(const x of cuts){spans.push([a,x]);a=x+1}spans.push([a,end]);continue;
+    }
+   }
+   spans.push([start,end]);
+  }
   const gaps=spans.slice(1).map((s,i)=>s[0]-spans[i][1]-1).sort((a,b)=>a-b);
   const common=gaps.length?gaps[Math.floor(gaps.length*.35)]:8;
-  const spaceGap=Math.max(22,Math.min(125,Math.max(median*.78,common*2.1)));
+  const spaceGap=Math.max(22,Math.min(125,Math.max(typical*.78,common*2.1)));
   for(let i=0;i<spans.length;i++){
    const [x0,x1]=spans[i];
    let y0=bottom,y1=top;
@@ -179,18 +226,34 @@ async function recognize(version){
   const {predictions}=await request("read",{images});
   if(version!==readVersion)return;
   let result="",lastLine=regions[0].line;
+  function candidate(i,char){return predictions[i]?.top?.find(p=>p.char===char)}
+  function neighboringType(i,step){
+   let j=i+step;
+   if(j<0||j>=regions.length)return "";
+   if(regions[j].line!==regions[i].line)return "";
+   if(step<0 && regions[i].space)return "";
+   if(step>0 && regions[j].space)return "";
+   const ch=predictions[j]?.top?.[0]?.char||"";
+   if(/[0-9]/.test(ch))return "number";
+   if(/[a-z]/.test(ch))return "lower";
+   if(/[A-Z]/.test(ch))return "upper";
+   return "";
+  }
   for(let i=0;i<regions.length;i++){
    if(i&&regions[i].line!==lastLine){result+="\n";lastLine=regions[i].line}
    else if(i&&regions[i].space)result+=" ";
-   const options=predictions[i].top,raw=options[0].char;
-   const before=result.slice(result.lastIndexOf(" ")+1);
-   const next=predictions[i+1]?.top?.[0]?.char||"";
-   // Distinguish likely words from numeric sequences when I/l/1 look alike.
-   let value=raw;
-   if(raw==="1" && ((/[A-Za-z]/.test(before))||(/[A-Za-z]/.test(next)&&next!=="I"))){
-    value=/[a-z]/.test(before+next)?"l":"I";
+   const options=predictions[i].top;
+   let ch=options[0].char;
+   const before=neighboringType(i,-1),after=neighboringType(i,1);
+   const ambiguous=["1","I","l","|","i"];
+   if(ambiguous.includes(ch)){
+    if((before==="number"||after==="number")&&candidate(i,"1"))ch="1";
+    else if(before==="lower"||after==="lower"){
+     if(candidate(i,"l"))ch="l";
+     else if(candidate(i,"i")&&ch!=="I")ch="i";
+    }else if((before==="upper"||after==="upper")&&candidate(i,"I"))ch="I";
    }
-   result+=value;
+   result+=ch;
   }
   display(result);
  }catch(e){if(version===readVersion)display("Recognition unavailable",true)}
