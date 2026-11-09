@@ -138,7 +138,7 @@ function modelProgress(pct,step,detail,state="loading"){
  $("modelStep").textContent=step;
  $("modelDetail").textContent=detail;
  if(pct===null){
-  $("modelPercent").textContent="…";bar.removeAttribute("aria-valuenow");
+  $("modelPercent").textContent=state==="pending"?"WAITING":"…";bar.removeAttribute("aria-valuenow");
  }else{
   const number=Math.max(0,Math.min(100,Math.round(pct)));
   $("modelPercent").textContent=number+"%";
@@ -570,6 +570,25 @@ onmessage=e=>{
  };
  worker.onerror=e=>{status("INFERENCE WORKER ERROR",true);console.error(e)};
 }
+
+let lastTrainingPoll=0;
+async function refreshTrainingStatus(){
+ if(Date.now()-lastTrainingPoll<180000)return;
+ lastTrainingPoll=Date.now();
+ try{
+  const u="https://api.github.com/repos/PletzelOnYT/INK-AI/actions/runs?per_page=20";
+  const response=await fetch(u,{cache:"no-store"});
+  if(!response.ok)return;
+  const data=await response.json();
+  const runs=data.workflow_runs||[];
+  const bootstrap=runs.find(r=>r.name==="Build first usable neural checkpoint");
+  const full=runs.find(r=>r.name==="Train INK AI handwriting model");
+  const fmt=(x)=>!x?"not scheduled":x.status==="completed"?(x.conclusion||"completed"):x.status;
+  if(modelBackend==="fallback"&&$("modelLoading").dataset.state==="pending"){
+    $("modelDetail").textContent="Initial neural checkpoint: "+fmt(bootstrap)+" · Full neural training: "+fmt(full)+". Basic recognition is available.";
+  }
+ }catch(_){/* Optional status telemetry; never block basic recognition. */}
+}
 async function loadModel(refresh=false){
  clearTimeout(modelRetryTimer);modelRetryTimer=null;
  // Keep basic recognition available while the model checks/downloads.
@@ -616,9 +635,10 @@ async function loadModel(refresh=false){
   loaded=true;modelBackend="fallback";
   const notPublished=/HTTP 404|not published/i.test(String(err.message||err));
   status("BASIC RECOGNITION ACTIVE · NEURAL UPGRADE PENDING");
-  modelProgress(0,notPublished?"Basic mode is ready — neural model pending":"Basic mode is ready — neural model unavailable",
-    notPublished?"GitHub hasn't published the neural weights. Basic offline recognition works now; rechecking every 45 seconds.":"Neural model error: "+String(err.message||err),
+  modelProgress(null,notPublished?"Neural training in progress — not downloading yet":"Basic recognition active; neural model unavailable",
+    notPublished?"The model file does not exist yet. Basic recognition works; GitHub will be checked again in 45 seconds.":"Neural model error: "+String(err.message||err),
     "pending");
+  if(notPublished)refreshTrainingStatus();
   modelRetryTimer=setTimeout(()=>loadModel(true),45000);
   $("reading").textContent="BASIC · LIVE";
   $("trainMessage").textContent="You can draw, read and save corrections in basic mode. GitHub's trained CNN will automatically replace it when published.";
