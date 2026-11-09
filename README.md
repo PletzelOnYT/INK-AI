@@ -1,79 +1,82 @@
-# INK AI — Online handwriting recognition and neural stroke completion
+# INK AI
 
-**One white drawing board, Pen, Eraser, optional ✨ Assist, and the recognized text.** Only handwritten letters (A–Z, a–z), digits (0–9), punctuation and mathematical symbols. No image generation or object sketches.
+**Handwriting recognition and live character completion.**
 
-[Download index.html](./index.html) and open it in a modern browser. The app downloads only its own published neural weights from this repository. When opened as a local HTML file, it needs internet access to obtain those weights. **No API keys, outside inference services, model providers, nearest-neighbor templates, or glyph-image lookups.**
+A small browser-based drawing app for writing letters, numbers, and symbols. Draw on the canvas to see what INK AI recognizes, or enable Assist to preview how a character might continue.
 
-## ✨ Experimental Assist — actual learned pen movements
+**Made by [PletzelOnYT](https://github.com/PletzelOnYT).**
 
-The new generator is a **class-conditioned, autoregressive, 2-layer GRU mixture-density network**. It consumes the ordered strokes actually drawn by the user, including pen-up boundaries, and predicts a probability distribution for the *next* (Δx, Δy), whether the pen is down, and whether the character has ended.
+## Try it
 
-The network samples future **multi-stroke pen trajectories**, not a bitmap, 32×32 glyph reconstruction, skeletonized pixel mask, traced font, or nearest matching saved example. Its only geometric rules constrain out-of-bounds jumps and smoothly render the neural model's own vector points. It samples pen-lift decisions from the model's learned probabilities rather than attaching every stroke together.
+**[Download index.html](./index.html)** and open it in Chrome or another modern browser.
 
-- Pen: draw real black strokes. Eraser: remove visible ink.
-- Sparkle: enable translucent gray neural vector suggestions.
-- **Tab:** cycle between neural completions for different plausible characters.
-- **G** or **Enter:** accept the current completion as editable, undoable pen strokes.
-- **Cmd+Z / Ctrl+Z:** undo; **Escape:** clear.
+It's a single HTML file. An internet connection is required to load the trained model files from this repository, including when opening the file directly from your computer. There's no account, API key, or server-side inference service to set up.
 
-The handwriting recognition CNN proposes likely character identities, but does *not* supply generated line shapes. The stroke generator also evaluates the likelihood of the user's existing pen-movement prefix under each candidate class to improve selection. Predictions run in an isolated browser Web Worker and never alter the real drawing until accepted.
+## Features
 
-### Real-time handwriting suggestions
+- **Live recognition** — identifies handwritten letters, numbers, punctuation, and common math symbols.
+- **Pen and eraser** — a simple canvas without extra menus.
+- **Assist** — optional translucent line suggestions that update while you're drawing.
+- **Vector completions** — suggestions are smooth pen strokes rather than blurry generated images.
+- **Multi-stroke characters** — handles separate strokes in characters like `+`, `=`, `:`, and `X`.
+- **Local drawing controls** — suggestions don't modify the actual drawing until you accept them.
 
-Suggestions now update **during active pointer movement** rather than only when the user releases the mouse or stylus. The UI coalesces incoming pointer events without repeatedly cancelling its scheduled model call. The worker streams the first learned vector continuation immediately; any later response is allowed to render instead of being discarded just because newer pen points arrived. Fresh suggestions follow automatically. While drawing, the UI limits generation steps and candidate count to keep latency low. Sample noise stays stable throughout the pen gesture, and short-term OCR evidence prevents the assistant from changing its guessed letter on every pixel.
+### Controls
 
-The [continuous-stroke Chrome regression](./tests/live-during-pointer-browser.py) holds down the mouse button while feeding 30 moving points. The previously trained smaller model produced 27 requests, 53 preview notifications, and 28 distinct visually captured previews in that test, with individual measured worker+OCR latencies of about 20–52 ms. The test does **not** establish those latencies on every machine or for the larger network.
+| Control | Action |
+| --- | --- |
+| Pen | Draw |
+| Eraser | Erase |
+| ✨ Assist | Toggle character suggestions |
+| Tab | Switch between available suggestions |
+| G / Enter | Accept the suggested strokes |
+| Cmd+Z / Ctrl+Z | Undo |
+| Escape | Clear the canvas |
 
-### Targeted fix for the bad lowercase h
+## How it works
 
-The user's November 8 screenshot showed an unfinished lowercase `h`: the recognition model correctly displayed **h**, but the neural completion generated a long straight horizontal tail. The original worker simply accepted the first random neural rollout. The new worker generates and evaluates several *actual neural pen trajectories*, rejecting unsupported flat continuations on rounded letters while allowing legitimate horizontal strokes such as `-`, `=`, and crossbars. A lowercase `h` must continue downward toward the established stem baseline, without trailing far below it. These are candidate-quality checks, **not procedural replacement glyph templates**.
+INK AI has two separate models:
 
-The [screenshot-specific sequence regression](./tests/h-continuation-regression.mjs) reproduces the actual pen order and verifies a descending **h** continuation rather than the original flat line. A separate [real Chrome canvas regression](./tests/h-completion-browser.py) uncovered a second integration bug: the whole-board recognizer correctly said `h` but an earlier cropped inference suggested `L`, `H` or `k`. The app now prioritizes the full-board single-glyph result **and automatically reruns Assist when that recognition result arrives**; if the newer model cannot generate `h`, the previous trained GRU supplies a coherent neural continuation. In the full browser test the completed preview descended **0.288 normalized glyph units**, used the neural backup, and was accepted with **G**. Neither test guarantees perfect handwriting on every writer's samples.
+**Recognition:** A convolutional neural network (CNN) reads the drawing and predicts the most likely character. The current V3 model was adapted for browser-drawn handwriting rather than only scanned character images.
 
-### Training the generator to finish partial characters
+**Completion:** A stroke-based GRU generates possible next pen movements from the sequence you've drawn so far. It works with pen coordinates and pen-up/pen-down information, so the output is a vector line instead of an image.
 
-The original GRU was trained largely using teacher forcing. That predicts the next movement in a complete handwriting recording but does not teach the network to recover once its own pen movements start drifting. A new [prefix-specific fine-tuning pipeline](./src/train_prefix_completion.py) uses randomly cut real handwritten character sequences. It feeds part of the *model's own previous predictions* back into the next step (scheduled sampling), with extra emphasis on easily confused lowercase letters.
+Assist uses multiple candidate trajectories and filters out implausible shapes. It also takes the full-character recognition result into account, so a partial-stroke prediction doesn't override a more reliable whole-character guess. If the newer completion model can't produce a usable continuation, it can fall back to the previous trained stroke model.
 
-On pen trajectories from writers kept out of training and checkpoint selection, the prefix-tuned 373,563-parameter checkpoint reduced 14-step free-running position error from **0.211183** to **0.195801**, an improvement of **7.28%**. [Measured results](./models/stroke-prefix-metrics.json). It nevertheless failed the screenshot's raw `h` completion test. The browser therefore uses the [prefix-tuned model](./models/ink-stroke-prefix-v1.json) when its rollout passes validation, and retains the [previous trained GRU](./models/ink-stroke-sequence-v1.json) as a **per-character neural fallback** when the newer model produces no valid completion. No font tracing, reference examples, or nearest-neighbor matching is reintroduced.
+The models run in browser workers. Drawings stay in the canvas unless you choose to accept a suggestion.
 
-### Larger-model results
+## Models and training
 
-The separate [1M-parameter V2 training workflow](./actions/workflows/train-stroke-v2.yml) completed, but **the checkpoint was rejected** because independent pen-lift quality did not pass the release gate. See [V2 metrics](./models/stroke-sequence-v2-metrics.json). A larger parameter count does not automatically mean better handwriting. The approved prefix-tuned and older neural models remain the dependable options until a larger generator demonstrates a real improvement.
+The recognition model was trained with EMNIST handwriting samples and adapted using pen-drawn characters from the UJI dataset. In the writer-separated UJI test, V3 reached **76.47%** accuracy, compared with **52.74%** for V2 on the same test. See [recognition results](./models/recognition-v3-metrics.json).
 
-The [live-drawing browser test](./tests/live-during-pointer-browser.py) verifies updates while the pen is still moving; the [h regression](./tests/h-continuation-regression.mjs) prevents reintroducing the exact straight-line error.
+The stroke generator uses [UJI Pen Characters v2](https://archive.ics.uci.edu/dataset/177/uji+pen+characters+version+2) for real handwritten pen trajectories. Additional punctuation and math characters use labeled synthetic stroke data. The training and evaluation sets separate handwriting from different writers.
 
-If a trained sequence checkpoint is temporarily inaccessible, the ✨ button retries downloading it. **There is no simulated/template fallback presented as AI.** The pen, eraser, and recognition continue functioning.
+The prefix-trained completion model is fine-tuned on unfinished characters and its own predicted movements. It reduced measured 14-step free-running position error by **7.28%** on a separate writer-held-out evaluation, though that doesn't translate directly into a character-completion accuracy percentage. See [completion results](./models/stroke-prefix-metrics.json).
 
-## Actual training data and full class support
+A larger 1M-parameter experiment was also trained, but it did not pass the pen-lift evaluation and is **not used as the default**. Model size alone isn't a measure of quality.
 
-[UJI Pen Characters (Version 2)](https://archive.ics.uci.edu/dataset/177/uji+pen+characters+version+2), by Prat, Castro, Llorens, Marzal and Vilar (2008), DOI [10.24432/C5FG8S](https://doi.org/10.24432/C5FG8S), **CC BY 4.0**: 11,640 human-written online character recordings from 60 writers. Each sample preserves the original sequence of actual pen coordinates and stroke boundaries. Training uses UJI's **writer-disjoint** training and test partitions.
+## Project files
 
-UJI includes real trajectories for uppercase and lowercase ASCII letters, digits and 16 punctuation marks. For the remaining common mathematical and punctuation characters (such as `+`, `=`, `^`, `×`, `÷`, `±`, `√`, `≠`, `≤` and `≥`) the project contributes **explicitly labeled synthetic vector trajectories** with stroke-order and shape augmentation; these are *not* claimed to be real-human recordings. The model supports all classes in [`CHARS`](./src/train.py).
-
-- Training source: [`src/train_stroke_sequence.py`](./src/train_stroke_sequence.py).
-- Independent browser inference: [`src/stroke_worker.js`](./src/stroke_worker.js), embedded verbatim into the downloadable HTML.
-- UI interface: [`src/stroke_assist_ui.js`](./src/stroke_assist_ui.js), embedded in the HTML.
-- Trained model: [`models/ink-stroke-sequence-v1.json`](./models/ink-stroke-sequence-v1.json), once the [training workflow](./actions/workflows/train-stroke-sequence.yml) successfully publishes it.
-- Held-out writer validation: [`models/stroke-sequence-metrics.json`](./models/stroke-sequence-metrics.json).
-
-**Published checkpoint:** 373,563 trainable parameters; 6,210 genuine human pen-trajectory training glyphs from UJI; 3,101 writer-disjoint held-out glyphs; 7,680 synthetic mathematical/punctuation trajectory examples; 111,120 training presentations over 6 training and 2 fine-tuning epochs. Best held-out teacher-forced negative log likelihood: **−4.31849**, pen-state classification accuracy: **98.951%**. A negative Gaussian log-likelihood is mathematically valid and is *not* a percentage accuracy. These metrics do not prove that generated future handwriting looks correct to humans.
-
-Automated Chrome tests confirm that five partial character examples produce nonempty narrow neural vector suggestions, that **Tab** cycles distinct proposals, and that **G** accepts strokes without affecting the pen/eraser. A separate unit test verifies that the recurrent worker emits genuine pen lifts for at least one of five multi-stroke symbol prefixes; the current measured result is **3/5**, not perfect multi-stroke reliability.
-
-**Limitations:** Character completion is inherently ambiguous. The GRU predicts one plausible continuation, not the user's intended letter with certainty. UJI does not record pressure/timing, so those aren't learned. Model evaluation must distinguish teacher-forced held-out sequence loss from actual rendered completion quality. Train/test samples from different writers are separated. Full multi-character cursive words and unsupported symbols are not guaranteed to be correct.
-
-## Character recognition and segmentation
-
-The recognized text below the board is generated by a separately trained CNN, **now upgraded to V3 for real pen input**. The original V2 was trained mostly on scanned EMNIST images; the V3 model was adapted to the stroke thickness, normalization, and drawing style used by the browser, using **6,210 genuine UJI online handwriting recordings**, EMNIST rehearsal, and 256,000 additional training presentations. It is still the project's own CNN—no third-party model or AI API.
-
-On **1,551 independent UJI samples from writers excluded from training and model selection**, recognition improved from **52.74% (V2)** to **76.47% (V3)**, a **23.73 percentage-point increase**. The browser-style EMNIST accuracy changed slightly from **84.51%** to **84.26%** on a separate 12,000-image sample. These are specific evaluation datasets, not a guarantee of the same accuracy on any user's handwriting. See [full V3 training and independent test results](./models/recognition-v3-metrics.json).
-
-The downloaded HTML automatically prefers [real-pen V3](./models/ink-cnn-v3.json), then [class-balanced V2](./models/ink-cnn-v2.json), then V1 if newer weights cannot load. V2 originally improved the mean lowercase-class accuracy on official EMNIST ByClass from 48.00% to 58.66%, but some visually indistinguishable uppercase/lowercase glyphs remain ambiguous. [Full V2 class metrics](./models/recognition-v2-metrics.json).
-
-The segmenter **never cuts a continuous connected stroke into multiple letters merely because it is wide** (an earlier bug turned a single `^` into a nonsensical long string). Nearby strokes are grouped for `^`, `+`, `=`, `:` and `X`. The [regression tests](./tests/recognition-regression-browser.py) recreate these shapes in actual Chrome, not just mock the classifier. The system is still imperfect for touching cursive letters.
+| File | Purpose |
+| --- | --- |
+| [index.html](./index.html) | Standalone drawing app |
+| [src/stroke_assist_ui.js](./src/stroke_assist_ui.js) | Live suggestions and drawing controls |
+| [src/stroke_worker.js](./src/stroke_worker.js) | Neural stroke generation |
+| [src/train.py](./src/train.py) | Character recognition training |
+| [src/train_stroke_sequence.py](./src/train_stroke_sequence.py) | Stroke-model training |
+| [src/train_prefix_completion.py](./src/train_prefix_completion.py) | Partial-character fine-tuning |
+| [models/](./models) | Model weights and evaluation results |
+| [tests/](./tests) | Browser and model regression tests |
 
 ## Testing
 
-[GitHub Actions verification](./actions/workflows/verify.yml) runs JavaScript/worker checks, real browser pen-and-eraser tests, the roof-shaped-stroke regression, and, once the generator exists, multi-stroke neural generation tests using its *real* learned weights. It also verifies that no nearest-neighbor/template completion code survives in the HTML.
+[GitHub Actions](./actions/workflows/verify.yml) runs JavaScript checks, model tests, and real Chrome tests for the drawing board. The test suite covers live suggestions while drawing, multi-stroke recognition, model loading from a downloaded HTML file, and completion of characters such as lowercase `h`.
 
-Training and inference are independent. The legacy raster completion network is no longer used by the HTML; it remains in historical source for reproducibility. The previous handwriting-example lookup bank and its builder have been removed.
+## Known limitations
+
+Handwriting can be ambiguous, especially similar characters such as `I`, `l`, and `1`. Assist can also guess the wrong completion for unusual writing styles or incomplete strokes. Multi-character cursive writing is still a work in progress.
+
+## Dataset credits
+
+- [UJI Pen Characters v2](https://archive.ics.uci.edu/dataset/177/uji+pen+characters+version+2) — Prat, Castro, Llorens, Marzal, and Vilar (2008), [DOI: 10.24432/C5FG8S](https://doi.org/10.24432/C5FG8S), CC BY 4.0.
+- EMNIST ByClass — handwriting recognition training data.
