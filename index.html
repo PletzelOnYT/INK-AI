@@ -179,7 +179,7 @@ self.onmessage=e=>{
    self.postMessage({type:"ready"});
   }else if(cmd==="predict"){
    if(!model)throw Error("Neural generator not initialized");
-   const {prefix,anchor,screenScale,serial}=e.data;
+   const {prefix,anchor,screenScale,serial,epoch}=e.data;
    if(!Array.isArray(prefix)||prefix.length<4)throw Error("Not enough pen movements");
    let hash=(prefix.length*19297 + Math.round(anchor[0]/26)*31+
              Math.round(anchor[1]/26)*127)|0;
@@ -190,7 +190,7 @@ self.onmessage=e=>{
     const generated=generateOnce(prefix,anchor,screenScale,hash+k*17391);
     paths.push(...generated);
    }
-   self.postMessage({type:"prediction",serial,paths,neural:true});
+   self.postMessage({type:"prediction",serial,epoch,paths,neural:true});
   }
  }catch(error){
   self.postMessage({type:"error",message:String(error?.message||error)});
@@ -228,7 +228,7 @@ document.getElementById("eraser").addEventListener("click",()=>chooseTool("erase
 // curve extrapolation, font completion, heuristics, or other providers.
 const SKETCH_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-sketch-gru-v1.json";
 let sketchWorker=null,sketchReady=false,sketchLoading=false,sketchTimer=0;
-let sketchBusy=false,sketchSerial=0,sketchActiveSerial=0,sketchRetry=0;
+let sketchBusy=false,sketchSerial=0,sketchActiveSerial=0,sketchRetry=0,sketchDirty=false,sketchEpoch=0;
 window.__inkSketchReady=false;
 window.__inkSketchEngine="neural-gru";
 window.__inkLastSketchModelError="";
@@ -242,7 +242,8 @@ function queueGhost(){
  if(!assistEnabled||tool!=="pen"){clearGhost();return}
  if(!sketchReady){clearGhost();return}
  // Throttle generation to ~10 updates/sec; keep the drawing loop immediate.
- if(sketchTimer || sketchBusy)return;
+ if(sketchBusy){sketchDirty=true;return}
+ if(sketchTimer)return;
  sketchTimer=setTimeout(()=>{
   sketchTimer=0;generateGhost();
  },95);
@@ -253,6 +254,7 @@ function updateAssist(){
  assistButton.setAttribute("aria-pressed",String(assistEnabled));
  assistButton.classList.toggle("assist-on",assistEnabled);
  if(!assistEnabled){
+  ++sketchEpoch;sketchDirty=false;
   clearTimeout(sketchTimer);sketchTimer=0;clearGhost();
  }else{
   if(!sketchReady)loadSketchModel();
@@ -274,7 +276,7 @@ function sketchPrefix(){
  }
  const extent=Math.max(90,right-left,bottom-top);
  const scale=180/extent,stepMin=Math.max(3.5,7.5/scale);
- const tokens=[],anchor=null;
+ const tokens=[];
  let previous=null;
  for(let i=0;i<penStrokes.length;i++){
   const stroke=penStrokes[i];
@@ -316,14 +318,16 @@ function createSketchWorker(){
    queueGhost();
   }else if(m.type==="prediction"){
    sketchBusy=false;
-   if(!assistEnabled||tool!=="pen")return;
+   if(!assistEnabled||tool!=="pen"||m.epoch!==sketchEpoch)return;
    if(m.serial>=sketchActiveSerial){
     sketchActiveSerial=m.serial;
     ghostCandidate=m.paths||[];
     renderGhost();
    }
-   // Keep responding to fast pen movement without blocking pointer events.
-   if(pointer!==null)queueGhost();
+   // Recover the latest pointer state if a previous neural inference was busy.
+   const needRefresh=sketchDirty||pointer!==null;
+   sketchDirty=false;
+   if(needRefresh)queueGhost();
   }else if(m.type==="error"){
    sketchBusy=false;
    window.__inkLastSketchModelError=m.message||"Neural generator failed";
@@ -362,7 +366,7 @@ function generateGhost(){
  if(!data){clearGhost();return}
  sketchBusy=true;
  const serial=++sketchSerial;
- sketchWorker.postMessage({cmd:"predict",serial,...data});
+ sketchWorker.postMessage({cmd:"predict",serial,epoch:sketchEpoch,...data});
 }
 function renderGhost(){
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
