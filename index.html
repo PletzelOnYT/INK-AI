@@ -26,7 +26,7 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 (() => {
 const MODEL_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
 const canvas=document.getElementById("pad"), ctx=canvas.getContext("2d",{willReadFrequently:true}), guess=document.getElementById("guess");
-let strokes=[],current=null,pointer=null,worker=null,loaded=false,requestId=0,readVersion=0,readTimer=0,lastTap=0;
+let strokes=[],current=null,pointer=null,worker=null,loaded=false,requestId=0,readVersion=0,readTimer=0;
 const requests=new Map();
 window.__inkReady=false;
 window.__inkEngine="cnn";
@@ -56,12 +56,10 @@ function reset(){
 canvas.addEventListener("pointerdown",e=>{
  e.preventDefault();
  if(pointer!==null)return;
- const now=performance.now();
- if(now-lastTap<330){lastTap=0;reset();return}
- lastTap=now;
  pointer=e.pointerId;current=[pos(e)];
  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
 });
+canvas.addEventListener("dblclick",e=>{e.preventDefault();reset()});
 canvas.addEventListener("pointermove",e=>{
  if(pointer!==e.pointerId||!current)return;
  e.preventDefault();current.push(pos(e));paint();
@@ -175,7 +173,7 @@ async function recognize(version){
  }catch(e){if(version===readVersion)display("Recognition unavailable",true)}
 }
 function createWorker(){
- const source=String.raw
+ const source=String.raw`
 "use strict";
 let labels=[],c1,c2,c3,f1,f2;
 function unpack(layer){
@@ -244,7 +242,7 @@ self.onmessage=e=>{
   }else throw Error("Unsupported command");
  }catch(error){self.postMessage({id,error:String(error?.message||error)})}
 };
-;
+`;
  const url=URL.createObjectURL(new Blob([source],{type:"text/javascript"}));
  worker=new Worker(url);
  URL.revokeObjectURL(url);
