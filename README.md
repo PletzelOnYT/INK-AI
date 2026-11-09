@@ -1,85 +1,47 @@
-# INK AI — Handwriting recognition and handwriting completion
+# INK AI — Online handwriting recognition and neural stroke completion
 
-**Minimal drawing interface:** a pen, an eraser, optional ✨ **Neural Assist**, a white handwriting board, and the automatically recognized text below. It is designed for **letters, numbers, punctuation, and mathematical symbols** — **not sketches or object drawings**.
+**One white drawing board, Pen, Eraser, optional ✨ Assist, and the recognized text.** Only handwritten letters (A–Z, a–z), digits (0–9), punctuation and mathematical symbols. No image generation or object sketches.
 
-[Open or download the single HTML file](./index.html). You can run it directly in a modern browser with an internet connection. It downloads its own trained recognition and handwriting-completion models, plus an optional bank of human handwriting examples, **only from this GitHub repository**. It uses no external AI inference services, API keys, or JavaScript libraries.
+[Download index.html](./index.html) and open it in a modern browser. The app downloads only its own published neural weights from this repository. When opened as a local HTML file, it needs internet access to obtain those weights. **No API keys, outside inference services, model providers, nearest-neighbor templates, or glyph-image lookups.**
 
-## Experimental Neural Assist (sparkle)
+## ✨ Experimental Assist — actual learned pen movements
 
-Tap ✨ and start handwriting a character. The existing recognizer generates candidate labels, and the independently trained V2 network predicts missing portions of the current letter, digit, or symbol. To avoid its old **large fuzzy gray sploches**, the browser now thins predicted glyphs to centerlines, traces the lines, smooths their curves, and displays them as **narrow, transparent pen strokes**.
+The new generator is a **class-conditioned, autoregressive, 2-layer GRU mixture-density network**. It consumes the ordered strokes actually drawn by the user, including pen-up boundaries, and predicts a probability distribution for the *next* (Δx, Δy), whether the pen is down, and whether the character has ended.
 
-A second improvement is the [human handwriting reference bank](./models/ink-human-glyph-references.json): **15,931 individual EMNIST, HASYv2 and supplemental punctuation examples** selected and stored in this repository. The assistant aligns these real handwritten shapes with the strokes you already drew, then uses them to guide neural completions. This reduces the blurry averaging problem, but cannot guarantee that an unfinished stroke has only one correct interpretation.
+The network samples future **multi-stroke pen trajectories**, not a bitmap, 32×32 glyph reconstruction, skeletonized pixel mask, traced font, or nearest matching saved example. Its only geometric rules constrain out-of-bounds jumps and smoothly render the neural model's own vector points.
 
-Press **Tab** to cycle through alternative suggested letters/symbols when a partial shape could mean several things, such as `I`, `l`, `1`, `B`, or `P`. Press **G** (or **Enter**) to accept the current ghost suggestion as real **editable vector strokes**. Press **Cmd+Z/Ctrl+Z** to undo, or keep handwriting without accepting. Unaccepted ghost lines never become ink or influence the recognizer.
+- Pen: draw real black strokes. Eraser: remove visible ink.
+- Sparkle: enable translucent gray neural vector suggestions.
+- **Tab:** cycle between neural completions for different plausible characters.
+- **G** or **Enter:** accept the current completion as editable, undoable pen strokes.
+- **Cmd+Z / Ctrl+Z:** undo; **Escape:** clear.
 
-**What it is:** A real larger class-conditioned neural completion model, trained and fine-tuned to reconstruct partly missing handwritten characters. The system learns from masked parts of human-written glyph images, not geometric curve extrapolation. It does **not** have original human stroke-order data: vector paths are derived from reconstructed images and real glyph examples rather than directly predicted from pen-motion sequences.
+The handwriting recognition CNN proposes likely character identities, but does *not* supply generated line shapes. The stroke generator also evaluates the likelihood of the user's existing pen-movement prefix under each candidate class to improve selection. Predictions run in an isolated browser Web Worker and never alter the real drawing until accepted.
 
-**What it is not:** Sketch generation, picture/object completion, a generalized art generator, or a model capable of reliably guessing any intended symbol from a few marks. Unclear partial characters such as `I`, `l`, `1`, `|` may be guessed incorrectly. The suggestion network predicts pixels, so its gray suggestions can be soft-edged rather than perfect human pen strokes.
+If the trained sequence weights have not yet been published, the ✨ button retries downloading them. **There is no simulated/template fallback presented as AI.** The pen, eraser, and recognition continue functioning.
 
-## The two independently trained models
+## Actual training data and full class support
 
-1. **Handwriting recognition:** [models/ink-cnn-v1.json](./models/ink-cnn-v1.json). Convolutional neural network, trained from scratch on EMNIST ByClass and HASYv2 with synthetic punctuation supplements. This predicts which character you are writing.
+[UJI Pen Characters (Version 2)](https://archive.ics.uci.edu/dataset/177/uji+pen+characters+version+2), by Prat, Castro, Llorens, Marzal and Vilar (2008), DOI [10.24432/C5FG8S](https://doi.org/10.24432/C5FG8S), **CC BY 4.0**: 11,640 human-written online character recordings from 60 writers. Each sample preserves the original sequence of actual pen coordinates and stroke boundaries. Training uses UJI's **writer-disjoint** training and test partitions.
 
-2. **Neural handwriting completion (V2):** [models/ink-glyph-completion-v2.json](./models/ink-glyph-completion-v2.json). A **1,106,848-parameter class-conditional residual neural network** trained from random initialization. Dataset: **100,000 real handwritten EMNIST letters/digits**, **24,247 real handwritten HASYv2 symbols**, plus **12,000 explicitly synthetic punctuation examples**. The 4-epoch training is followed by a lower-learning-rate **fine-tuning stage on 74,386 difficult/confusable character examples**. The total training presentations are **619,374**. There are nine kinds of simulated incomplete handwriting and a missing-ink overlap objective to reduce vague gray haze. [V2 training metrics](./models/glyph-completion-v2-metrics.json) include masked completion F1. The previous [V1 network](./models/ink-glyph-completion-v1.json) remains as a safe fallback if V2 weights cannot be loaded.
+UJI includes real trajectories for uppercase and lowercase ASCII letters, digits and 16 punctuation marks. For the remaining common mathematical and punctuation characters (such as `+`, `=`, `^`, `×`, `÷`, `±`, `√`, `≠`, `≤` and `≥`) the project contributes **explicitly labeled synthetic vector trajectories** with stroke-order and shape augmentation; these are *not* claimed to be real-human recordings. The model supports all classes in [`CHARS`](./src/train.py).
 
-V2's generator evaluates the handwriting classifier's **three most likely letters/symbols**, comparing how each proposed completion explains the actual visible ink instead of blindly trusting the top OCR guess. See the [side-by-side held-out benchmark](./models/glyph-completion-comparison.json) when published. No extra AI service, sketch dataset, or externally pretrained weights are used.
+- Training source: [`src/train_stroke_sequence.py`](./src/train_stroke_sequence.py).
+- Independent browser inference: [`src/stroke_worker.js`](./src/stroke_worker.js), embedded verbatim into the downloadable HTML.
+- UI interface: [`src/stroke_assist_ui.js`](./src/stroke_assist_ui.js), embedded in the HTML.
+- Trained model: [`models/ink-stroke-sequence-v1.json`](./models/ink-stroke-sequence-v1.json), once the [training workflow](./actions/workflows/train-stroke-sequence.yml) successfully publishes it.
+- Held-out writer validation: [`models/stroke-sequence-metrics.json`](./models/stroke-sequence-metrics.json), when available.
 
-The complete implementation is a single HTML file containing browser inference code. Training uses Python/PyTorch in [src/train.py](./src/train.py), [src/train_glyph_completion.py](./src/train_glyph_completion.py) (legacy), and [src/train_glyph_completion_v2.py](./src/train_glyph_completion_v2.py) (V2). The finished weights load only from `PletzelOnYT/INK-AI`; the browser does not call other inference providers.
+**Limitations:** Character completion is inherently ambiguous. The GRU predicts one plausible continuation, not the user's intended letter with certainty. UJI does not record pressure/timing, so those aren't learned. Model evaluation must distinguish teacher-forced held-out sequence loss from actual rendered completion quality. Train/test samples from different writers are separated. Full multi-character cursive words and unsupported symbols are not guaranteed to be correct.
 
-## Character recognition: screenshot regression and V2 improvements
+## Character recognition and segmentation
 
-The November 8 Mac screenshot showed a single roof-shaped handwritten stroke
-mistaken for a long sequence of unrelated characters. This was a **segmentation
-bug**: a formerly implemented "vertical valley" heuristic incorrectly split a
-single connected diagonal line into many letter boxes. INK AI now **never
-divides connected ink solely because it is wide**.
+The recognized text below the board is generated by a separately trained CNN. The published [balanced V2 recognizer](./models/ink-cnn-v2.json) improved mean lowercase-class accuracy from 48.00% to 58.66% on the official EMNIST ByClass test set, while overall accuracy decreased slightly from 84.90% to 84.32%. [Full class metrics](./models/recognition-v2-metrics.json).
 
-The original drawn roof is reproduced in
-[`tests/recognition-regression-browser.py`](./tests/recognition-regression-browser.py).
-It must produce exactly **one** region and the caret **`^`**. Additional
-real-Chrome checks cover one continuous V, long zigzags, three independent
-letters, and detached multi-stroke symbols `=`, `:`, `+`, and `X`.
+The segmenter **never cuts a continuous connected stroke into multiple letters merely because it is wide** (an earlier bug turned a single `^` into a nonsensical long string). Nearby strokes are grouped for `^`, `+`, `=`, `:` and `X`. The [regression tests](./tests/recognition-regression-browser.py) recreate these shapes in actual Chrome, not just mock the classifier. The system is still imperfect for touching cursive letters.
 
-The recognizer now uses conservative single-stroke geometry where unambiguous,
-and combines nearby dots/crossbars rather than splitting symbols into multiple
-lines. It also uses neighboring letters to help disambiguate uppercase vs.
-lowercase characters that EMNIST frequently renders nearly identically. Low
-confidence predictions can be shown as unknown instead of fabricated answers.
+## Testing
 
-The original CNN recognizes about 85% of the official EMNIST ByClass test
-images, but this **does not** imply 85% accuracy on arbitrary user handwriting,
-joined cursive, or the user's on-screen stroke. Its per-class metrics show
-significant limitations for rare lowercase shapes.
+[GitHub Actions verification](./actions/workflows/verify.yml) runs JavaScript/worker checks, real browser pen-and-eraser tests, the roof-shaped-stroke regression, and, once the generator exists, multi-stroke neural generation tests using its *real* learned weights. It also verifies that no nearest-neighbor/template completion code survives in the HTML.
 
-A new [class-balanced V2 recognition model](./models/ink-cnn-v2.json) was fine-tuned
-for 480,000 more training presentations from **the project's own V1 weights**.
-On all 116,323 official EMNIST test images, the class-balanced results are:
-
-| Metric | V1 | V2 |
-| --- | ---: | ---: |
-| Overall accuracy | 84.90% | 84.32% |
-| Macro-average class accuracy | 70.49% | 74.33% |
-| Lowercase macro accuracy | 48.00% | 58.66% |
-
-V2 makes significantly fewer errors on many rare lowercase letters but has a
-small overall accuracy trade-off. It was only published because it cleared the
-pre-established thresholds for minority-class improvement and maximum allowed
-overall regression. Some individual classes, such as uppercase C, remain worse.
-See [the full V2 class-level metrics](./models/recognition-v2-metrics.json) and
-[the safe-training workflow](./actions/workflows/train-recognition-v2.yml).
-The HTML automatically prefers the independently validated V2 model and
-falls back to V1 if unavailable.
-
-## Drawing controls
-
-The **pen** makes black strokes. The **eraser** removes parts of the ink. The **sparkle** turns neural handwriting completion on and off. Press **Tab** to see alternative character completions, **G/Enter** to accept a vector stroke suggestion, **Escape** to clear the board, or **Ctrl+Z/Cmd+Z** to undo.
-
-## Training-data attribution
-
-- Cohen, Afshar, Tapson and van Schaik (2017), *EMNIST: An Extension of MNIST to Handwritten Letters*, NIST.
-- Martin Thoma (2017), *HASYv2 Dataset*, [Zenodo](https://zenodo.org/records/259444), ODbL.
-- Synthetic punctuation examples are computer-generated, not human handwriting.
-
-Source datasets retain their original rights and licenses. INK AI does not include anyone else's pretrained model.
-
-[Verify the browser and neural tests](./actions/workflows/verify.yml)
+Training and inference are independent. The legacy raster completion network is no longer used by the HTML; it remains in historical source for reproducibility. The previous handwriting-example lookup bank and its builder have been removed.
