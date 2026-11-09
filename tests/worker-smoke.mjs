@@ -8,6 +8,7 @@ fs.writeFileSync("/tmp/ink-worker-check.js",match[1]);
 const output=[];
 const ctx={atob:s=>Buffer.from(s,"base64").toString("binary"),
  postMessage:msg=>output.push(msg),Float32Array,Int8Array,Math,Array,Error};
+ctx.self=ctx;
 vm.createContext(ctx);vm.runInContext(match[1],ctx);
 const labels="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".split("");
 function layer(shape){
@@ -15,7 +16,7 @@ function layer(shape){
  bias:new Array(shape[0]).fill(0)};
 }
 function call(id,cmd,extra={}){
- output.length=0;ctx.onmessage({data:{id,cmd,...extra}});
+ output.length=0;ctx.self.onmessage({data:{id,cmd,...extra}});
  const match=output.find(v=>v.id===id);
  assert.ok(match);if(match.error)throw Error(match.error);return match.result;
 }
