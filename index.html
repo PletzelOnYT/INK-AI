@@ -211,7 +211,7 @@ function updateAssist(){
  if(!assistEnabled){
   clearTimeout(glyphTimer);glyphTimer=0;glyphDirty=false;clearGhost();
  }else{
-  if(!glyphReady)loadGlyphModel();
+  if(!glyphReady||window.__inkGlyphVersion<2)loadGlyphModel();
   queueGhost();
  }
 }
