@@ -54,6 +54,22 @@ try:
     res=draw([zig]);print("ONE-STROKE ZIGZAG:",res,flush=True)
     assert res["regions"]==1
     assert len(res["guess"])==1
+    # A zigzag may be an ambiguous character, but shouldn't trigger the
+    # deterministic *single roof* rule just because one peak is higher.
+    assert browser.execute_script("return window.__inkShapeOverride")=="" or res["guess"]!="^",res
+    # Multiple detached marks on one glyph must stay grouped.
+    equal=[
+        [[270,205],[350,205]],
+        [[270,247],[350,247]]
+    ]
+    res=draw(equal);print("EQUALS SIGN BARS:",res,flush=True)
+    assert res["regions"]==1
+    colon=[
+        [[440,194],[448,194]],
+        [[440,244],[448,244]]
+    ]
+    res=draw(colon);print("COLON DOTS:",res,flush=True)
+    assert res["regions"]==1
     # Conversely independent, widely spaced pen strokes may form characters.
     multi=[
         [[145,160],[145,250]],
