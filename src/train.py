@@ -223,11 +223,30 @@ def main():
         if acc>best:
             best=acc
             export(model,a.output,seen,hasy_count,acc,epoch+1)
-    # Save metrics to repository. Raw images intentionally aren't committed.
+    # Record difficult per-class errors, especially the I / l / 1 confusion.
+    model.eval()
+    counts = torch.zeros(62,dtype=torch.int64)
+    matches = torch.zeros(62,dtype=torch.int64)
+    confusion = torch.zeros((62,62),dtype=torch.int64)
+    with torch.inference_mode():
+        for x,y in val:
+            predicted = model(x).argmax(1)
+            for label,pred in zip(y,predicted):
+                label=int(label);pred=int(pred)
+                counts[label]+=1
+                if label==pred: matches[label]+=1
+                if pred<62: confusion[label,pred]+=1
+    classes=list(string.digits+string.ascii_uppercase+string.ascii_lowercase)
+    per_class={ch:{"tested":int(counts[i]),"accuracy":round(float(matches[i]/max(counts[i],1)),4)}
+               for i,ch in enumerate(classes)}
+    ambiguous={ch:{"as_"+other:int(confusion[LOOKUP[ch],LOOKUP[other]])
+                  for other in ("I","l","1","i","L","|") if other in LOOKUP and LOOKUP[other]<62}
+               for ch in ("I","l","1","i","L")}
     Path("models").mkdir(exist_ok=True)
     Path("models/metrics.json").write_text(json.dumps(
         {"test_accuracy":best,"training_presentations":seen,
          "emnist_training_images":len(em),"hasy_selected":hasy_count,
+         "per_class":per_class,"ambiguous_confusion":ambiguous,
          "model":"models/ink-cnn-v1.json"},indent=2),encoding="utf8")
     print("Completed",seen,"training presentations.",flush=True)
 
