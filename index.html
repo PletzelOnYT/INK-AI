@@ -46,201 +46,183 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
   </div>
   <div id="guess" data-muted="true" aria-live="polite">Loading AI…</div>
 </main>
-<script id="glyphWorkerSource" type="text/plain">
+<script id="strokeWorkerSource" type="text/plain">
 "use strict";
-// INK AI neural glyph completion: V2 residual 1.1M parameters, V1 fallback.
-let model=null,labels=[],embedding=null,layers=[],version=0;
-function unpack(layer){
- const raw=atob(layer.weights),w=new Float32Array(raw.length);
- for(let i=0;i<raw.length;i++){
-  const z=raw.charCodeAt(i);
-  w[i]=(z>127?z-256:z)*layer.scale;
+/* INK AI online handwriting generator: actual autoregressive GRU / MDN.
+ * Each output is a pen trajectory. NO pixel reconstruction, glyph references,
+ * raster skeletonization, nearest-neighbor, font templates or geometry paths.
+ */
+let network=null,characters=[],embedding=null,layers=[],outputWeight=null,outputBias=null;
+let hiddenSize=0,embedSize=0,kCount=0,outputRows=0,maxSteps=48;
+function unpack(obj){
+ const bytes=atob(obj.weights),out=new Float32Array(bytes.length);
+ for(let i=0;i<bytes.length;i++){
+  const v=bytes.charCodeAt(i);out[i]=(v>127?v-256:v)*obj.scale;
  }
- return {w,b:Float32Array.from(layer.bias),shape:layer.shape};
+ return {w:out,shape:obj.shape};
 }
-function dense(input,L,relu){
- const [N,M]=L.shape,result=new Float32Array(N);
- for(let o=0;o<N;o++){
-  let sum=L.b[o],start=o*M;
-  for(let i=0;i<M;i++)sum+=input[i]*L.w[start+i];
-  result[o]=relu?Math.max(0,sum):sum;
+function product(mat,x,row){
+ const w=mat.w,n=mat.shape[1],offset=row*n;
+ let sum=0;
+ for(let i=0;i<n;i++)sum+=w[offset+i]*x[i];
+ return sum;
+}
+function sig(v){return v>=0?1/(1+Math.exp(-v)):Math.exp(v)/(1+Math.exp(v))}
+function step(token,states,characterEmbedding){
+ const in0=new Float32Array(3+embedSize);
+ in0.set(token);in0.set(characterEmbedding,3);
+ let input=in0;
+ for(let layer=0;layer<layers.length;layer++){
+  const L=layers[layer],old=states[layer],H=hiddenSize;
+  const gi=new Float32Array(H*3),gh=new Float32Array(H*3);
+  const inputRows=L.ih.shape[1];
+  // GRU weights follow PyTorch gate ordering (reset, update, candidate).
+  for(let r=0;r<3*H;r++){
+   const wi=r*inputRows,wh=r*H;
+   let a=L.bi[r],b=L.bh[r];
+   for(let j=0;j<inputRows;j++)a+=L.ih.w[wi+j]*input[j];
+   for(let j=0;j<H;j++)b+=L.hh.w[wh+j]*old[j];
+   gi[r]=a;gh[r]=b;
+  }
+  const next=new Float32Array(H);
+  for(let j=0;j<H;j++){
+   const reset=sig(gi[j]+gh[j]);
+   const update=sig(gi[H+j]+gh[H+j]);
+   const candidate=Math.tanh(gi[H*2+j]+reset*gh[H*2+j]);
+   next[j]=candidate*(1-update)+old[j]*update;
+  }
+  states[layer]=next;input=next;
  }
- return result;
-}
-function residual(input,L){
- const next=dense(input,L,false),result=new Float32Array(next.length);
- for(let i=0;i<next.length;i++)result[i]=Math.max(0,next[i]+input[i]);
- return result;
-}
-function reconstruct(partial,label){
- const idx=labels.indexOf(label);
- if(idx<0)throw Error("Unsupported character: "+label);
- const input=new Float32Array(1024+model.dimensions.class_embedding);
- input.set(partial);
- input.set(embedding.subarray(idx*model.dimensions.class_embedding,(idx+1)*model.dimensions.class_embedding),1024);
- let h=dense(input,layers[0],true);
- if(version===2){
-  h=residual(h,layers[1]);
-  h=residual(h,layers[2]);
- }else{
-  h=dense(h,layers[1],true);
- }
- const full=dense(h,layers[version===2?3:2],false);
- const output=new Uint8Array(1024);
- for(let i=0;i<1024;i++){
-  const val=1/(1+Math.exp(-Math.max(-20,Math.min(20,full[i]))));
-  output[i]=Math.max(0,Math.min(255,Math.round(val*255)));
+ const output=new Float32Array(outputRows);
+ for(let i=0;i<outputRows;i++){
+  let value=outputBias[i],offset=i*hiddenSize;
+  for(let j=0;j<hiddenSize;j++)value+=outputWeight.w[offset+j]*input[j];
+  output[i]=value;
  }
  return output;
 }
-// Reference bank: authentic individual handwritten examples, not averaged
-// glyph rasters. Neural completion picks plausible characters; matching the
-// user's existing ink to actual human samples stabilizes predicted geometry.
-let referenceStrings=Object.create(null);
-const decodedReferences=new Map();
-function prototypeSet(label){
- if(decodedReferences.has(label))return decodedReferences.get(label);
- const strings=referenceStrings[label]||[];
- const shapes=[];
- for(const encoded of strings){
-  const bytes=atob(encoded),bitmap=new Uint8Array(1024);
-  for(let i=0;i<1024;i++)
-   bitmap[i]=(bytes.charCodeAt(i>>3)>>(7-(i&7)))&1;
-  shapes.push(bitmap);
- }
- decodedReferences.set(label,shapes);
- return shapes;
+function hash(seed,label,serial){
+ let x=((seed+serial*7919+label.charCodeAt(0)*6269)|0)^0x6c7d1f3b;
+ return x||1729;
 }
-function nearestHandwriting(partial,label,neural){
- const shapes=prototypeSet(label);
- if(!shapes.length)return null;
- const observed=[];
- for(let i=0;i<1024;i++)
-  if(partial[i]>.3)observed.push({i,x:i&31,y:i>>5,weight:partial[i]});
- if(observed.length<6)return null;
- const total=observed.reduce((a,b)=>a+b.weight,0);
- let best=null,score=-Infinity;
- // Align each human-written prototype to the incomplete stroke, allowing
- // a small translation for different handwriting placement.
- for(const shape of shapes){
-  for(const dy of [-3,-1,1,3,0])for(const dx of [-3,-1,1,3,0]){
-   let hit=0;
-   for(const point of observed){
-    const x=point.x-dx,y=point.y-dy;
-    if(x>=0&&x<32&&y>=0&&y<32&&shape[y*32+x])hit+=point.weight;
-   }
-   const match=hit/total;
-   if(match<score-.04)continue;
-   let outside=0,referenceCount=0,neuralAgreement=0;
-   for(let y=1;y<31;y++)for(let x=1;x<31;x++){
-    const tx=x-dx,ty=y-dy;
-    if(tx<0||tx>31||ty<0||ty>31||!shape[ty*32+tx])continue;
-    const i=y*32+x;referenceCount++;
-    if(partial[i]<.27)outside++;
-    neuralAgreement+=neural[i]/255;
-   }
-   const novelty=Math.min(1,outside/25);
-   const overlap=referenceCount?neuralAgreement/referenceCount:0;
-   const quality=match+.14*overlap+.075*novelty-
-        (referenceCount>240?.13:0);
-   if(quality>score){score=quality;best={shape,dx,dy,match,novelty,quality}}
-  }
- }
- if(!best||best.match<.40)return null;
- const output=new Uint8Array(1024);
- for(let y=0;y<32;y++)for(let x=0;x<32;x++){
-  const sx=x-best.dx,sy=y-best.dy;
-  const real=sx>=0&&sx<32&&sy>=0&&sy<32?
-    best.shape[sy*32+sx]:0;
-  // Preserve actual human topology. A small trained-model contribution
-  // smooths isolated source defects; not a fuzzy probabilistic image paste.
-  output[y*32+x]=Math.round(real?238:Math.min(35,neural[y*32+x]*.12));
- }
- return {prediction:output,coverage:best.match,novelty:best.novelty,
-    quality:best.quality,realExample:true};
+function rng(seed){
+ let x=seed|0;
+ return ()=>{x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296};
 }
-function pickCompletion(partial,options){
- const given=Array.isArray(options)&&options.length?options.slice(0,5):
-   [{char:"?",confidence:1}];
- const incoming=new Map();
- for(const c of given)if(labels.includes(c.char))
-  incoming.set(c.char,Math.max(.001,Number(c.confidence)||.001));
- // Incomplete straight strokes often look like finished I/l/1/| to the OCR.
- // They could instead be the beginning of P, B, H, 4, +, etc. Do not rule
- // those out just because the *full-character* classifier says "1".
- const ambiguous=new Set(["I","l","1","|","i","L","t","T","!","/","-"]);
- if(given.slice(0,3).some(c=>ambiguous.has(c.char))){
-  for(const letter of ["B","P","R","F","H","E","D","T","L","K","4","+","7","J"])
-   if(labels.includes(letter)&&!incoming.has(letter))incoming.set(letter,.035);
+function normal(random){
+ return Math.sqrt(-2*Math.log(Math.max(1e-8,random())))*
+   Math.cos(6.283185307179586*random());
+}
+function sample(output,random,variation){
+ const K=kCount;
+ let mx=-Infinity;
+ for(let j=0;j<K;j++)mx=Math.max(mx,output[j]);
+ const weights=new Float32Array(K),temperature=variation?0.88:0.55;
+ let sum=0;
+ for(let j=0;j<K;j++){weights[j]=Math.exp((output[j]-mx)/temperature);sum+=weights[j]}
+ let u=random()*sum,choice=K-1;
+ for(let j=0;j<K;j++){u-=weights[j];if(u<=0){choice=j;break}}
+ const jitter=variation?.34:.13;
+ const sdX=Math.exp(Math.max(-5,Math.min(.6,output[3*K+choice])));
+ const sdY=Math.exp(Math.max(-5,Math.min(.6,output[4*K+choice])));
+ const dx=output[K+choice]+normal(random)*sdX*jitter;
+ const dy=output[2*K+choice]+normal(random)*sdY*jitter;
+ const draw=sig(output[5*K])>0.5;
+ const stop=sig(output[5*K+1])>0.56;
+ return {dx,dy,draw,stop};
+}
+function completeGlyph(prefix,label,seed,variation){
+ const index=characters.indexOf(label);
+ if(index<0)throw Error("Unknown handwritten glyph: "+label);
+ const charEmbedding=embedding.subarray(index*embedSize,(index+1)*embedSize);
+ const states=layers.map(()=>new Float32Array(hiddenSize));
+ let last=null,x=0,y=0;
+ for(const token of prefix){
+  if(token.length!==3||!token.every(Number.isFinite))throw Error("Invalid pen prefix");
+  x+=token[0];y+=token[1];
+  last=step(token,states,charEmbedding);
  }
- const hypotheses=[];
- for(const [char,confidence] of incoming){
-  const learned=reconstruct(partial,char);
-  const grounded=nearestHandwriting(partial,char,learned);
-  const pred=grounded?.prediction||learned;
-  let agrees=0,visible=0,newInk=0,ink=0;
-  for(let i=0;i<1024;i++){
-   if(partial[i]>.30){agrees+=partial[i]*pred[i]/255;visible+=partial[i]}
-   if(partial[i]<.22&&pred[i]>145)newInk++;
-   if(pred[i]>145)ink++;
+ const rand=rng(hash(seed,label,variation?19:0));
+ let active=[[x,y]],paths=[],moves=0,penUps=0;
+ for(let j=0;j<maxSteps;j++){
+  if(!last)break;
+  const predicted=sample(last,rand,variation);
+  let {dx,dy,draw}=predicted;
+  if(!Number.isFinite(dx)||!Number.isFinite(dy))break;
+  // Reject unphysical pen-down leaps without inventing a continuation line.
+  const length=Math.hypot(dx,dy);
+  if(draw&&length>.12){dx*=.12/length;dy*=.12/length}
+  if(!draw&&length>.8){dx*=.8/length;dy*=.8/length}
+  const nx=x+dx,ny=y+dy;
+  if(nx<-.08||nx>1.08||ny<-.08||ny>1.08)break;
+  x=nx;y=ny;
+  if(draw){
+   active.push([x,y]);moves++;
+  }else{
+   if(active.length>1)paths.push(active);
+   active=[[x,y]];penUps++;
   }
-  const support=agrees/Math.max(1,visible);
-  const novelty=Math.min(1,newInk/24);
-  const neuralBonus=grounded?.realExample?grounded.coverage*.42:0;
-  let score=1.25*support+.23*Math.log(confidence+.02)
-    +.15*novelty+neuralBonus;
-  if(newInk<5)score-=.4; // A non-completion is not a useful suggestion.
-  if(ink>300)score-=.3;  // Avoid overfilled character hallucinations.
-  hypotheses.push({label:char,prediction:pred,score,
-    source:grounded?"real-handwriting":"trained-generator",
-    coverage:grounded?.coverage||support});
+  last=step([dx,dy,draw?1:0],states,charEmbedding);
+  if(predicted.stop&&j>=4)break;
  }
- hypotheses.sort((a,b)=>b.score-a.score);
- const good=hypotheses.slice(0,4);
- if(!good.length)throw Error("No supported character completion");
- return {primary:good[0],alternatives:good};
+ if(active.length>1)paths.push(active);
+ // Never emit empty previews or arbitrary shapes disconnected from input.
+ return {paths,moves,penUps};
 }
 self.onmessage=e=>{
- const {cmd}=e.data;
+ const m=e.data;
  try{
-  if(cmd==="init"){
-   const m=e.data.model;
-   if(m.format!=="ink-glyph-completion-residual-v2"&&
-      m.format!=="ink-glyph-completion-mlp-v1")throw Error("Wrong handwriting model format");
-   version=m.format==="ink-glyph-completion-residual-v2"?2:1;
-   if(m.layers?.length!==(version===2?4:3)||m.dimensions?.input!==1024)
-      throw Error("Invalid neural architecture");
-   if(version===2 && (m.parameter_count<1000000||m.parameter_count>=2000000))
-      throw Error("Invalid V2 parameter count");
-   model=m;labels=m.labels;
-   embedding=Float32Array.from(m.embedding.flat());
-   layers=m.layers.map(unpack);
-   if(layers[0].shape[1]!==1024+m.dimensions.class_embedding||
-      layers[version===2?3:2].shape[0]!==1024)throw Error("Invalid weights");
-   self.postMessage({type:"ready",model:"handwriting",version,
-      parameters:m.parameter_count||0,classes:labels.length});
-  }else if(cmd==="references"){
-   if(e.data.references?.format!=="ink-human-glyph-examples-v1")
-      throw Error("Invalid human handwriting references");
-   referenceStrings=e.data.references.per_class;
-   decodedReferences.clear();
-   self.postMessage({type:"references-ready",count:e.data.references.total_examples});
-  }else if(cmd==="complete"){
-   if(!model)throw Error("Handwriting model not initialized");
-   const {serial,epoch,partial,label,options}=e.data;
-   const selected=options?pickCompletion(partial,options):
-      {primary:{label,prediction:reconstruct(partial,label)},
-       alternatives:[]};
-   const chosen=selected.primary;
-   const alt=selected.alternatives?.map(x=>({
-     label:x.label,prediction:x.prediction,source:x.source
-   }))||[];
+  if(m.cmd==="init"){
+   const o=m.model;
+   if(o?.format!=="ink-online-stroke-mdn-v1")throw Error("Expected actual online stroke generator");
+   if(o.architecture?.input!==3||o.architecture?.mixtures!==5||
+      o.architecture?.layers!==2)throw Error("Unsupported GRU trajectory model");
+   network=o;characters=o.labels;
+   hiddenSize=o.architecture.hidden;embedSize=o.architecture.embed;
+   kCount=o.architecture.mixtures;
+   maxSteps=Math.min(64,o.architecture.max_generate||48);
+   if(hiddenSize<24||hiddenSize>384||characters.length<100)
+    throw Error("Unvalidated neural trajectory model dimensions");
+   embedding=Float32Array.from(o.embedding.flat());
+   layers=o.gru.map(l=>({ih:unpack(l.ih),hh:unpack(l.hh),
+      bi:Float32Array.from(l.bias_ih),bh:Float32Array.from(l.bias_hh)}));
+   outputWeight=unpack(o.head_weight);
+   outputBias=Float32Array.from(o.head_bias);
+   outputRows=5*kCount+2;
+   for(let k=0;k<layers.length;k++){
+    const expected=k===0?3+embedSize:hiddenSize;
+    if(layers[k].ih.shape[0]!==3*hiddenSize||
+       layers[k].ih.shape[1]!==expected||
+       layers[k].hh.shape[1]!==hiddenSize)throw Error("Corrupt GRU weights");
+   }
+   if(outputWeight.shape[0]!==outputRows||
+      outputWeight.shape[1]!==hiddenSize)throw Error("Corrupt trajectory head");
+   self.postMessage({type:"ready",engine:"stroke-gru-mdn",
+     parameters:o.parameter_count,classes:characters.length,
+     realSamples:o.training.real_training_glyphs});
+  }else if(m.cmd==="generate"){
+   if(!network)throw Error("Neural generator is not initialized");
+   const prefix=m.prefix,serial=m.serial,epoch=m.epoch;
+   if(!Array.isArray(prefix)||prefix.length<2||prefix.length>120)
+    throw Error("Insufficient genuine pen coordinates");
+   const options=(m.options||[]).filter(o=>characters.includes(o.char))
+     .slice(0,4);
+   const results=[];
+   let j=0;
+   for(const choice of options){
+    const result=completeGlyph(prefix,choice.char,serial*317+j*571,false);
+    if(result.moves>2&&result.paths.length)results.push({
+      label:choice.char,paths:result.paths,
+      penUps:result.penUps,confidence:choice.confidence||0
+    });
+    j++;
+   }
    self.postMessage({type:"completion",serial,epoch,
-       label:chosen.label,prediction:chosen.prediction,
-       alternatives:alt,source:chosen.source});
-  }
+       alternatives:results,neural:true,engine:"stroke-gru-mdn"});
+  }else throw Error("Unknown neural generation command");
  }catch(error){
-  self.postMessage({type:"error",message:String(error?.message||error)});
+  self.postMessage({type:"error",serial:m.serial,epoch:m.epoch,
+    message:String(error?.message||error)});
  }
 };
 </script>
