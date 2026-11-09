@@ -1,82 +1,44 @@
 # INK AI
 
-**Handwriting recognition and live character completion.**
+Handwriting recognition and whole-character auto-correct in a single HTML file.
 
-A small browser-based drawing app for writing letters, numbers, and symbols. Draw on the canvas to see what INK AI recognizes, or enable Assist to preview how a character might continue.
-
-**Made by [PletzelOnYT](https://github.com/PletzelOnYT).**
+Made by [PletzelOnYT](https://github.com/PletzelOnYT).
 
 ## Try it
 
-**[Download index.html](./index.html)** and open it in Chrome or another modern browser.
+Download [index.html](./index.html) and open it in Chrome. The trained character recognizer and English word list are inside the HTML file, so it also works offline.
 
-It's a single HTML file. An internet connection is required to load the trained model files from this repository, including when opening the file directly from your computer. There's no account, API key, or server-side inference service to set up.
+Draw on the white board, then turn on Assist to preview a complete corrected letter. It will not change your original handwriting until you accept the correction.
 
-## Features
-
-- **Live recognition** — identifies handwritten letters, numbers, punctuation, and common math symbols.
-- **Pen and eraser** — a simple canvas without extra menus.
-- **Assist** — optional translucent line suggestions that update while you're drawing.
-- **Vector completions** — suggestions are smooth pen strokes rather than blurry generated images.
-- **Multi-stroke characters** — handles separate strokes in characters like `+`, `=`, `:`, and `X`.
-- **Local drawing controls** — suggestions don't modify the actual drawing until you accept them.
-
-### Controls
-
-| Control | Action |
+| Key | What it does |
 | --- | --- |
-| Pen | Draw |
-| Eraser | Erase |
-| ✨ Assist | Toggle character suggestions |
-| Tab | Switch between available suggestions |
-| G / Enter | Accept the suggested strokes |
-| Cmd+Z / Ctrl+Z | Undo |
-| Escape | Clear the canvas |
+| **G** or **Accept** | Replace the selected handwritten character with the complete, corrected character |
+| **Tab** | Cycle through recognized alternatives |
+| **Ctrl/Cmd + Z** | Undo the correction and restore the original drawing |
+| **Escape** | Clear the board |
 
-## How it works
+Pen and eraser still work as before.
 
-INK AI has two separate models:
+## Recognition and English context
 
-**Recognition:** A convolutional neural network (CNN) reads the drawing and predicts the most likely character. The current V3 model was adapted for browser-drawn handwriting rather than only scanned character images.
+INK AI runs a trained CNN in your browser to recognize letters, numbers, punctuation, and mathematical symbols. It also has a built-in, frequency-ranked list of **10,000 English words** that helps pick between plausible letters within a word. The dictionary can favor a reasonable English word, but it does **not** override strongly recognized handwriting, and it does not try to guess words when you write a single letter.
 
-**Completion:** A stroke-based GRU generates possible next pen movements from the sequence you've drawn so far. It works with pen coordinates and pen-up/pen-down information, so the output is a vector line instead of an image.
+The preview is a whole, clean character, **not** a continuation of an unfinished neural stroke. You can change the suggestion using Tab, accept it using G, or leave your handwriting untouched.
 
-Assist uses multiple candidate trajectories and filters out implausible shapes. It also takes the full-character recognition result into account, so a partial-stroke prediction doesn't override a more reliable whole-character guess. If the newer completion model can't produce a usable continuation, it can fall back to the previous trained stroke model.
+Everything runs locally; no account, API key, external AI service, or connection is required for this standalone version.
 
-The models run in browser workers. Drawings stay in the canvas unless you choose to accept a suggestion.
+## Development
 
-## Models and training
+- `src/autocorrect_ui.js` — correction preview, English context scoring, acceptance and undo.
+- `models/ink-cnn-v3.json` — trained character recognition.
+- `src/train_recognition_v3.py` — training and writer-disjoint evaluation.
+- `tests/autocorrect-quality.mjs` — contextual scoring and bundled-asset tests.
+- `tests/autocorrect-browser.py` — real offline Chrome tests for G, click-to-accept, and undo.
 
-The recognition model was trained with EMNIST handwriting samples and adapted using pen-drawn characters from the UJI dataset. In the writer-separated UJI test, V3 reached **76.47%** accuracy, compared with **52.74%** for V2 on the same test. See [recognition results](./models/recognition-v3-metrics.json).
+The older stroke-sequence generation experiments remain in `src/` and `models/` for research, but they are not used by the main auto-correct interface.
 
-The stroke generator uses [UJI Pen Characters v2](https://archive.ics.uci.edu/dataset/177/uji+pen+characters+version+2) for real handwritten pen trajectories. Additional punctuation and math characters use labeled synthetic stroke data. The training and evaluation sets separate handwriting from different writers.
+Dictionary data: [google-10000-english](https://github.com/first20hours/google-10000-english), based on public word-frequency data.
 
-The prefix-trained completion model is fine-tuned on unfinished characters and its own predicted movements. It reduced measured 14-step free-running position error by **7.28%** on a separate writer-held-out evaluation, though that doesn't translate directly into a character-completion accuracy percentage. See [completion results](./models/stroke-prefix-metrics.json).
+## Limitations
 
-A larger 1M-parameter experiment was also trained, but it did not pass the pen-lift evaluation and is **not used as the default**. Model size alone isn't a measure of quality.
-
-## Project files
-
-| File | Purpose |
-| --- | --- |
-| [index.html](./index.html) | Standalone drawing app |
-| [src/stroke_assist_ui.js](./src/stroke_assist_ui.js) | Live suggestions and drawing controls |
-| [src/stroke_worker.js](./src/stroke_worker.js) | Neural stroke generation |
-| [src/train.py](./src/train.py) | Character recognition training |
-| [src/train_stroke_sequence.py](./src/train_stroke_sequence.py) | Stroke-model training |
-| [src/train_prefix_completion.py](./src/train_prefix_completion.py) | Partial-character fine-tuning |
-| [models/](./models) | Model weights and evaluation results |
-| [tests/](./tests) | Browser and model regression tests |
-
-## Testing
-
-[GitHub Actions](./actions/workflows/verify.yml) runs JavaScript checks, model tests, and real Chrome tests for the drawing board. The test suite covers live suggestions while drawing, multi-stroke recognition, model loading from a downloaded HTML file, and completion of characters such as lowercase `h`.
-
-## Known limitations
-
-Handwriting can be ambiguous, especially similar characters such as `I`, `l`, and `1`. Assist can also guess the wrong completion for unusual writing styles or incomplete strokes. Multi-character cursive writing is still a work in progress.
-
-## Dataset credits
-
-- [UJI Pen Characters v2](https://archive.ics.uci.edu/dataset/177/uji+pen+characters+version+2) — Prat, Castro, Llorens, Marzal, and Vilar (2008), [DOI: 10.24432/C5FG8S](https://doi.org/10.24432/C5FG8S), CC BY 4.0.
-- EMNIST ByClass — handwriting recognition training data.
+Recognition can still be wrong, especially with connected cursive, overlapping characters, or unusual handwriting. Word context can improve ambiguous guesses, but it does not understand sentences or guarantee the intended letter.
