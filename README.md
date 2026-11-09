@@ -24,11 +24,25 @@ Suggestions now update **during active pointer movement** rather than only when 
 
 The [continuous-stroke Chrome regression](./tests/live-during-pointer-browser.py) holds down the mouse button while feeding 30 moving points. The previously trained smaller model produced 27 requests, 53 preview notifications, and 28 distinct visually captured previews in that test, with individual measured worker+OCR latencies of about 20–52 ms. The test does **not** establish those latencies on every machine or for the larger network.
 
-### Larger optional model
+### Targeted fix for the bad lowercase h
 
-A separate [1M-parameter V2 training workflow](./actions/workflows/train-stroke-v2.yml) trains a 336-hidden-unit recurrent model with additional math-symbol and confusing-character fine-tuning. It is evaluated against the existing 373,563-parameter V1 on two writer-separated test groups and **is only published if it improves held-out sequence likelihood without materially degrading pen-lift F1**. The browser will prefer [V2 weights](./models/ink-stroke-sequence-v2.json) if published and validated; otherwise V1 remains available. The new model also has a [bounded live-inference acceptance test](./tests/stroke-sequence-v2-acceptance.mjs). Larger parameter count is not, by itself, evidence of more accurate completion.
+The user's November 8 screenshot showed an unfinished lowercase `h`: the recognition model correctly displayed **h**, but the neural completion generated a long straight horizontal tail. The original worker simply accepted the first random neural rollout. The new worker generates and evaluates several *actual neural pen trajectories*, rejecting unsupported flat continuations on rounded letters while allowing legitimate horizontal strokes such as `-`, `=`, and crossbars. A lowercase `h` must continue downward toward the established stem baseline, without trailing far below it. These are candidate-quality checks, **not procedural replacement glyph templates**.
 
-If the trained sequence weights have not yet been published, the ✨ button retries downloading them. **There is no simulated/template fallback presented as AI.** The pen, eraser, and recognition continue functioning.
+The [screenshot-specific regression](./tests/h-continuation-regression.mjs) reproduces the actual pen order and verifies a descending **h** continuation rather than the original flat line. A fresh reader's drawing may still differ from the training set; this is not a guarantee of perfect handwriting completion.
+
+### Training the generator to finish partial characters
+
+The original GRU was trained largely using teacher forcing. That predicts the next movement in a complete handwriting recording but does not teach the network to recover once its own pen movements start drifting. A new [prefix-specific fine-tuning pipeline](./src/train_prefix_completion.py) uses randomly cut real handwritten character sequences. It feeds part of the *model's own previous predictions* back into the next step (scheduled sampling), with extra emphasis on easily confused lowercase letters.
+
+On pen trajectories from writers kept out of training and checkpoint selection, the prefix-tuned 373,563-parameter checkpoint reduced 14-step free-running position error from **0.211183** to **0.195801**, an improvement of **7.28%**. [Measured results](./models/stroke-prefix-metrics.json). It nevertheless failed the screenshot's raw `h` completion test. The browser therefore uses the [prefix-tuned model](./models/ink-stroke-prefix-v1.json) when its rollout passes validation, and retains the [previous trained GRU](./models/ink-stroke-sequence-v1.json) as a **per-character neural fallback** when the newer model produces no valid completion. No font tracing, reference examples, or nearest-neighbor matching is reintroduced.
+
+### Larger-model results
+
+The separate [1M-parameter V2 training workflow](./actions/workflows/train-stroke-v2.yml) completed, but **the checkpoint was rejected** because independent pen-lift quality did not pass the release gate. See [V2 metrics](./models/stroke-sequence-v2-metrics.json). A larger parameter count does not automatically mean better handwriting. The approved prefix-tuned and older neural models remain the dependable options until a larger generator demonstrates a real improvement.
+
+The [live-drawing browser test](./tests/live-during-pointer-browser.py) verifies updates while the pen is still moving; the [h regression](./tests/h-continuation-regression.mjs) prevents reintroducing the exact straight-line error.
+
+If a trained sequence checkpoint is temporarily inaccessible, the ✨ button retries downloading it. **There is no simulated/template fallback presented as AI.** The pen, eraser, and recognition continue functioning.
 
 ## Actual training data and full class support
 
