@@ -1,0 +1,48 @@
+name: Build first usable neural checkpoint
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/bootstrap.py"
+      - ".github/workflows/bootstrap.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-ai-bootstrap
+  cancel-in-progress: false
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Train initial neural model on real handwriting
+        run: python -u src/bootstrap.py --samples 60000 --punctuation 8000 --epochs 2
+      - name: Publish first checkpoint to latest main (unless a full model is already there)
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git cat-file -e origin/main:models/ink-cnn-v1.json 2>/dev/null; then
+            echo "A model was already published. Preserve the existing model."
+            exit 0
+          fi
+          git pull --rebase origin main
+          git add models/ink-cnn-v1.json models/metrics.json
+          git commit -m "Publish early neural handwriting checkpoint"
+          git push origin HEAD:main
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-ai-bootstrap-checkpoint
+          path: models/
+          if-no-files-found: ignore
