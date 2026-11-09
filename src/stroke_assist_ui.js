@@ -5,7 +5,7 @@ const STROKE_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/mode
 const STROKE_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v2.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
-let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphPenRevision=0;
+let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
 let ghostPending=null,ghostOptions=[],ghostChoice=0;
 window.__inkGlyphReady=false;
 window.__inkAssistModel="online-stroke-gru";
@@ -31,6 +31,7 @@ function clearGhost(){
  window.__inkAssistLabel="";window.__inkGhostSource="none";
  window.__inkSuggestionChoices=[];
 }
+function beginAssistStroke(){glyphStrokeSeed=(glyphStrokeSeed+1)|0}
 function queueGhost(){
  if(!assistEnabled||tool!=="pen"){clearGhost();return}
  if(!glyphReady)return;
@@ -228,7 +229,8 @@ async function generateGlyph(){
   const big=window.__inkGlyphParameters>=1000000;
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
      prefix:input.prefix,options: isLive? options.slice(0,big?1:2):options,
-     live:isLive,maxSteps:isLive?(big?20:26):52});
+     live:isLive,maxSteps:isLive?(big?20:26):52,
+     seed:glyphStrokeSeed});
  }catch(err){
   glyphBusy=false;window.__inkAssistInFlight=false;
   window.__inkLastGlyphError=String(err.message||err);
