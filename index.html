@@ -290,6 +290,7 @@ window.__inkEngine="cnn";
 window.__inkRecognitionVersion=0;
 window.__inkRecognitionAccuracy=0;
 window.__inkDetectedRegions=0;
+window.__inkStrokeAwareSplits=0;
 window.__inkLastGuess="";
 window.__inkShapeOverride="";
 window.__inkTopCandidates=[];
@@ -709,7 +710,74 @@ function segment(){
    found.push({box:[x0,y0,x1,y1],line,space:i>0&&x0-spans[i-1][1]-1>spaceGap});
   }
  }
- return {regions:found,pixels};
+ // An accidental visual contact between neighboring written letters can
+ // merge two genuinely separate pen gestures into one bitmap component.
+ // Only use pen-up history to split when there is a very clear between-stroke
+ // boundary. Never split a single pen-down path, or break crossing symbols,
+ // crossbars, punctuation, and multi-stroke letter components.
+ let regions=found;
+ if(!strokes.some(s=>s.tool==="eraser")){
+  const recorded=strokes.filter(s=>s.tool==="pen"&&s.points?.length>=3)
+   .map(s=>{
+    let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity,length=0;
+    for(let j=0;j<s.points.length;j++){
+     const p=s.points[j];
+     x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);
+     y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);
+     if(j)length+=Math.hypot(p[0]-s.points[j-1][0],
+                             p[1]-s.points[j-1][1]);
+    }
+    return {x0,x1,y0,y1,length,cx:(x0+x1)/2,cy:(y0+y1)/2};
+   });
+  if(recorded.length>=2){
+   const refined=[];
+   for(const region of regions){
+    const [rx0,ry0,rx1,ry1]=region.box;
+    const rw=rx1-rx0,rh=ry1-ry0;
+    if(rw<Math.max(72,rh*.95)){refined.push(region);continue}
+    const group=recorded.filter(p=>p.cx>=rx0&&p.cx<=rx1&&
+       p.cy>=ry0-8&&p.cy<=ry1+8&&p.length>=Math.max(35,rh*.42))
+       .sort((a,b)=>a.cx-b.cx);
+    if(group.length<2){refined.push(region);continue}
+    const cuts=[];
+    for(let i=0;i<group.length-1;i++){
+     const a=group[i],b=group[i+1];
+     const overlap=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0));
+     const separation=b.cx-a.cx;
+     const cut=(a.x1+b.x0)/2;
+     if(separation<Math.max(43,rh*.58)||overlap>8||
+        Math.abs(a.cy-b.cy)>rh*.45||cut<rx0+18||cut>rx1-18)continue;
+     // A stroke crossing this candidate seam belongs to a composite glyph
+     // (H, A, X, T, + etc.), not another letter.
+     if(group.some(p=>p!==a&&p!==b&&p.x0<cut-10&&p.x1>cut+10))
+       continue;
+     // Avoid dividing joined loops whose ink has a broad vertical crossing.
+     const col=Math.max(rx0+1,Math.min(rx1-1,Math.round(cut)));
+     let inkAtCut=0;
+     for(let y=ry0;y<=ry1;y++)inkAtCut+=ink[y*w+col];
+     if(inkAtCut>Math.max(17,rh*.32))continue;
+     cuts.push(col);
+    }
+    if(!cuts.length){refined.push(region);continue}
+    let previous=rx0;
+    const unique=[...new Set(cuts)].sort((a,b)=>a-b);
+    for(const edge of [...unique,rx1+1]){
+     const x0=previous,x1=edge-1;
+     previous=edge;
+     if(x1-x0<15)continue;
+     let y0=ry1,y1=ry0;
+     for(let y=ry0;y<=ry1;y++)for(let x=x0;x<=x1;x++){
+      if(ink[y*w+x]){y0=Math.min(y0,y);y1=Math.max(y1,y)}
+     }
+     if(y1>=y0)refined.push({box:[x0,y0,x1,y1],
+        line:region.line,space:x0===rx0?region.space:false});
+    }
+   }
+   regions=refined;
+  }
+ }
+ window.__inkStrokeAwareSplits=Math.max(0,regions.length-found.length);
+ return {regions,pixels};
 }
 function normalize(box,pixels){
  const [x0,y0,x1,y1]=box,w=x1-x0+1,h=y1-y0+1;
