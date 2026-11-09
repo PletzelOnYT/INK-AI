@@ -18,6 +18,16 @@ The network samples future **multi-stroke pen trajectories**, not a bitmap, 32×
 
 The handwriting recognition CNN proposes likely character identities, but does *not* supply generated line shapes. The stroke generator also evaluates the likelihood of the user's existing pen-movement prefix under each candidate class to improve selection. Predictions run in an isolated browser Web Worker and never alter the real drawing until accepted.
 
+### Real-time handwriting suggestions
+
+Suggestions now update **during active pointer movement** rather than only when the user releases the mouse or stylus. The UI coalesces incoming pointer events without repeatedly cancelling its scheduled model call. The worker streams the first learned vector continuation immediately; any later response is allowed to render instead of being discarded just because newer pen points arrived. Fresh suggestions follow automatically. While drawing, the UI limits generation steps and candidate count to keep latency low. Sample noise stays stable throughout the pen gesture, and short-term OCR evidence prevents the assistant from changing its guessed letter on every pixel.
+
+The [continuous-stroke Chrome regression](./tests/live-during-pointer-browser.py) holds down the mouse button while feeding 30 moving points. The previously trained smaller model produced 27 requests, 53 preview notifications, and 28 distinct visually captured previews in that test, with individual measured worker+OCR latencies of about 20–52 ms. The test does **not** establish those latencies on every machine or for the larger network.
+
+### Larger optional model
+
+A separate [1M-parameter V2 training workflow](./actions/workflows/train-stroke-v2.yml) trains a 336-hidden-unit recurrent model with additional math-symbol and confusing-character fine-tuning. It is evaluated against the existing 373,563-parameter V1 on two writer-separated test groups and **is only published if it improves held-out sequence likelihood without materially degrading pen-lift F1**. The browser will prefer [V2 weights](./models/ink-stroke-sequence-v2.json) if published and validated; otherwise V1 remains available. The new model also has a [bounded live-inference acceptance test](./tests/stroke-sequence-v2-acceptance.mjs). Larger parameter count is not, by itself, evidence of more accurate completion.
+
 If the trained sequence weights have not yet been published, the ✨ button retries downloading them. **There is no simulated/template fallback presented as AI.** The pen, eraser, and recognition continue functioning.
 
 ## Actual training data and full class support
