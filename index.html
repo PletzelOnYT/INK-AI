@@ -18,10 +18,19 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 .tool:focus-visible{outline:2px solid white;outline-offset:2px}
 #pad[data-tool="eraser"]{cursor:cell}
 
-#pad{display:block;width:100%;aspect-ratio:2.18/1;background:#fff;border-radius:14px;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+/* The prediction layer is never part of the saved/recognized ink. */
+.board{position:relative;width:100%;aspect-ratio:1200/550;background:#fff;border-radius:14px;overflow:hidden}
+.board canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
+#ghost{pointer-events:none;z-index:2}
+#pad{z-index:1}
+.tool.assist-on{background:#ececec;color:#0b0b0b}
+@media(max-width:650px){.board{aspect-ratio:1.14/1;border-radius:9px}}
+
+
+#pad{background:#fff;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
 #guess{min-height:95px;padding:18px 20px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;color:#fff;font-size:clamp(24px,3vw,43px);font-weight:570;line-height:1.25;letter-spacing:-.02em}
 #guess[data-muted="true"]{color:#8e8e8e;font-size:clamp(15px,2vw,23px);font-weight:400;letter-spacing:0}
-@media(max-width:650px){main{padding:10px 0;gap:8px;justify-content:start}#pad{aspect-ratio:1.14/1;border-radius:9px}#guess{min-height:80px}}
+@media(max-width:650px){main{padding:10px 0;gap:8px;justify-content:start}#pad{border-radius:0}#guess{min-height:80px}}
 </style>
 </head>
 <body>
@@ -29,8 +38,12 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
   <div class="tools" role="toolbar" aria-label="Drawing tools">
     <button id="pen" class="tool" type="button" aria-label="Pen" title="Pen" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 4 4 4-12 12H4v-4L16 4Z"/><path d="m14 6 4 4"/></svg></button>
     <button id="eraser" class="tool" type="button" aria-label="Eraser" title="Eraser" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.8 13.3-7.4 7.4H7.1l-3.6-3.6a2 2 0 0 1 0-2.8L14.2 3.6a2 2 0 0 1 2.8 0l3.8 3.8a2 2 0 0 1 0 2.8Z"/><path d="m9.5 8.3 7.2 7.2M13.4 20.7H21"/></svg></button>
+    <button id="assist" class="tool" type="button" aria-label="Experimental AI drawing assist" title="Experimental Assist · faint stroke suggestions · press G to use a suggestion" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/><path d="m19 17 .8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"/></svg></button>
   </div>
-  <canvas id="pad" width="1200" height="550" data-tool="pen" aria-label="Write or draw here"></canvas>
+  <div class="board">
+    <canvas id="pad" width="1200" height="550" data-tool="pen" aria-label="Write or draw here"></canvas>
+    <canvas id="ghost" width="1200" height="550" aria-hidden="true"></canvas>
+  </div>
   <div id="guess" data-muted="true" aria-live="polite">Loading AI…</div>
 </main>
 <script>
@@ -38,20 +51,137 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 (() => {
 const MODEL_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
 const canvas=document.getElementById("pad"), ctx=canvas.getContext("2d",{willReadFrequently:true}), guess=document.getElementById("guess");
+const ghostCanvas=document.getElementById("ghost"),ghostCtx=ghostCanvas.getContext("2d");
+const assistButton=document.getElementById("assist");
 let strokes=[],current=null,pointer=null,worker=null,loaded=false,requestId=0,readVersion=0,readTimer=0,tool="pen";
+let assistEnabled=false,ghostFrame=0,ghostCandidate=null,modelHint=null,assistLastDraw=0;
 const requests=new Map();
 window.__inkReady=false;
 window.__inkEngine="cnn";
+window.__inkAssistEnabled=false;
+window.__inkGhostPoints=0;
 function display(text,muted=false){guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
 function chooseTool(next){
  if(next!=="pen"&&next!=="eraser")return;
  tool=next;canvas.dataset.tool=next;
+ if(tool!=="pen"){modelHint=null;ghostCandidate=null}
+ queueGhost();
  for(const name of ["pen","eraser"]){
   document.getElementById(name).setAttribute("aria-pressed",String(name===next));
  }
 }
 document.getElementById("pen").addEventListener("click",()=>chooseTool("pen"));
 document.getElementById("eraser").addEventListener("click",()=>chooseTool("eraser"));
+
+function updateAssist(){
+ assistEnabled=!assistEnabled;
+ window.__inkAssistEnabled=assistEnabled;
+ assistButton.setAttribute("aria-pressed",String(assistEnabled));
+ assistButton.classList.toggle("assist-on",assistEnabled);
+ if(!assistEnabled){ghostCandidate=null;ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);window.__inkGhostPoints=0}
+ else queueGhost();
+}
+assistButton.addEventListener("click",updateAssist);
+function queueGhost(){
+ if(!assistEnabled){ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);return}
+ if(ghostFrame)return;
+ ghostFrame=requestAnimationFrame(()=>{
+  ghostFrame=0;renderGhost();
+ });
+}
+function recentVectors(points){
+ // Ignore duplicate pointer events and normalize by geometric path length.
+ const last=points[points.length-1],path=[last],deltas=[];
+ let distance=0;
+ for(let i=points.length-2;i>=0&&path.length<14;i--){
+  const p=points[i],q=path[path.length-1];
+  const d=Math.hypot(q[0]-p[0],q[1]-p[1]);
+  if(d<3)continue;
+  distance+=d;path.push(p);
+  if(distance>100)break;
+ }
+ if(path.length<3)return null;
+ path.reverse();
+ for(let i=1;i<path.length;i++){
+  const dx=path[i][0]-path[i-1][0],dy=path[i][1]-path[i-1][1],len=Math.hypot(dx,dy);
+  deltas.push({x:dx/len,y:dy/len,len,angle:Math.atan2(dy,dx)});
+ }
+ const tail=deltas.slice(-6);
+ let sx=0,sy=0;
+ for(let i=0;i<tail.length;i++){
+  const weight=i+1;sx+=tail[i].x*weight;sy+=tail[i].y*weight;
+ }
+ let heading=Math.atan2(sy,sx),curve=0,weight=0;
+ for(let i=1;i<tail.length;i++){
+  const left=tail[i-1],right=tail[i];
+  const diff=Math.atan2(Math.sin(right.angle-left.angle),Math.cos(right.angle-left.angle));
+  const w=i;
+  curve+=(diff/Math.max(5,(left.len+right.len)/2))*w;
+  weight+=w;
+ }
+ curve=Math.max(-.035,Math.min(.035,weight?curve/weight:0));
+ return {last,heading,curve,distance,points:path};
+}
+function projectedPath(stroke){
+ if(!stroke||stroke.tool!=="pen"||stroke.points.length<3)return null;
+ const v=recentVectors(stroke.points);
+ if(!v)return null;
+ let {heading,curve,last}=v;
+ // The existing CNN is trained to identify characters, not predict strokes.
+ // Use it only as a modest bias when the geometry already supports an arc.
+ if(modelHint?.confidence>.36 && /[0OoQqCcGgSs]/.test(modelHint.char) && Math.abs(curve)>.003){
+  curve*=1.10;
+ }
+ if(modelHint?.confidence>.36 && /[Il1TtL]/.test(modelHint.char) && Math.abs(curve)<.014){
+  curve*=.65;
+ }
+ const length=Math.min(112,Math.max(43,v.distance*.82));
+ const steps=Math.max(8,Math.ceil(length/7));
+ const distance=length/steps,path=[[last[0],last[1]]];
+ let x=last[0],y=last[1];
+ for(let i=1;i<=steps;i++){
+  const decay=1-Math.pow(i/steps,2)*.58;
+  heading+=curve*distance*decay;
+  x+=Math.cos(heading)*distance*decay;
+  y+=Math.sin(heading)*distance*decay;
+  if(x<6||x>canvas.width-6||y<6||y>canvas.height-6)break;
+  path.push([x,y]);
+ }
+ return path.length>=3?path:null;
+}
+function bestGhost(){
+ if(!assistEnabled||tool!=="pen")return null;
+ const candidate=current?.tool==="pen"?current:strokes.slice().reverse().find(s=>s.tool==="pen");
+ return projectedPath(candidate);
+}
+function renderGhost(){
+ ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
+ ghostCandidate=bestGhost();
+ window.__inkGhostPoints=ghostCandidate?.length||0;
+ if(!ghostCandidate)return;
+ const g=ghostCtx;
+ g.save();g.lineCap="round";g.lineJoin="round";g.lineWidth=10;
+ for(let i=1;i<ghostCandidate.length;i++){
+  const t=i/(ghostCandidate.length-1);
+  const alpha=.36*(1-t)*(.84+.16*Math.cos(t*5));
+  g.strokeStyle="rgba(65,65,65,"+alpha.toFixed(3)+")";
+  g.beginPath();g.moveTo(...ghostCandidate[i-1]);g.lineTo(...ghostCandidate[i]);g.stroke();
+ }
+ g.restore();
+}
+// Apply only on deliberate user action; ghost strokes never enter OCR by themselves.
+function acceptGhost(){
+ if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate||ghostCandidate.length<3)return;
+ strokes.push({tool:"pen",points:ghostCandidate.map(p=>[p[0],p[1]])});
+ modelHint=null;paint();schedule(70);
+}
+window.addEventListener("keydown",e=>{
+ if(e.key.toLowerCase()==="g"&&!e.ctrlKey&&!e.altKey&&!e.metaKey && !e.repeat &&
+    !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)){
+  acceptGhost();
+ }
+});
+
 function paint(){
  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
  ctx.lineJoin="round";ctx.lineCap="round";
@@ -65,6 +195,7 @@ function paint(){
   for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);
   ctx.stroke();
  }
+ queueGhost();
 }
 paint();
 function pos(e){
@@ -73,13 +204,13 @@ function pos(e){
          Math.max(0,Math.min(canvas.height,(e.clientY-box.top)*canvas.height/box.height))];
 }
 function reset(){
- strokes=[];current=null;pointer=null;paint();++readVersion;
+ strokes=[];current=null;pointer=null;modelHint=null;ghostCandidate=null;paint();++readVersion;
  clearTimeout(readTimer);display(loaded?"Draw something":"Loading AI…",true);
 }
 canvas.addEventListener("pointerdown",e=>{
  e.preventDefault();
  if(pointer!==null)return;
- pointer=e.pointerId;current={tool,points:[pos(e)]};
+ pointer=e.pointerId;current={tool,points:[pos(e)]};modelHint=null;
  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
 });
 
@@ -256,6 +387,11 @@ async function recognize(version){
    result+=ch;
   }
   display(result);
+  if(assistEnabled){
+    const last=predictions[predictions.length-1]?.top?.[0];
+    modelHint=last?{char:last.char,confidence:last.confidence}:null;
+    queueGhost();
+  }
  }catch(e){if(version===readVersion)display("Recognition unavailable",true)}
 }
 function createWorker(){
