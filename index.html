@@ -10845,30 +10845,33 @@ function createGlyphWorker(){
       clearGhost();
      }
      if(possibilities.length){
-      ghostOptions=possibilities;
-      window.__inkSuggestionChoices=ghostOptions.map(o=>o.label);
-      ghostChoice=0;setGhostChoice(0);
-      if(ghostCandidate){
-       glyphLastPreviewAt=performance.now();
-       window.__inkLastPreviewTime=glyphLastPreviewAt;
-       window.__inkLastPreviewLatencyMs=Math.round(glyphLastPreviewAt-glyphRequestedAt);
-       if(pointer!==null)window.__inkLivePreviewUpdates++;
-      }
-      // Streaming keeps drawing responsive. Once the pen stops, use an
-      // independent neural recognizer to score the FULL suggested glyph,
-      // rather than trusting the pen generator's next-motion likelihood.
-      if(m.type==="completion"&&pointer===null&&ghostPending?.box){
-       const serial=m.serial,epoch=m.epoch,pending=ghostPending;
+      const serial=m.serial,epoch=m.epoch,pending=ghostPending;
+      const publish=ordered=>{
+       if(!assistEnabled||tool!=="pen"||glyphSerial!==serial||
+          glyphEpoch!==epoch||ghostPending?.serial!==serial)return;
+       if(!ordered.length){clearGhost();return}
+       ghostOptions=ordered;
+       window.__inkSuggestionChoices=ordered.map(o=>o.label);
+       ghostChoice=0;setGhostChoice(0);
+       if(ghostCandidate){
+        glyphLastPreviewAt=performance.now();
+        window.__inkLastPreviewTime=glyphLastPreviewAt;
+        window.__inkLastPreviewLatencyMs=Math.round(glyphLastPreviewAt-glyphRequestedAt);
+        if(pointer!==null)window.__inkLivePreviewUpdates++;
+       }
+      };
+      if(m.type==="completion"&&pointer===null&&pending?.box){
+       // The unverified raw rollout is often the ugly flash users see.
+       // Wait for the independent handwritten-CNN critic BEFORE painting a
+       // stationary ghost; still stream live neural strokes while drawing.
        scoreFinishedAlternatives(possibilities,pending).then(ordered=>{
-        if(!assistEnabled||tool!=="pen"||glyphSerial!==serial||
-           glyphEpoch!==epoch||ghostPending?.serial!==serial)return;
-        if(!ordered.length){clearGhost();return}
-        ghostOptions=ordered;
-        window.__inkSuggestionChoices=ordered.map(o=>o.label);
-        ghostChoice=0;setGhostChoice(0);
+        if(pointer===null)publish(ordered);
        }).catch(err=>{
         window.__inkLastGlyphError="Candidate scoring: "+String(err.message||err);
+        if(glyphSerial===serial&&glyphEpoch===epoch&&pointer===null)clearGhost();
        });
+      }else if(pointer!==null){
+       publish(possibilities);
       }
      }
    }
