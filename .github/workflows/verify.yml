@@ -1,7 +1,7 @@
 name: Validate INK AI frontend and trainer
 on:
   push:
-    branches: [main, "feature/real-neural-stroke-continuation", "feature/lowercase-c-i-recognition"]
+    branches: [main, "feature/word-case-loop-regression"]
     paths:
       - "index.html"
       - "src/**"
@@ -66,6 +66,7 @@ jobs:
           if test -s models/ink-stroke-sequence-v1.json; then python3 tests/live-during-pointer-browser.py; fi
           if test -s models/ink-stroke-sequence-v1.json; then python3 tests/local-file-browser.py; fi
           python3 tests/recognition-regression-browser.py
+          python3 tests/word-case-loop-browser.py
           python3 tests/lowercase-recognition-browser.py
           python3 tests/continuation-offline-browser.py
           if test -s models/ink-stroke-sequence-v1.json; then python3 tests/h-completion-browser.py; fi
