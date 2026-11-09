@@ -52,6 +52,11 @@ try:
     assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="false"
     assert driver.execute_script("return window.__inkGhostPoints")==0
     print("PASS: experimental assist turns off and clears ghost overlay",flush=True)
+    # Use a fresh single-stroke canvas for the existing erase-to-empty test.
+    ActionChains(driver).send_keys("\ue00c").perform()
+    wait.until(lambda d:d.find_element(By.ID,"guess").get_attribute("data-muted")=="true")
+    ActionChains(driver).move_to_element_with_offset(canvas,-120,-50).click_and_hold().move_by_offset(0,100).release().perform()
+    wait.until(lambda d:d.find_element(By.ID,"guess").get_attribute("data-muted")=="false")
     driver.find_element(By.ID,"eraser").click()
     assert driver.find_element(By.ID,"eraser").get_attribute("aria-pressed")=="true"
     assert canvas.get_attribute("data-tool")=="eraser"
