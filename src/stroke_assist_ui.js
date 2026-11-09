@@ -4,6 +4,7 @@
 const STROKE_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v1.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
+let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphPenRevision=0;
 let ghostPending=null,ghostOptions=[],ghostChoice=0;
 window.__inkGlyphReady=false;
 window.__inkAssistModel="online-stroke-gru";
@@ -17,6 +18,11 @@ window.__inkGhostSegments=0;
 window.__inkGhostStrokeWidth=0;
 window.__inkAcceptedVectorCount=0;
 window.__inkSuggestionChoices=[];
+window.__inkLivePreviewUpdates=0;
+window.__inkAssistRequests=0;
+window.__inkLastPreviewLatencyMs=0;
+window.__inkLastPreviewTime=0;
+window.__inkAssistInFlight=false;
 function clearGhost(){
  ghostCandidate=null;ghostOptions=[];ghostChoice=0;ghostPending=null;
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
@@ -26,10 +32,15 @@ function clearGhost(){
 }
 function queueGhost(){
  if(!assistEnabled||tool!=="pen"){clearGhost();return}
- if(!glyphReady){clearGhost();return}
+ if(!glyphReady)return;
  if(glyphBusy){glyphDirty=true;return}
  if(glyphTimer)return;
- glyphTimer=setTimeout(()=>{glyphTimer=0;generateGlyph()},120);
+ // True trailing-edge coalescing: do not restart this timer on each
+ // pointermove. Continuous drawing MUST eventually trigger inference.
+ const since=performance.now()-glyphRequestedAt;
+ const interval=pointer!==null?105:135;
+ const delay=Math.max(0,interval-since);
+ glyphTimer=setTimeout(()=>{glyphTimer=0;generateGlyph()},delay);
 }
 function updateAssist(){
  assistEnabled=!assistEnabled;
@@ -114,20 +125,39 @@ function createGlyphWorker(){
    window.__inkGlyphParameters=m.parameters;
    assistButton.title="Neural handwriting strokes · Tab alternatives · G accept";
    queueGhost();
-  }else if(m.type==="completion"){
-   glyphBusy=false;
+  }else if(m.type==="preview"||m.type==="completion"){
+   if(m.type==="completion"){
+    glyphBusy=false;window.__inkAssistInFlight=false;
+   }
+   // Even when new pointer data arrived, DISPLAY the most recent completed
+   // prediction rather than starving the preview by dropping every result.
+   // Queue a fresher model call immediately afterwards.
    if(assistEnabled&&tool==="pen"&&m.neural===true&&
       m.epoch===glyphEpoch&&m.serial===glyphSerial&&
-      ghostPending?.serial===m.serial&&!glyphDirty){
-     ghostOptions=(m.alternatives||[]).filter(o=>o.paths?.some(p=>p.length>1));
-     window.__inkSuggestionChoices=ghostOptions.map(o=>o.label);
-     ghostChoice=0;setGhostChoice(0);
+      ghostPending?.serial===m.serial){
+     const possibilities=(m.alternatives||[]).filter(o=>o.paths?.some(p=>p.length>1));
+     if(possibilities.length){
+      ghostOptions=possibilities;
+      window.__inkSuggestionChoices=ghostOptions.map(o=>o.label);
+      ghostChoice=0;setGhostChoice(0);
+      if(ghostCandidate){
+       glyphLastPreviewAt=performance.now();
+       window.__inkLastPreviewTime=glyphLastPreviewAt;
+       window.__inkLastPreviewLatencyMs=Math.round(glyphLastPreviewAt-glyphRequestedAt);
+       if(pointer!==null)window.__inkLivePreviewUpdates++;
+      }
+     }
    }
+   if(m.type==="completion"){
+    const dirty=glyphDirty;glyphDirty=false;
+    if(dirty||pointer!==null)queueGhost();
+   }
+  }else if(m.type==="error"){
+   glyphBusy=false;window.__inkAssistInFlight=false;
+   window.__inkLastGlyphError=m.message||"Neural generation failed";
+   assistButton.title=window.__inkLastGlyphError;
    const dirty=glyphDirty;glyphDirty=false;
    if(dirty||pointer!==null)queueGhost();
-  }else if(m.type==="error"){
-   glyphBusy=false;window.__inkLastGlyphError=m.message||"Neural generation failed";
-   assistButton.title=window.__inkLastGlyphError;
   }
  };
  glyphWorker.onerror=()=>{
@@ -170,7 +200,8 @@ async function generateGlyph(){
  if(!assistEnabled||tool!=="pen"||!glyphReady||glyphBusy||!loaded)return;
  const input=completionInput();
  if(!input){clearGhost();return}
- glyphBusy=true;
+ glyphBusy=true;window.__inkAssistInFlight=true;
+ glyphRequestedAt=performance.now();window.__inkAssistRequests++;
  const serial=++glyphSerial,epoch=glyphEpoch;
  try{
   // The CNN supplies only class probabilities, NEVER proposed geometry.
@@ -179,15 +210,18 @@ async function generateGlyph(){
        ctx.getImageData(0,0,canvas.width,canvas.height));
   const read=await request("read",{images:[bitmap]});
   if(epoch!==glyphEpoch||serial!==glyphSerial||!assistEnabled){
-   glyphBusy=false;return;
+   glyphBusy=false;window.__inkAssistInFlight=false;return;
   }
   const options=read.predictions?.[0]?.top?.slice(0,4)||[];
-  if(!options.length){glyphBusy=false;return}
+  if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
   ghostPending={frame:f,serial};
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
-     prefix:input.prefix,options});
+     prefix:input.prefix,options: pointer!==null? options.slice(0,2):options,
+     live:pointer!==null,maxSteps:pointer!==null?26:52});
  }catch(err){
-  glyphBusy=false;window.__inkLastGlyphError=String(err.message||err);
+  glyphBusy=false;window.__inkAssistInFlight=false;
+  window.__inkLastGlyphError=String(err.message||err);
+  if(glyphDirty||pointer!==null){glyphDirty=false;queueGhost()}
  }
 }
 function toScreenPaths(paths,frame){
