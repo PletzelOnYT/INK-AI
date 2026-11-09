@@ -1,29 +1,43 @@
-# INK AI
+# INK AI — Handwriting recognition + neural sketch completion
 
-An intentionally minimal handwriting-recognition web app.
+**INK AI has a minimal interface:** pen, eraser, optional ✨ Neural Assist, a white drawing board, and live handwriting recognition underneath. No registration, training buttons, or third-party inference API.
 
-**Interface:** a minimal black-and-white pen, eraser, and Experimental Assist toolbar; one white drawing canvas; and one live text prediction. No training controls, settings, dashboards, or third-party inference APIs.
+Download [index.html](./index.html) and open it in Chrome, Edge, or Safari with internet access. The single HTML file downloads its **own two model files from this repository**; it has no external JavaScript libraries.
 
-[Open or download the single HTML file](./index.html) and open it in your browser. Internet access is needed to download the independently trained neural-network weights from [models/ink-cnn-v1.json](./models/ink-cnn-v1.json) in **this repository only**.
+## Two completely different trained models
 
-Choose the **pen** to draw black ink or the **eraser** to remove parts of strokes, using your mouse, finger, or stylus. Erasing is pixel-precise and undoable. The text prediction updates automatically after drawing **or erasing**. Press **Escape** to clear the board and **Ctrl+Z / Cmd+Z** to undo. The toolbar keeps the pen and eraser icons styled after the drawing tools in Apple's Pages.
+**1. Handwriting reader** — [models/ink-cnn-v1.json](./models/ink-cnn-v1.json)
 
-## Experimental Assist (sparkle icon)
+- PyTorch convolutional neural network, trained independently using human EMNIST characters and HASYv2 math symbols.
+- Reads uppercase, lowercase, numbers, punctuation, and simple sequences as you draw.
+- Known problem: I / lowercase l / 1 ambiguity and touching or cursive handwriting.
 
-The sparkle button toggles faint, translucent suggested strokes. As you draw, the page estimates where your next line might continue using local movement, curvature, and stroke-history geometry, with a small directional bias from the trained character-recognition CNN after recognition. Predictions update with `requestAnimationFrame` for low latency. Suggestions are rendered on a **separate, transparent canvas**: they never count as real handwriting or alter recognition unless you choose to accept one.
+**2. Generative drawing assistant** — [models/ink-sketch-gru-v1.json](./models/ink-sketch-gru-v1.json)
 
-To accept the visible ghost stroke, press **G**; it becomes ordinary undoable ink. Turn off the sparkle button to hide suggestions. Eraser mode also hides suggestions.
+- **Genuine independently trained neural generator**, not line extrapolation.
+- Trained from random weights using 27,253 human sketches from Google's Quick, Draw! dataset across 12 categories (cat, dog, tree, flower, house, car, bird, fish, star, smiley face, bicycle, apple).
+- The recurrent GRU uses a learned mixture of Gaussian pen-movement distributions, pen-up signals, and stop signals to sample **possible future drawing strokes**, conditioned on your earlier strokes.
+- Trained for three passes, 81,759 training presentations. Its held-out generative negative log likelihood is reported in [models/sketch-metrics.json](./models/sketch-metrics.json). That is a loss metric, **not a percentage accuracy or visual-quality guarantee**.
+- Weights are only fetched from this GitHub repo and decoded by a dedicated browser Web Worker.
 
-**This is experimental stroke prediction, not a separately trained generative drawing model.** It can suggest continuations of lines or curves, but it does not understand arbitrary scenes or reliably complete complex pictures.
+## Using Neural Assist
 
-## Model
+Tap the ✨ sparkle button. Draw a partial shape with the pen and translucent gray **neural suggestions** appear. These suggestions are sampled from the independent sketch generator's learned distribution, not the old geometric algorithm. Press **G** to accept the visible suggestion as ordinary ink, or keep drawing and the suggestions update. Tap ✨ again to switch it off.
 
-The Python/PyTorch trainer in [src/train.py](./src/train.py) trains the convolutional model from scratch, using EMNIST handwriting and HASYv2 samples and augmentations. The resulting quantized JSON model runs locally in a browser Web Worker; no server receives the drawing. The training code is retained for future development, but **training and fine-tuning are not part of the user interface**.
+Ghost strokes live on a separate transparent overlay and **do not alter your actual artwork or OCR prediction until accepted**. The sketch generator can suggest curves and multi-stroke figure completions. Its learned categories are limited, so it will not reliably finish arbitrary scenes or act like a large text-to-image model. It may output poor or incomplete suggestions. The referenced external example video could not be independently inspected, so this implementation should not be described as an exact recreation of that video.
 
-Training metrics: [models/metrics.json](./models/metrics.json). The browser also includes conservative preprocessing improvements for detached dots, touching letters, and context-dependent I/l/1 choices. Word recognition remains limited by character segmentation and ambiguous handwriting; similar glyphs such as I/l/1 are particularly challenging. These preprocessing changes do not change the neural-network weights or its recorded accuracy.
+Pen and Eraser still work with mouse, touch, and stylus. **Escape** clears, **Ctrl+Z/Cmd+Z** undoes.
 
-Original handwriting dataset attribution:
-- Cohen, Afshar, Tapson, van Schaik (2017), [EMNIST](https://www.nist.gov/itl/products-and-services/emnist-dataset), NIST.
-- Martin Thoma (2017), [HASYv2](https://zenodo.org/records/259444), ODbL.
+## Reproducible source, no third-party model inference
 
-[Check HTML/worker and browser tests](./actions/workflows/verify.yml).
+The code to train each model is in [src/train.py](./src/train.py) and [src/train_sketch.py](./src/train_sketch.py). The training jobs run in GitHub Actions and are separate from the user interface. The model weights are original results of training; no other provider's pre-trained weights are copied or fetched at runtime.
+
+## Data rights and attribution
+
+- **Google Creative Lab, Quick, Draw! Dataset**, [project](https://github.com/googlecreativelab/quickdraw-dataset), [license CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Training on derivative Sketch-RNN-format vector records; original contributing human drawings retain applicable rights.
+- Cohen, Afshar, Tapson & van Schaik (2017), EMNIST dataset from NIST.
+- Martin Thoma (2017), HASYv2 dataset, ODbL.
+
+The project does **not** claim exclusive ownership of the original training datasets or of third-party research concepts.
+
+[View GitHub Actions validation](./actions/workflows/verify.yml) · [View sketch-model training job](./actions/workflows/train-sketch.yml)
