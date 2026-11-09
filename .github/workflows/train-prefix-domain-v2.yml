@@ -1,0 +1,81 @@
+name: Train browser-domain partial handwriting completion V2
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_prefix_domain_v2.py"
+      - "tests/prefix-domain-v2-unit.py"
+      - ".github/workflows/train-prefix-domain-v2.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-prefix-domain-v2
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Validate visible-prefix-only coordinates and neural gradient
+        run: |
+          python -m py_compile src/train_prefix_domain_v2.py
+          python -u tests/prefix-domain-v2-unit.py
+      - name: Fine-tune on true partial canvas frame and evaluate on different writers
+        run: |
+          python -u src/train_prefix_domain_v2.py \
+            --epochs 5 --samples-per-epoch 18500 --batch 96 --tail-steps 20
+      - name: Independently validate candidate checkpoint before publication
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("models/stroke-prefix-domain-v2-metrics.json").read_text())
+          assert r["real_independent_glyphs"]>1100
+          assert r["seen"]>30000
+          assert r["parameters"]>300000
+          if r["eligible"]:
+            model=json.loads(Path("models/ink-stroke-prefix-domain-v2.json").read_text())
+            assert model["format"]=="ink-online-stroke-mdn-v1"
+            assert model["training"]["prefix_domain_v2"] is True
+            assert model["training"]["fine_tuned_own_model"]=="models/ink-stroke-prefix-v1.json"
+            assert r["gain"]>=.025
+            assert r["candidate"]["independent"]["prefix_frame_position_error"] < r["baseline"]["independent"]["prefix_frame_position_error"]
+            print("PASS: improved independent real-pen prefix test:",r["gain"],flush=True)
+          else:
+            assert not Path("models/ink-stroke-prefix-domain-v2.json").exists()
+            print("REJECT: no demonstrated gain; keep verified model",flush=True)
+          PY
+      - name: Publish only independently improved learned model
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/stroke-prefix-domain-v2-metrics.json
+          if test -s models/ink-stroke-prefix-domain-v2.json; then
+            git add models/ink-stroke-prefix-domain-v2.json
+          fi
+          git commit -m "Evaluate prefix-coordinate-adapted handwriting completion model"
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prefix-domain-v2-validation
+          path: |
+            models/ink-stroke-prefix-domain-v2.json
+            models/stroke-prefix-domain-v2-metrics.json
+          if-no-files-found: ignore
