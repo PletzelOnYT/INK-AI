@@ -59,3 +59,24 @@ for(let p=0;p<prefixes.length;p++){
  }
  console.log("PASS: trained sequence generator generated",all.length,"ordered vector points",output.alternatives.map(c=>c.label));
 }
+
+const symbolTraces=[
+ {char:"+",prefix:[[.17,.51,0],[.10,0,1],[.10,0,1],[.10,0,1]]},
+ {char:"=",prefix:[[.18,.38,0],[.10,0,1],[.10,0,1],[.10,0,1]]},
+ {char:":",prefix:[[.50,.33,0],[.005,.01,1],[.005,.01,1],[.005,.01,1]]},
+ {char:"X",prefix:[[.25,.20,0],[.10,.10,1],[.10,.10,1],[.10,.10,1]]},
+ {char:"^",prefix:[[.20,.73,0],[.10,-.15,1],[.10,-.15,1],[.10,-.15,1]]}
+];
+let multi=0;
+for(let i=0;i<symbolTraces.length;i++){
+ const record=symbolTraces[i];
+ ctx.self.onmessage({data:{cmd:"generate",serial:200+i,epoch:3,prefix:record.prefix,
+   options:[{char:record.char,confidence:1}]}});
+ const result=messages.find(m=>m.type==="completion"&&m.serial===200+i);
+ assert.ok(result,"Neural worker must return a response for "+record.char);
+ const paths=result.alternatives?.flatMap(o=>o.paths)||[];
+ const ups=result.alternatives?.reduce((n,o)=>n+o.penUps,0)||0;
+ multi+=paths.length>1?1:0;
+ console.log("MULTI-STROKE NEURAL",record.char,"pen ups",ups,"separate paths",paths.length);
+}
+console.log("Measured distinct multi-stroke neural completions:",multi,"of 5 tested symbol prefixes");
