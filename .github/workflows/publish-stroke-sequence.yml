@@ -1,0 +1,56 @@
+name: Recover published neural stroke weights
+on:
+  workflow_run:
+    workflows: ["Train genuine online handwriting stroke generator"]
+    types: [completed]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: ink-ai-neural-pen-trajectories
+          path: models/
+      - name: Validate learned sequence and writer-disjoint evidence
+        run: |
+          python - <<'PY'
+          import math,json
+          from pathlib import Path
+          m=json.loads(Path("models/ink-stroke-sequence-v1.json").read_text())
+          r=json.loads(Path("models/stroke-sequence-metrics.json").read_text())
+          assert m["format"]=="ink-online-stroke-mdn-v1"
+          assert m["training"]["real_training_glyphs"]>6000
+          assert m["training"]["real_writer_holdout_glyphs"]>1800
+          assert m["training"]["writer_disjoint_validation"]
+          assert m["architecture"]["layers"]==2
+          assert m["training"]["all_supported_classes"]>=100
+          assert math.isfinite(r["best"]) and -30<r["best"]<50
+          print("Recovered real handwritten generator",m["parameter_count"],"params")
+          PY
+      - name: Publish if original training did not publish weights
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git cat-file -e origin/main:models/ink-stroke-sequence-v1.json 2>/dev/null; then
+            echo "Model already published."
+            exit 0
+          fi
+          git add models/ink-stroke-sequence-v1.json models/stroke-sequence-metrics.json
+          git commit -m "Recover and publish trained online handwriting generator"
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
