@@ -125,10 +125,10 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
  score/=Math.max(1,prefix.length-1);
  // Stable input-conditioned seed avoids flashing unrelated previews on
  // repeated repainting of identical user strokes.
- let inkHash=0;
- for(const v of prefix)for(const part of v)
-  inkHash=(Math.imul(inkHash,31)+Math.round(part*300))|0;
- const rand=rng(hash(inkHash^seed,label,variation?19:0));
+ // The generation seed belongs to the current pen gesture, not to
+ // a changing prefix hash. Otherwise each new point completely reshuffles
+ // the Gaussian noise and makes the assistant flicker/jitter.
+ const rand=rng(hash(seed,label,variation?19:0));
  let active=[[x,y]],paths=[],moves=0,penUps=0;
  for(let j=0;j<limitSteps;j++){
   if(!last)break;
@@ -190,6 +190,7 @@ self.onmessage=e=>{
    if(!network)throw Error("Neural generator is not initialized");
    const prefix=m.prefix,serial=m.serial,epoch=m.epoch;
    const live=m.live===true;
+   const gestureSeed=(Number(m.seed)||0)|0;
    const steps=Math.max(12,Math.min(maxSteps,Number(m.maxSteps)||maxSteps));
    if(!Array.isArray(prefix)||prefix.length<2||prefix.length>120)
     throw Error("Insufficient genuine pen coordinates");
@@ -200,7 +201,7 @@ self.onmessage=e=>{
    for(const choice of options){
     // Deterministic class-conditioned sample for identical pen prefixes;
     // do NOT reseed every time the UI asks for an update.
-    const result=completeGlyph(prefix,choice.char,j*571,false,steps);
+    const result=completeGlyph(prefix,choice.char,gestureSeed+j*571,false,steps);
     if(result.moves>2&&result.paths.length)results.push({
       label:choice.char,paths:result.paths,
       penUps:result.penUps,confidence:choice.confidence||0,
@@ -217,7 +218,7 @@ self.onmessage=e=>{
    // Provide a second learned sample for Tab cycling when classifier
    // candidates are too ambiguous to yield two usable vector trajectories.
    if(results.length===1&&!live){
-    const alt=completeGlyph(prefix,results[0].label,31,true,steps);
+    const alt=completeGlyph(prefix,results[0].label,gestureSeed+31,true,steps);
     if(alt.moves>2&&alt.paths.length){
      results.push({label:results[0].label,paths:alt.paths,
        penUps:alt.penUps,confidence:results[0].confidence,
