@@ -1,6 +1,66 @@
 // Browser side of the real autoregressive stroke-sequence generator.
 // Uses only real mouse/pen trajectories; neural worker returns pen-up/down
 // vectors. No nearest neighbor, font glyph, bitmap, skeleton or templates.
+// English word context only reorders plausible CNN labels; it never draws
+// letters, invents strokes, or changes high-confidence classifications.
+const englishWords=document.getElementById("inkEnglishWords")?.textContent.trim().split(/\s+/)||[];
+const englishRanks=new Map();
+const englishPrefixes=new Set();
+for(let i=0;i<englishWords.length;i++){
+ const word=englishWords[i];
+ if(!/^[a-z]+$/.test(word)||englishRanks.has(word))continue;
+ englishRanks.set(word,i+1);
+ for(let n=2;n<word.length;n++)englishPrefixes.add(word.slice(0,n));
+}
+window.__inkDictionaryWords=englishRanks.size;
+window.__inkWordRegions=[];
+function dictionaryRankOptions(incoming,box){
+ if(incoming.length<2||!window.__inkWordRegions.length)return incoming;
+ const regions=window.__inkWordRegions,choices=window.__inkTopCandidates;
+ const cx=(box.l+box.r)/2,cy=(box.t+box.b)/2;
+ let index=-1,bestDistance=Infinity;
+ for(let i=0;i<regions.length;i++){
+  const r=regions[i],b=r.box;
+  const dx=Math.max(0,b[0]-cx,cx-b[2]),dy=Math.max(0,b[1]-cy,cy-b[3]);
+  const distance=dx*dx+dy*dy;
+  if(distance<bestDistance){bestDistance=distance;index=i}
+ }
+ if(index<0||bestDistance>400||!regions[index])return incoming;
+ let prefix="",suffix="";
+ for(let j=index-1;j>=0;j--){
+  if(regions[j].line!==regions[index].line||regions[j+1].space)break;
+  const char=choices[j]?.[0]?.char;
+  if(!/^[a-z]$/i.test(char||""))break;
+  prefix=char+prefix;
+ }
+ for(let j=index+1;j<regions.length;j++){
+  if(regions[j].line!==regions[index].line||regions[j].space)break;
+  const char=choices[j]?.[0]?.char;
+  if(!/^[a-z]$/i.test(char||""))break;
+  suffix+=char;
+ }
+ if(prefix.length+suffix.length<2)return incoming;
+ const highest=Math.max(...incoming.map(x=>x.confidence||0));
+ if(highest>=.87)return incoming;
+ return incoming.map(option=>{
+  const char=option.char;
+  if(!/^[a-z]$/i.test(char)||(option.confidence||0)<highest*.12)
+   return {...option,_languageScore:-100};
+  const word=(prefix+char+suffix).toLowerCase(),rank=englishRanks.get(word);
+  let bonus=0;
+  if(rank&&word.length>=3)bonus=1.05+.30*Math.log(10001/rank)/Math.log(10001);
+  else if(!suffix&&englishPrefixes.has(word))bonus=.24;
+  return {...option,_languageScore:Math.log(Math.max(.00001,option.confidence))+bonus};
+ }).sort((a,b)=>b._languageScore-a._languageScore);
+}
+function completedLowercaseH(input){
+ if(!input?.group||input.group.length<2)return false;
+ const box=input.box,range=box.b-box.t;
+ if(range<70)return false;
+ const last=input.group.at(-1).points.at(-1);
+ return last[1]>=box.b-Math.max(12,range*.105);
+}
+
 const STROKE_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v1.json";
 const STROKE_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v2.json";
 const STROKE_PREFIX_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-prefix-v1.json";
@@ -40,6 +100,18 @@ async function loadValidatedBackup(){
  if(glyphFallbackLoading||!glyphWorker)return;
  glyphFallbackLoading=true;
  try{
+  // The backup generator is included in the standalone HTML.
+  const embedded=document.getElementById("inkStrokeBackup");
+  if(embedded){
+   try{
+    const model=JSON.parse(embedded.textContent);
+    if(model.format==="ink-online-stroke-mdn-v1"&&
+       model.parameter_count<1000000&&!model.training?.prefix_tuned){
+     glyphWorker.postMessage({cmd:"fallback",model});
+     return;
+    }
+   }catch(_){/* Fall through to repository model on older HTML files. */}
+  }
   const urls=location.protocol==="file:"?[STROKE_URL]:
       ["models/ink-stroke-sequence-v1.json",STROKE_URL];
   for(const url of urls){
@@ -149,7 +221,7 @@ function completionInput(){
   });
   return {frame:f,prefix:short,box:b};
  }
- return {frame,prefix,box};
+ return {frame,prefix,box,group};
 }
 function createGlyphWorker(){
  if(glyphWorker)glyphWorker.terminate();
@@ -257,7 +329,18 @@ async function loadGlyphModel(){
      "models/ink-stroke-sequence-v2.json",STROKE_V2_URL,
      "models/ink-stroke-sequence-v1.json",STROKE_URL];
   let model=null,lastError=null;
+  const embedded=document.getElementById("inkStrokeModel");
+  if(embedded){
+   try{
+    const saved=JSON.parse(embedded.textContent);
+    if(saved.format==="ink-online-stroke-mdn-v1"&&
+       saved.training?.prefix_domain_v2&&
+       saved.training?.fine_tuned_own_model==="models/ink-stroke-prefix-v1.json")
+       model=saved;
+   }catch(_){/* Fall back to repository files when unavailable. */}
+  }
   for(const source of sources){
+   if(model)break;
    try{
     const r=await fetch(source,{cache:(source.includes("v2")||source.includes("v3")||source.includes("prefix"))?"no-store":"default"});
     if(!r.ok)throw Error("Model not published HTTP "+r.status);
@@ -322,6 +405,11 @@ function stableCharacterOptions(incoming){
  return [...glyphClassMemory.entries()].sort((a,b)=>b[1]-a[1])
   .slice(0,4).map(([char,score])=>({char,confidence:score}));
 }
+function isLiveCandidateRequired(input,label,live){
+ if(live)return true;
+ if(label==="h"&&completedLowercaseH(input))return false;
+ return true;
+}
 async function generateGlyph(){
  if(!assistEnabled||tool!=="pen"||!glyphReady||glyphBusy||!loaded)return;
  const input=completionInput();
@@ -340,6 +428,7 @@ async function generateGlyph(){
   }
   const fresh=read.predictions?.[0]?.top?.slice(0,4)||[];
   let options=stableCharacterOptions(fresh);
+  options=dictionaryRankOptions(options,input.box);
   // A full multi-stroke glyph is much more informative than a partial crop.
   // In the screenshot the board OCR says "h" but the cropped assistant OCR
   // said L/H/k. Put h FIRST and insist on a neural completion of h.
@@ -349,6 +438,12 @@ async function generateGlyph(){
   if(preferred){
    options=[{char:preferred,confidence:1},
      ...options.filter(c=>c.char!==preferred)].slice(0,4);
+  }
+  // When the writer has already reached the ascender's baseline with
+  // the right leg of h, don't append a meaningless extra tail.
+  if(!isLiveCandidateRequired(input,preferred,pointer!==null)){
+   clearGhost();glyphBusy=false;window.__inkAssistInFlight=false;
+   return;
   }
   if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
   ghostPending={frame:f,box:input.box,serial};

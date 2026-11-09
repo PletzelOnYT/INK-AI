@@ -1,7 +1,7 @@
 name: Validate INK AI frontend and trainer
 on:
   push:
-    branches: [main, "feature/full-character-autocorrect"]
+    branches: [main]
     paths:
       - "index.html"
       - "src/**"
@@ -42,15 +42,16 @@ jobs:
           PY
           node --check /tmp/ink-check.js
           node tests/worker-smoke.mjs
-          node tests/autocorrect-quality.mjs
-          node --check src/autocorrect_ui.js
           node tests/recognition-v2-metrics.mjs
           node tests/recognition-v3-metrics.mjs
           node --check /tmp/ink-worker-check.js
+          node tests/glyph-model-smoke.mjs
+          node tests/h-continuation-regression.mjs
           node tests/stroke-sequence-v2-acceptance.mjs
           node tests/prefix-quality-acceptance.mjs
           node tests/prefix-domain-quality.mjs
           node tests/penlift-v3-quality.mjs
+          node --check /tmp/ink-stroke-worker.js
           node --check src/stroke_worker.js
           node --check src/stroke_assist_ui.js
 
@@ -58,6 +59,10 @@ jobs:
         run: |
           python3 -m pip install --quiet selenium
           command -v google-chrome || command -v chromium
+          python3 tests/browser-smoke.py
+          if test -s models/ink-stroke-sequence-v1.json; then python3 tests/live-during-pointer-browser.py; fi
+          if test -s models/ink-stroke-sequence-v1.json; then python3 tests/local-file-browser.py; fi
           python3 tests/recognition-regression-browser.py
-          python3 tests/autocorrect-browser.py
+          if test -s models/ink-stroke-sequence-v1.json; then python3 tests/h-completion-browser.py; fi
+          if test -s models/ink-stroke-sequence-v1.json; then python3 tests/glyph-completion-browser.py; fi
           if test -s models/ink-cnn-v1.json; then python3 tests/neural-browser-smoke.py; fi
