@@ -25,6 +25,11 @@ try:
     assert len(driver.find_elements(By.ID,"guess"))==1
     print("PASS: pen/eraser/assist, drawing surface and live prediction are visible",flush=True)
     wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
+    if Path("models/ink-cnn-v2.json").is_file():
+        assert driver.execute_script("return window.__inkRecognitionVersion===2"),"Published recognition V2 was not loaded in Chrome"
+        acc=driver.execute_script("return window.__inkRecognitionAccuracy")
+        assert acc>0.75,acc
+        print("PASS: Chrome loads validated V2 recognizer with measured EMNIST accuracy",acc,flush=True)
     canvas=driver.find_element(By.ID,"pad")
     ActionChains(driver).move_to_element_with_offset(canvas,-120,-50).click_and_hold().move_by_offset(0,100).release().perform()
     wait.until(lambda d:d.find_element(By.ID,"guess").get_attribute("data-muted")=="false")
