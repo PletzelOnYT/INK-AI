@@ -109,6 +109,75 @@ function likelihood(output,actual){
  return maxDensity+Math.log(sum)+
    Math.log(Math.max(1e-5,actualDraw?draw:1-draw));
 }
+// Sequence-level candidate validation. The GRU generates the geometry;
+// this critic only scores/rejects physically implausible free-running samples.
+// It never draws a shape, copies a template, or fabricates a stroke.
+function continuationQuality(prefix,paths,label,penUps,stopReached){
+ let x=0,y=0,minY=Infinity,maxY=-Infinity,minX=Infinity,maxX=-Infinity;
+ for(const p of prefix){
+  x+=p[0];y+=p[1];minY=Math.min(minY,y);maxY=Math.max(maxY,y);
+  minX=Math.min(minX,x);maxX=Math.max(maxX,x);
+ }
+ const startX=x,startY=y;
+ let length=0,down=0,up=0,flatSpan=0,changes=0,lastDir=0;
+ let minTailY=Infinity,maxTailY=-Infinity;
+ let endX=x,endY=y;
+ for(const path of paths){
+  for(let j=0;j<path.length;j++){
+   const [px,py]=path[j];
+   if(!Number.isFinite(px)||!Number.isFinite(py))
+    return {score:-1e6,reason:"nonfinite"};
+   minTailY=Math.min(minTailY,py);maxTailY=Math.max(maxTailY,py);
+   if(j){
+    const dx=px-path[j-1][0],dy=py-path[j-1][1];
+    const step=Math.hypot(dx,dy);
+    if(step>.125)changes+=2;
+    length+=step;
+    if(dy>.012)down+=dy;
+    if(dy<-.012)up-=dy;
+    if(Math.abs(dx)>.01){
+     const dir=Math.sign(dx);
+     if(lastDir&&dir!==lastDir)changes++;
+     lastDir=dir;
+    }
+   }
+  }
+  const last=path.at(-1);
+  endX=last[0];endY=last[1];
+ }
+ if(length<.035)return {score:-1e6,reason:"empty"};
+ const dx=endX-startX,dy=endY-startY;
+ const tailRange=maxTailY-minTailY;
+ const horizontallyFlat=length>.16&&Math.abs(dx)>.15&&
+   Math.abs(dy)<.075&&tailRange<.105;
+ let score=0;
+ if(horizontallyFlat)score-=12;
+ if(length>.85)score-=3*(length-.85);
+ if(!stopReached)score-=.18; // do not prefer endless uncontrolled tails
+ if(changes>8)score-=.4*(changes-8);
+ if(penUps>3)score-=.6*(penUps-3);
+ // Ascenders with rounded shoulders require a descending right leg.
+ // These are shape-validity constraints, NOT hand-coded generated strokes.
+ const ascender=/^[hbnm]$/.test(label);
+ const tall=maxY-minY>.36;
+ const arcStarted=x-minX>.10;
+ if(ascender&&tall&&arcStarted){
+  const expectedBottom=Math.max(startY+.07,maxY-.095);
+  if(endY<expectedBottom)score-=11+18*(expectedBottom-endY);
+  else score+=Math.min(.6,(endY-startY)*2.5);
+  if(label==="h"&&endX<startX-.035)score-=2;
+ }
+ if(label==="h"&&tall&&arcStarted){
+  if(down<.065)score-=10;
+  if(length>.14&&down<up*.30)score-=3;
+ }
+ // Avoid strange detached left-going extensions after a finished letter.
+ if(endX<minX-.12||endX>Math.max(maxX,startX)+.70)score-=4;
+ // Prefer modest, curved endings to unnecessary horizontal tails.
+ score+=Math.min(.4,Math.min(down,up)*1.2);
+ return {score,reason:horizontallyFlat?"flat-tail":"ok",
+    end:[endX,endY],length,down,flat:horizontallyFlat};
+}
 function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
  const index=characters.indexOf(label);
  if(index<0)throw Error("Unknown handwritten glyph: "+label);
@@ -129,7 +198,7 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
  // a changing prefix hash. Otherwise each new point completely reshuffles
  // the Gaussian noise and makes the assistant flicker/jitter.
  const rand=rng(hash(seed,label,variation?19:0));
- let active=[[x,y]],paths=[],moves=0,penUps=0;
+ let active=[[x,y]],paths=[],moves=0,penUps=0,stopReached=false;
  for(let j=0;j<limitSteps;j++){
   if(!last)break;
   const predicted=sample(last,rand,variation);
@@ -149,11 +218,12 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
    active=[[x,y]];penUps++;
   }
   last=step([dx,dy,draw?1:0],states,charEmbedding);
-  if(predicted.stop&&j>=4)break;
+  if(predicted.stop&&j>=4){stopReached=true;break}
  }
  if(active.length>1)paths.push(active);
  // Never emit empty previews or arbitrary shapes disconnected from input.
- return {paths,moves,penUps,prefixScore:score};
+ return {paths,moves,penUps,prefixScore:score,stopReached,
+  quality:continuationQuality(prefix,paths,label,penUps,stopReached)};
 }
 self.onmessage=e=>{
  const m=e.data;
@@ -197,33 +267,53 @@ self.onmessage=e=>{
    const options=(m.options||[]).filter(o=>characters.includes(o.char))
      .slice(0,live?2:4);
    const results=[];
-   let j=0;
-   for(const choice of options){
-    // Deterministic class-conditioned sample for identical pen prefixes;
-    // do NOT reseed every time the UI asks for an update.
-    const result=completeGlyph(prefix,choice.char,gestureSeed+j*571,false,steps);
-    if(result.moves>2&&result.paths.length)results.push({
-      label:choice.char,paths:result.paths,
-      penUps:result.penUps,confidence:choice.confidence||0,
-      score:result.prefixScore+0.25*Math.log((choice.confidence||0)+.03)
-    });
-    j++;
-    // Stream the first available vector trajectory without waiting for
-    // additional neural samples to finish. Main thread is free to paint.
-    if(results.length===1&&j===1)self.postMessage({
-      type:"preview",serial,epoch,alternatives:results.slice(),
-      neural:true,engine:"stroke-gru-mdn"
-    });
-   }
-   // Provide a second learned sample for Tab cycling when classifier
-   // candidates are too ambiguous to yield two usable vector trajectories.
-   if(results.length===1&&!live){
-    const alt=completeGlyph(prefix,results[0].label,gestureSeed+31,true,steps);
-    if(alt.moves>2&&alt.paths.length){
-     results.push({label:results[0].label,paths:alt.paths,
-       penUps:alt.penUps,confidence:results[0].confidence,
-       score:results[0].score-.15,variant:"stochastic"});
+   // Multiple independent genuine GRU rollouts. Select trajectories using
+   // a class-conditioned structural critic, not the first random sample.
+   // More samples when stationary; cap live work to maintain responsiveness.
+   const perLabel=live?(hiddenSize>=300?2:4):(hiddenSize>=300?6:12);
+   for(let j=0;j<options.length;j++){
+    const choice=options[j];
+    let strongest=null;
+    for(let attempt=0;attempt<perLabel;attempt++){
+     const variant=attempt>0;
+     const sampleSeed=gestureSeed+j*571+attempt*997;
+     const result=completeGlyph(prefix,choice.char,sampleSeed,variant,steps);
+     if(result.moves<2||!result.paths.length)continue;
+     const q=result.quality;
+     const value=q.score+Math.min(1.8,result.prefixScore*.04)+
+       .17*Math.log((choice.confidence||0)+.03);
+     if(value<-.9)continue;
+     if(!strongest||value>strongest.score){
+      strongest={label:choice.char,paths:result.paths,
+       penUps:result.penUps,confidence:choice.confidence||0,
+       score:value,reason:q.reason,quality:q.score,variant:attempt};
+     }
     }
+    if(strongest){
+     results.push(strongest);
+     // Only announce coherent neural geometry, never a rejected flat tail.
+     if(results.length===1)self.postMessage({
+       type:"preview",serial,epoch,alternatives:results.slice(),
+       neural:true,engine:"stroke-gru-mdn"
+     });
+    }
+   }
+   // An optional second class-consistent sample makes Tab useful if the
+   // recognizer supplied only one plausible character identity.
+   if(results.length===1&&!live){
+    const top=results[0],label=top.label;
+    let second=null;
+    for(let attempt=0;attempt<4;attempt++){
+     const alt=completeGlyph(prefix,label,gestureSeed+707+attempt*1093,true,steps);
+     if(alt.moves<2||alt.quality.score<-.9)continue;
+     const score=alt.quality.score+.17*Math.log((top.confidence||0)+.03);
+     if(!second||score>second.score)second={
+       label,paths:alt.paths,penUps:alt.penUps,confidence:top.confidence,
+       score,reason:alt.quality.reason,quality:alt.quality.score,
+       variant:"second-neural-sample"
+     };
+    }
+    if(second)results.push(second);
    }
    results.sort((a,b)=>b.score-a.score);
    self.postMessage({type:"completion",serial,epoch,
