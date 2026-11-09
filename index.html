@@ -128,7 +128,7 @@ const MODEL_PATH="models/ink-cnn-v1.json";
 const STORAGE="ink-ai-personal-f2-v1";
 const $=(id)=>document.getElementById(id);
 const c=$("pad"),ctx=c.getContext("2d",{willReadFrequently:true});
-let strokes=[],drawing=null,pointer=null,mode="text",worker=null,loaded=false,labels=[],activeVersion=0,activeTimer=0,lastRegions=[],lastPredictions=[],lastRead="",lastValue="",corrections=0,pending=new Map(),idCounter=0;
+let strokes=[],drawing=null,pointer=null,mode="text",worker=null,loaded=false,labels=[],activeVersion=0,activeTimer=0,lastRegions=[],lastPredictions=[],lastRead="",lastValue="",corrections=0,pending=new Map(),idCounter=0,modelRetryTimer=null;
 ctx.lineCap="round";ctx.lineJoin="round";
 function toast(t){let el=$("notice");el.textContent=t;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),3000)}
 function status(t,error=false){$("status").textContent=t;$("status").dataset.error=error?"true":"false"}
@@ -497,6 +497,7 @@ onmessage=e=>{
  worker.onerror=e=>{status("INFERENCE WORKER ERROR",true);console.error(e)};
 }
 async function loadModel(refresh=false){
+ clearTimeout(modelRetryTimer);modelRetryTimer=null;
  loaded=false;$("fineTune").disabled=true;
  status("CHECKING YOUR GITHUB MODEL");
  modelProgress(0,"Looking for trained model…","Your repository: PletzelOnYT/INK-AI");
@@ -531,10 +532,11 @@ async function loadModel(refresh=false){
  }catch(err){
   loaded=false;
   const notPublished=/HTTP 404|not published/i.test(String(err.message||err));
-  status(notPublished?"MODEL STILL TRAINING — NOT YET PUBLISHED":"MODEL DOWNLOAD FAILED",true);
-  modelProgress(0,notPublished?"Model not available yet":"Unable to load model",
-    notPublished?"The training job has not published its weights to GitHub. The HTML itself is working.":"Error: "+String(err.message||err),
+  status(notPublished?"MODEL NOT PUBLISHED · AUTO-RETRY ON":"MODEL DOWNLOAD FAILED",true);
+  modelProgress(0,notPublished?"Model still training — waiting for upload":"Unable to load model",
+    notPublished?"No model file on GitHub yet. Automatically checking every 45 seconds.":"Error: "+String(err.message||err),
     "error");
+  if(notPublished)modelRetryTimer=setTimeout(()=>loadModel(true),45000);
   $("output").innerHTML=notPublished
    ?'<span class="hint">Your model is still being trained on GitHub. Recognition will work once <b>models/ink-cnn-v1.json</b> is published. Click “Reload GitHub model” after the training finishes.</span>'
    :'<span class="hint">Could not download or initialize the model. Check the repository connection and reload.</span>';
