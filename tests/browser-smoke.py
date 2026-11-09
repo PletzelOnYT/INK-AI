@@ -17,10 +17,11 @@ driver=webdriver.Chrome(options=opt)
 try:
     driver.get(f"http://127.0.0.1:{server.server_port}/index.html")
     wait=WebDriverWait(driver,45)
-    assert len(driver.find_elements(By.TAG_NAME,"button"))==0
+    assert len(driver.find_elements(By.TAG_NAME,"button"))==2
+    assert driver.find_element(By.ID,"pen").get_attribute("aria-pressed")=="true"
     assert len(driver.find_elements(By.TAG_NAME,"canvas"))==1
     assert len(driver.find_elements(By.ID,"guess"))==1
-    print("PASS: only a drawing board and guessed text are visible",flush=True)
+    print("PASS: only pen/eraser, canvas and live prediction are visible",flush=True)
     wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
     canvas=driver.find_element(By.ID,"pad")
     ActionChains(driver).move_to_element_with_offset(canvas,-120,-50).click_and_hold().move_by_offset(0,100).release().perform()
@@ -28,6 +29,17 @@ try:
     text=driver.find_element(By.ID,"guess").text
     assert text
     print("PASS: recognition automatically updates",repr(text),flush=True)
+    driver.find_element(By.ID,"eraser").click()
+    assert driver.find_element(By.ID,"eraser").get_attribute("aria-pressed")=="true"
+    assert canvas.get_attribute("data-tool")=="eraser"
+    ActionChains(driver).move_to_element_with_offset(canvas,-120,-50).click_and_hold().move_by_offset(0,100).release().perform()
+    wait.until(lambda d:d.find_element(By.ID,"guess").get_attribute("data-muted")=="true")
+    print("PASS: eraser removes ink and recognition updates automatically",flush=True)
+    driver.find_element(By.ID,"pen").click()
+    assert driver.find_element(By.ID,"pen").get_attribute("aria-pressed")=="true"
+    ActionChains(driver).move_to_element_with_offset(canvas,-150,-40).click_and_hold().move_by_offset(0,90).release().perform()
+    wait.until(lambda d:d.find_element(By.ID,"guess").get_attribute("data-muted")=="false")
+    print("PASS: pen draws again after switching back",flush=True)
     ActionChains(driver).send_keys("\ue00c").perform()
     wait.until(lambda d:d.find_element(By.ID,"guess").get_attribute("data-muted")=="true")
     print("PASS: Escape clears the drawing",flush=True)
