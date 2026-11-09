@@ -54,7 +54,7 @@ const canvas=document.getElementById("pad"), ctx=canvas.getContext("2d",{willRea
 const ghostCanvas=document.getElementById("ghost"),ghostCtx=ghostCanvas.getContext("2d");
 const assistButton=document.getElementById("assist");
 let strokes=[],current=null,pointer=null,worker=null,loaded=false,requestId=0,readVersion=0,readTimer=0,tool="pen";
-let assistEnabled=false,ghostFrame=0,ghostCandidate=null,modelHint=null,assistLastDraw=0;
+let assistEnabled=false,ghostCandidate=null;
 const requests=new Map();
 window.__inkReady=false;
 window.__inkEngine="cnn";
@@ -64,7 +64,7 @@ function display(text,muted=false){guess.textContent=text;guess.dataset.muted=mu
 function chooseTool(next){
  if(next!=="pen"&&next!=="eraser")return;
  tool=next;canvas.dataset.tool=next;
- if(tool!=="pen"){modelHint=null;ghostCandidate=null}
+ if(tool!=="pen"){clearGhost()}
  queueGhost();
  for(const name of ["pen","eraser"]){
   document.getElementById(name).setAttribute("aria-pressed",String(name===next));
@@ -73,111 +73,177 @@ function chooseTool(next){
 document.getElementById("pen").addEventListener("click",()=>chooseTool("pen"));
 document.getElementById("eraser").addEventListener("click",()=>chooseTool("eraser"));
 
+// Experimental Assist uses independently trained generative weights. NO
+// curve extrapolation, font completion, heuristics, or other providers.
+const SKETCH_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-sketch-gru-v1.json";
+let sketchWorker=null,sketchReady=false,sketchLoading=false,sketchTimer=0;
+let sketchBusy=false,sketchSerial=0,sketchActiveSerial=0,sketchRetry=0;
+window.__inkSketchReady=false;
+window.__inkSketchEngine="neural-gru";
+window.__inkLastSketchModelError="";
+
+function clearGhost(){
+ ghostCandidate=null;
+ ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
+ window.__inkGhostPoints=0;
+}
+function queueGhost(){
+ if(!assistEnabled||tool!=="pen"){clearGhost();return}
+ if(!sketchReady){clearGhost();return}
+ // Throttle generation to ~10 updates/sec; keep the drawing loop immediate.
+ if(sketchTimer || sketchBusy)return;
+ sketchTimer=setTimeout(()=>{
+  sketchTimer=0;generateGhost();
+ },95);
+}
 function updateAssist(){
  assistEnabled=!assistEnabled;
  window.__inkAssistEnabled=assistEnabled;
  assistButton.setAttribute("aria-pressed",String(assistEnabled));
  assistButton.classList.toggle("assist-on",assistEnabled);
- if(!assistEnabled){ghostCandidate=null;ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);window.__inkGhostPoints=0}
- else queueGhost();
+ if(!assistEnabled){
+  clearTimeout(sketchTimer);sketchTimer=0;clearGhost();
+ }else{
+  if(!sketchReady)loadSketchModel();
+  queueGhost();
+ }
 }
 assistButton.addEventListener("click",updateAssist);
-function queueGhost(){
- if(!assistEnabled){ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);return}
- if(ghostFrame)return;
- ghostFrame=requestAnimationFrame(()=>{
-  ghostFrame=0;renderGhost();
- });
+
+function sketchPrefix(){
+ // Convert actual ink into pen-movement tokens in Quick Draw's coordinate
+ // system; these are inputs to the generative neural model, not fake paths.
+ const penStrokes=(current?[...strokes,current]:strokes)
+   .filter(s=>s.tool==="pen"&&s.points?.length>=2);
+ if(!penStrokes.length)return null;
+ let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+ for(const stroke of penStrokes)for(const p of stroke.points){
+  left=Math.min(left,p[0]);top=Math.min(top,p[1]);
+  right=Math.max(right,p[0]);bottom=Math.max(bottom,p[1]);
+ }
+ const extent=Math.max(90,right-left,bottom-top);
+ const scale=180/extent,stepMin=Math.max(3.5,7.5/scale);
+ const tokens=[],anchor=null;
+ let previous=null;
+ for(let i=0;i<penStrokes.length;i++){
+  const stroke=penStrokes[i];
+  const sample=[stroke.points[0]];
+  for(let j=1;j<stroke.points.length;j++){
+   const p=stroke.points[j],q=sample[sample.length-1];
+   if(Math.hypot(p[0]-q[0],p[1]-q[1])>=stepMin ||
+      j===stroke.points.length-1){
+    sample.push(p);
+   }
+  }
+  if(sample.length<2)continue;
+  for(let j=0;j<sample.length;j++){
+   const p=sample[j];
+   if(previous!==null){
+    const dx=Math.max(-4,Math.min(4,(p[0]-previous[0])*scale/20));
+    const dy=Math.max(-4,Math.min(4,(p[1]-previous[1])*scale/20));
+    tokens.push([dx,dy,0]);
+   }
+   previous=p;
+  }
+  if(tokens.length && stroke!==current)tokens[tokens.length-1][2]=1;
+ }
+ if(tokens.length<4||!previous)return null;
+ return {prefix:tokens.slice(-72),anchor:previous,
+         screenScale:20/scale};
 }
-function recentVectors(points){
- // Ignore duplicate pointer events and normalize by geometric path length.
- const last=points[points.length-1],path=[last],deltas=[];
- let distance=0;
- for(let i=points.length-2;i>=0&&path.length<14;i--){
-  const p=points[i],q=path[path.length-1];
-  const d=Math.hypot(q[0]-p[0],q[1]-p[1]);
-  if(d<3)continue;
-  distance+=d;path.push(p);
-  if(distance>100)break;
- }
- if(path.length<3)return null;
- path.reverse();
- for(let i=1;i<path.length;i++){
-  const dx=path[i][0]-path[i-1][0],dy=path[i][1]-path[i-1][1],len=Math.hypot(dx,dy);
-  deltas.push({x:dx/len,y:dy/len,len,angle:Math.atan2(dy,dx)});
- }
- const tail=deltas.slice(-6);
- let sx=0,sy=0;
- for(let i=0;i<tail.length;i++){
-  const weight=i+1;sx+=tail[i].x*weight;sy+=tail[i].y*weight;
- }
- let heading=Math.atan2(sy,sx),curve=0,weight=0;
- for(let i=1;i<tail.length;i++){
-  const left=tail[i-1],right=tail[i];
-  const diff=Math.atan2(Math.sin(right.angle-left.angle),Math.cos(right.angle-left.angle));
-  const w=i;
-  curve+=(diff/Math.max(5,(left.len+right.len)/2))*w;
-  weight+=w;
- }
- curve=Math.max(-.035,Math.min(.035,weight?curve/weight:0));
- return {last,heading,curve,distance,points:path};
+function createSketchWorker(){
+ if(sketchWorker)sketchWorker.terminate();
+ const source=document.getElementById("sketchWorkerSource").textContent;
+ const url=URL.createObjectURL(new Blob([source],{type:"text/javascript"}));
+ sketchWorker=new Worker(url);
+ URL.revokeObjectURL(url);
+ sketchWorker.onmessage=e=>{
+  const m=e.data;
+  if(m.type==="ready"){
+   sketchReady=true;sketchBusy=false;window.__inkSketchReady=true;
+   assistButton.title="Neural Sketch Assist ready · press G to accept";
+   queueGhost();
+  }else if(m.type==="prediction"){
+   sketchBusy=false;
+   if(!assistEnabled||tool!=="pen")return;
+   if(m.serial>=sketchActiveSerial){
+    sketchActiveSerial=m.serial;
+    ghostCandidate=m.paths||[];
+    renderGhost();
+   }
+   // Keep responding to fast pen movement without blocking pointer events.
+   if(pointer!==null)queueGhost();
+  }else if(m.type==="error"){
+   sketchBusy=false;
+   window.__inkLastSketchModelError=m.message||"Neural generator failed";
+   assistButton.title="Neural Assist unavailable: "+window.__inkLastSketchModelError;
+  }
+ };
+ sketchWorker.onerror=e=>{
+  sketchReady=false;sketchBusy=false;window.__inkSketchReady=false;
+  window.__inkLastSketchModelError="Sketch worker failed";
+ };
 }
-function projectedPath(stroke){
- if(!stroke||stroke.tool!=="pen"||stroke.points.length<3)return null;
- const v=recentVectors(stroke.points);
- if(!v)return null;
- let {heading,curve,last}=v;
- // The existing CNN is trained to identify characters, not predict strokes.
- // Use it only as a modest bias when the geometry already supports an arc.
- if(modelHint?.confidence>.36 && /[0OoQqCcGgSs]/.test(modelHint.char) && Math.abs(curve)>.003){
-  curve*=1.10;
- }
- if(modelHint?.confidence>.36 && /[Il1TtL]/.test(modelHint.char) && Math.abs(curve)<.014){
-  curve*=.65;
- }
- const length=Math.min(112,Math.max(43,v.distance*.82));
- const steps=Math.max(8,Math.ceil(length/7));
- const distance=length/steps,path=[[last[0],last[1]]];
- let x=last[0],y=last[1];
- for(let i=1;i<=steps;i++){
-  const decay=1-Math.pow(i/steps,2)*.58;
-  heading+=curve*distance*decay;
-  x+=Math.cos(heading)*distance*decay;
-  y+=Math.sin(heading)*distance*decay;
-  if(x<6||x>canvas.width-6||y<6||y>canvas.height-6)break;
-  path.push([x,y]);
- }
- return path.length>=3?path:null;
+async function loadSketchModel(){
+ if(sketchReady||sketchLoading)return;
+ sketchLoading=true;
+ assistButton.title="Loading independently trained sketch generator from GitHub…";
+ try{
+  const response=await fetch(SKETCH_URL,{cache:"no-store"});
+  if(!response.ok)throw Error("Neural sketch model not published ("+response.status+")");
+  const model=await response.json();
+  if(model.format!=="ink-generative-gru-v1")throw Error("Incompatible sketch weights");
+  createSketchWorker();
+  sketchWorker.postMessage({cmd:"init",model});
+  window.__inkLastSketchModelError="";
+ }catch(error){
+  window.__inkLastSketchModelError=String(error.message||error);
+  assistButton.title="Neural sketch model pending on GitHub — no fake suggestions";
+  if(assistEnabled){
+   clearTimeout(sketchRetry);
+   sketchRetry=setTimeout(()=>{if(assistEnabled&&!sketchReady)loadSketchModel()},30000);
+  }
+ }finally{sketchLoading=false}
 }
-function bestGhost(){
- if(!assistEnabled||tool!=="pen")return null;
- const candidate=current?.tool==="pen"?current:strokes.slice().reverse().find(s=>s.tool==="pen");
- return projectedPath(candidate);
+function generateGhost(){
+ if(!assistEnabled||!sketchReady||sketchBusy||tool!=="pen")return;
+ const data=sketchPrefix();
+ if(!data){clearGhost();return}
+ sketchBusy=true;
+ const serial=++sketchSerial;
+ sketchWorker.postMessage({cmd:"predict",serial,...data});
 }
 function renderGhost(){
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
- ghostCandidate=bestGhost();
- window.__inkGhostPoints=ghostCandidate?.length||0;
- if(!ghostCandidate)return;
+ let count=0;
+ const paths=Array.isArray(ghostCandidate)?ghostCandidate:[];
  const g=ghostCtx;
- g.save();g.lineCap="round";g.lineJoin="round";g.lineWidth=10;
- for(let i=1;i<ghostCandidate.length;i++){
-  const t=i/(ghostCandidate.length-1);
-  const alpha=.36*(1-t)*(.84+.16*Math.cos(t*5));
-  g.strokeStyle="rgba(65,65,65,"+alpha.toFixed(3)+")";
-  g.beginPath();g.moveTo(...ghostCandidate[i-1]);g.lineTo(...ghostCandidate[i]);g.stroke();
+ g.save();
+ g.strokeStyle="rgba(55,55,55,0.32)";
+ g.lineCap="round";g.lineJoin="round";g.lineWidth=10;
+ for(const path of paths){
+  if(path.length<2)continue;
+  count+=path.length;
+  g.beginPath();
+  g.moveTo(path[0][0],path[0][1]);
+  for(let i=1;i<path.length;i++)g.lineTo(path[i][0],path[i][1]);
+  g.stroke();
  }
  g.restore();
+ window.__inkGhostPoints=count;
 }
-// Apply only on deliberate user action; ghost strokes never enter OCR by themselves.
 function acceptGhost(){
- if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate||ghostCandidate.length<3)return;
- strokes.push({tool:"pen",points:ghostCandidate.map(p=>[p[0],p[1]])});
- modelHint=null;paint();schedule(70);
+ if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate?.length)return;
+ const paths=ghostCandidate.filter(p=>p.length>=2);
+ if(!paths.length)return;
+ for(const points of paths){
+  strokes.push({tool:"pen",points:points.map(p=>[p[0],p[1]])});
+ }
+ clearGhost();paint();schedule(75);
 }
 window.addEventListener("keydown",e=>{
- if(e.key.toLowerCase()==="g"&&!e.ctrlKey&&!e.altKey&&!e.metaKey && !e.repeat &&
-    !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)){
+ if(e.key.toLowerCase()==="g"&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.repeat&&
+    !(e.target instanceof HTMLInputElement)&&!(e.target instanceof HTMLTextAreaElement)){
   acceptGhost();
  }
 });
@@ -204,13 +270,13 @@ function pos(e){
          Math.max(0,Math.min(canvas.height,(e.clientY-box.top)*canvas.height/box.height))];
 }
 function reset(){
- strokes=[];current=null;pointer=null;modelHint=null;ghostCandidate=null;paint();++readVersion;
+ strokes=[];current=null;pointer=null;clearGhost();paint();++readVersion;
  clearTimeout(readTimer);display(loaded?"Draw something":"Loading AI…",true);
 }
 canvas.addEventListener("pointerdown",e=>{
  e.preventDefault();
  if(pointer!==null)return;
- pointer=e.pointerId;current={tool,points:[pos(e)]};modelHint=null;
+ pointer=e.pointerId;current={tool,points:[pos(e)]};
  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
 });
 
@@ -387,11 +453,7 @@ async function recognize(version){
    result+=ch;
   }
   display(result);
-  if(assistEnabled){
-    const last=predictions[predictions.length-1]?.top?.[0];
-    modelHint=last?{char:last.char,confidence:last.confidence}:null;
-    queueGhost();
-  }
+
  }catch(e){if(version===readVersion)display("Recognition unavailable",true)}
 }
 function createWorker(){
