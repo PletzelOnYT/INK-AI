@@ -76,5 +76,21 @@ for(const checkpoint of checkpoints){
     });
  }
  assert.ok(passed,"A partially written h should yield at least one learned downward tail; not just suppress all suggestions");
+ if(checkpoint.includes("prefix")){
+  received.length=0;
+  ctx.self.onmessage({data:{cmd:"generate",serial:915,epoch:5,seed:16,
+    prefix,live:false,maxSteps:52,preferred:"h",options:[
+      {char:"L",confidence:.55},{char:"H",confidence:.25},
+      {char:"k",confidence:.15},{char:"h",confidence:.05}
+    ]}});
+  const chosen=received.find(m=>m.type==="completion"&&m.serial===915);
+  assert.ok(chosen?.alternatives?.length,"Recognized h must have a trained fallback");
+  assert.equal(chosen.alternatives[0].label,"h",
+    "Full-board h must outrank misleading cropped OCR L/H/k");
+  assert.equal(chosen.fallback,true,"The robust h should use the verified older neural network");
+  assert.ok(!received.some(m=>m.type==="preview"&&
+    m.alternatives?.[0]?.label!=="h"),"Do not preview the wrong letter before h fallback finishes");
+  console.log("PASS: whole-board h overrides misleading crop labels and invokes verified neural fallback");
+ }
 }
 console.log("PASS: screenshot h regression — live descending vector, quality rejection, and automatic verified neural fallback");
