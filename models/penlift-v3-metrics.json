@@ -1,0 +1,154 @@
+{
+  "eligible": false,
+  "source": "models/ink-stroke-prefix-domain-v2.json",
+  "baseline": {
+    "calibration": {
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "true_lifts": 673,
+      "predicted_lifts": 0,
+      "true_positive": 0,
+      "false_positive": 0,
+      "normal_pen_down_accuracy": 1.0
+    },
+    "independent": {
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "true_lifts": 679,
+      "predicted_lifts": 0,
+      "true_positive": 0,
+      "false_positive": 0,
+      "normal_pen_down_accuracy": 1.0
+    },
+    "prefix_position": {
+      "prefix_frame_position_error": 0.341954,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 13140,
+      "cut_errors": {
+        "8": 0.398635,
+        "13": 0.340551,
+        "21": 0.283367
+      }
+    }
+  },
+  "candidate": {
+    "calibration": {
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "true_lifts": 673,
+      "predicted_lifts": 0,
+      "true_positive": 0,
+      "false_positive": 0,
+      "normal_pen_down_accuracy": 1.0
+    },
+    "independent": {
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "true_lifts": 679,
+      "predicted_lifts": 0,
+      "true_positive": 0,
+      "false_positive": 0,
+      "normal_pen_down_accuracy": 1.0
+    },
+    "prefix_position": {
+      "prefix_frame_position_error": 0.367903,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 13140,
+      "cut_errors": {
+        "8": 0.416986,
+        "13": 0.367435,
+        "21": 0.316385
+      }
+    }
+  },
+  "train_glyphs": 6210,
+  "test_glyphs": 1550,
+  "best_epoch": 1,
+  "seen": 105000,
+  "epochs": [
+    {
+      "epoch": 1,
+      "train_loss": 0.56336,
+      "calibration": {
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "true_lifts": 673,
+        "predicted_lifts": 0,
+        "true_positive": 0,
+        "false_positive": 0,
+        "normal_pen_down_accuracy": 1.0
+      },
+      "seen": 21000
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.549818,
+      "calibration": {
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "true_lifts": 673,
+        "predicted_lifts": 0,
+        "true_positive": 0,
+        "false_positive": 0,
+        "normal_pen_down_accuracy": 1.0
+      },
+      "seen": 42000
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.546303,
+      "calibration": {
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "true_lifts": 673,
+        "predicted_lifts": 0,
+        "true_positive": 0,
+        "false_positive": 0,
+        "normal_pen_down_accuracy": 1.0
+      },
+      "seen": 63000
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.541293,
+      "calibration": {
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "true_lifts": 673,
+        "predicted_lifts": 0,
+        "true_positive": 0,
+        "false_positive": 0,
+        "normal_pen_down_accuracy": 1.0
+      },
+      "seen": 84000
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.542561,
+      "calibration": {
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "true_lifts": 673,
+        "predicted_lifts": 0,
+        "true_positive": 0,
+        "false_positive": 0,
+        "normal_pen_down_accuracy": 1.0
+      },
+      "seen": 105000
+    }
+  ],
+  "criterion": "Pen-up F1 precision and recall on writers excluded from training and epoch selection, with prefix trajectory position error <= 106% of baseline"
+}
