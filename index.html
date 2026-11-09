@@ -261,6 +261,7 @@ window.__inkRecognitionVersion=0;
 window.__inkRecognitionAccuracy=0;
 window.__inkDetectedRegions=0;
 window.__inkLastGuess="";
+window.__inkShapeOverride="";
 window.__inkAssistEnabled=false;
 window.__inkGhostPoints=0;
 function display(text,muted=false){guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
@@ -822,10 +823,19 @@ function segment(){
     const lowCols=projections(line[0],line[1]);
     const upper=groupRuns(topCols,2,1),lower=groupRuns(lowCols,2,1);
     const lowHeight=line[1]-line[0]+1,topHeight=last[1]-last[0]+1;
-    const smallTop=topHeight<Math.min(33,lowHeight*.48)&&upper.length<=Math.max(1,lower.length);
-    const aligned=upper.length>0&&upper.every(a=>lower.some(b=>
-      (a[0]+a[1])/2>=b[0]-13&&(a[0]+a[1])/2<=b[1]+13));
-    if(smallTop&&aligned){last[1]=line[1];continue}
+    const smallTop=topHeight<Math.min(33,lowHeight*.48);
+    const smallBottom=lowHeight<Math.min(33,topHeight*.48);
+    const punctuationPair=topHeight<=18&&lowHeight<=18&&gap<=72;
+    const aligned=upper.length>0&&lower.length>0&&upper.every(a=>lower.some(b=>{
+      const center=(a[0]+a[1])/2;
+      return center>=b[0]-Math.max(13,(b[1]-b[0])*.15)&&
+          center<=b[1]+Math.max(13,(b[1]-b[0])*.15);
+    }));
+    // Keep i/j dots, ! dots, colon and equals-sign bars with their glyph.
+    // Never merge two normal-height handwriting lines just for x-overlap.
+    if(aligned&&(smallTop||smallBottom||punctuationPair)){
+     last[1]=line[1];continue;
+    }
    }
   }
   merged.push([...line]);
@@ -933,22 +943,24 @@ function shapeFromStroke(region){
    bottom=Math.max(bottom,p[1]);
   }
   const valleyIndex=ordered.reduce((best,p,i)=>p[1]>ordered[best][1]?i:best,0);
-  const inspect=(i,inverted)=>{
+  const looksLikeSinglePeak=i=>{
    if(i<2||i>=ordered.length-2)return false;
    const a=ordered[0],mid=ordered[i],b=ordered[ordered.length-1];
-   const leftRun=Math.abs(mid[0]-a[0]),rightRun=Math.abs(b[0]-mid[0]);
-   if(leftRun<w*.20||rightRun<w*.20)return false;
-   const level=inverted?Math.min(a[1],b[1])-mid[1]:Math.min(a[1],b[1])-mid[1];
-   if(inverted?level>h*.45:level<h*.45)return false;
-   let violations=0;
+   if(mid[0]-a[0]<w*.20||b[0]-mid[0]<w*.20)return false;
+   if(Math.min(a[1],b[1])-mid[1]<h*.45)return false;
+   if(Math.abs(a[1]-b[1])>=h*.40)return false;
+   let backwards=0,wrongVertical=0;
    for(let j=1;j<ordered.length;j++){
     const dx=ordered[j][0]-ordered[j-1][0];
-    if(dx<-Math.max(8,w*.028))violations++;
+    const dy=ordered[j][1]-ordered[j-1][1];
+    if(dx<-Math.max(8,w*.028))backwards++;
+    // Actual caret slopes run consistently up into apex, down afterward.
+    wrongVertical+=j<=i?Math.max(0,dy):Math.max(0,-dy);
    }
-   return violations<Math.max(3,ordered.length*.14)&&
-    Math.abs(a[1]-b[1])<h*.40;
+   return backwards<Math.max(3,ordered.length*.14)&&
+      wrongVertical<h*.22;
   };
-  if(inspect(peak,false))return "^";
+  if(looksLikeSinglePeak(peak))return "^";
   const a=ordered[0],p=ordered[valleyIndex],b=ordered[ordered.length-1];
   if(valleyIndex>1&&valleyIndex<ordered.length-2&&
       p[1]-Math.max(a[1],b[1])>h*.48&&
@@ -963,6 +975,7 @@ async function recognize(version){
  window.__inkDetectedRegions=regions.length;
  if(!regions.length){display("Draw something",true);return}
  const simple=shapeFromStroke(regions);
+ window.__inkShapeOverride=simple||"";
  if(simple!==null){display(simple);window.__inkLastGuess=simple;return}
  try{
   const images=regions.map(r=>normalize(r.box,pixels));
