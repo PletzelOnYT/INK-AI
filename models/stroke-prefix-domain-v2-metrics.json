@@ -1,0 +1,173 @@
+{
+  "eligible": true,
+  "source": "models/ink-stroke-prefix-v1.json",
+  "parameters": 373563,
+  "real_training_glyphs": 6210,
+  "real_independent_glyphs": 1550,
+  "synthetic_symbols": 5760,
+  "seen": 87803,
+  "baseline": {
+    "calibration": {
+      "prefix_frame_position_error": 0.426864,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 22356,
+      "cut_errors": {
+        "8": 0.549789,
+        "13": 0.426365,
+        "21": 0.29686
+      }
+    },
+    "independent": {
+      "prefix_frame_position_error": 0.423789,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 22188,
+      "cut_errors": {
+        "8": 0.542005,
+        "13": 0.422882,
+        "21": 0.298743
+      }
+    }
+  },
+  "candidate": {
+    "calibration": {
+      "prefix_frame_position_error": 0.324775,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 22356,
+      "cut_errors": {
+        "8": 0.379879,
+        "13": 0.331565,
+        "21": 0.259109
+      }
+    },
+    "independent": {
+      "prefix_frame_position_error": 0.333551,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 22188,
+      "cut_errors": {
+        "8": 0.395021,
+        "13": 0.328074,
+        "21": 0.273823
+      }
+    }
+  },
+  "gain": 0.212931,
+  "best": {
+    "epoch": 4,
+    "loss": -3.51183,
+    "calibration": {
+      "prefix_frame_position_error": 0.322285,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 18144,
+      "cut_errors": {
+        "8": 0.370596,
+        "13": 0.326799,
+        "21": 0.266004
+      }
+    },
+    "samples_seen": 70159,
+    "seconds": 33.3
+  },
+  "epochs": [
+    {
+      "epoch": 1,
+      "loss": -3.11356,
+      "calibration": {
+        "prefix_frame_position_error": 0.351214,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 18144,
+        "cut_errors": {
+          "8": 0.422788,
+          "13": 0.352278,
+          "21": 0.273782
+        }
+      },
+      "samples_seen": 17621,
+      "seconds": 32.7
+    },
+    {
+      "epoch": 2,
+      "loss": -3.32825,
+      "calibration": {
+        "prefix_frame_position_error": 0.355087,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 18144,
+        "cut_errors": {
+          "8": 0.398019,
+          "13": 0.35645,
+          "21": 0.307876
+        }
+      },
+      "samples_seen": 35129,
+      "seconds": 33.3
+    },
+    {
+      "epoch": 3,
+      "loss": -3.41095,
+      "calibration": {
+        "prefix_frame_position_error": 0.370087,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 18144,
+        "cut_errors": {
+          "8": 0.394397,
+          "13": 0.375119,
+          "21": 0.338847
+        }
+      },
+      "samples_seen": 52584,
+      "seconds": 32.5
+    },
+    {
+      "epoch": 4,
+      "loss": -3.51183,
+      "calibration": {
+        "prefix_frame_position_error": 0.322285,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 18144,
+        "cut_errors": {
+          "8": 0.370596,
+          "13": 0.326799,
+          "21": 0.266004
+        }
+      },
+      "samples_seen": 70159,
+      "seconds": 33.3
+    },
+    {
+      "epoch": 5,
+      "loss": -3.47259,
+      "calibration": {
+        "prefix_frame_position_error": 0.323532,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 18144,
+        "cut_errors": {
+          "8": 0.377811,
+          "13": 0.326087,
+          "21": 0.262961
+        }
+      },
+      "samples_seen": 87803,
+      "seconds": 32.1
+    }
+  ],
+  "metric_description": "Free-running 12-step displacement after prefix-only bounding, independently evaluated on unseen writers; NOT whole-character accuracy."
+}
