@@ -350,6 +350,7 @@ self.onmessage=e=>{
    self.postMessage({type:"ready",engine:"stroke-gru-mdn",
      parameters:network.parameter_count,classes:characters.length,
      prefixTuned:Boolean(network.training?.prefix_tuned),
+     prefixDomain:Boolean(network.training?.prefix_domain_v2),
      realSamples:network.training.real_training_glyphs});
   }else if(m.cmd==="fallback"){
    if(!mainNetworkState)throw Error("Initialize primary model first");
