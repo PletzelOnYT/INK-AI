@@ -369,7 +369,7 @@ function maskBitmap(candidate){
   const predicted=candidate.prediction[i]/255,already=candidate.partial[i];
   // V2 has much higher missing-ink recall than V1, but also overdraws.
   // Calibrate only the displayed ghost: filter low-probability haze.
-  const cutoff=window.__inkGlyphVersion===2?.49:.36;
+  const cutoff=window.__inkGlyphVersion===2 ? .49 : .36;
   const strength=window.__inkGlyphVersion===2?1.6:1.2;
   const extra=Math.max(0,predicted-cutoff)*
        Math.max(0,1-Math.min(1,already*1.6));
