@@ -1,0 +1,228 @@
+{
+  "eligible": false,
+  "parameter_count": 1085499,
+  "baseline_v1": {
+    "calibration": {
+      "nll": -4.384692,
+      "pen_state_accuracy": 0.989074,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1548,
+      "true_pen_lifts": 705,
+      "predicted_pen_lifts": 0
+    },
+    "independent": {
+      "nll": -4.220022,
+      "pen_state_accuracy": 0.989952,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1553,
+      "true_pen_lifts": 647,
+      "predicted_pen_lifts": 0
+    }
+  },
+  "v2": {
+    "calibration": {
+      "nll": -4.078512,
+      "pen_state_accuracy": 0.989074,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1548,
+      "true_pen_lifts": 705,
+      "predicted_pen_lifts": 0
+    },
+    "independent": {
+      "nll": -3.492358,
+      "pen_state_accuracy": 0.989952,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1553,
+      "true_pen_lifts": 647,
+      "predicted_pen_lifts": 0
+    }
+  },
+  "best": {
+    "calibration": {
+      "nll": -4.078512,
+      "pen_state_accuracy": 0.989074,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1548,
+      "true_pen_lifts": 705,
+      "predicted_pen_lifts": 0
+    },
+    "stage": "ambiguous-and-symbol-fine-tune",
+    "epoch": 3,
+    "presentations": 222000
+  },
+  "history": [
+    {
+      "stage": "general-pretrain",
+      "epoch": 1,
+      "train_loss": -1.38638,
+      "calibration": {
+        "nll": -3.025975,
+        "pen_state_accuracy": 0.977498,
+        "pen_lift_f1": 0.002747,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 751
+      },
+      "seconds": 131.5
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 2,
+      "train_loss": -2.5588,
+      "calibration": {
+        "nll": -2.585166,
+        "pen_state_accuracy": 0.978319,
+        "pen_lift_f1": 0.002851,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 698
+      },
+      "seconds": 128.0
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 3,
+      "train_loss": -2.94935,
+      "calibration": {
+        "nll": -3.063575,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 128.6
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 4,
+      "train_loss": -2.86654,
+      "calibration": {
+        "nll": -3.208753,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 128.4
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 5,
+      "train_loss": -3.40392,
+      "calibration": {
+        "nll": -3.414704,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 129.7
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 6,
+      "train_loss": -2.96547,
+      "calibration": {
+        "nll": -0.617061,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 129.4
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 7,
+      "train_loss": -2.52523,
+      "calibration": {
+        "nll": -3.572294,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 129.6
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 8,
+      "train_loss": -3.37741,
+      "calibration": {
+        "nll": -2.729289,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 130.3
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 9,
+      "train_loss": -3.04918,
+      "calibration": {
+        "nll": -3.080046,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 130.4
+    },
+    {
+      "stage": "ambiguous-and-symbol-fine-tune",
+      "epoch": 1,
+      "train_loss": -3.91431,
+      "calibration": {
+        "nll": -3.98258,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 129.7
+    },
+    {
+      "stage": "ambiguous-and-symbol-fine-tune",
+      "epoch": 2,
+      "train_loss": -4.21584,
+      "calibration": {
+        "nll": -4.047643,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 130.6
+    },
+    {
+      "stage": "ambiguous-and-symbol-fine-tune",
+      "epoch": 3,
+      "train_loss": -4.27538,
+      "calibration": {
+        "nll": -4.078512,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "seconds": 129.8
+    }
+  ],
+  "total_presentations": 222000,
+  "real_human_trajectory_samples": 6210,
+  "writer_disjoint_test_samples": 1553,
+  "synthetic_symbol_examples": 13200,
+  "selection_rule": "V2 needs improved NLL on both writer-separated splits and non-regressed pen-lift F1"
+}
