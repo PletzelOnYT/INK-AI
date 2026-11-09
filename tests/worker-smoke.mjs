@@ -27,9 +27,10 @@ const model={format:"ink-cnn-int8-v1",labels,layers:[
  fakeLayer([96,512]),fakeLayer([labels.length,96])]};
 function call(id,cmd,payload={}){
  output.length=0;ctx.onmessage({data:{id,cmd,...payload}});
- assert.equal(output.length,1);assert.equal(output[0].id,id);
- if(output[0].error)throw Error(output[0].error);
- return output[0].result;
+ const messages=output.filter(x=>x.id===id);
+ assert.equal(messages.length,1);
+ if(messages[0].error)throw Error(messages[0].error);
+ return messages[0].result;
 }
 assert.equal(call(1,"init",{model}).classes,labels.length);
 const image=new Array(1024).fill(0);
