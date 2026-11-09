@@ -290,6 +290,8 @@ window.__inkAssistLabel="";
 window.__inkGhostSource="none";
 window.__inkGhostSegments=0;
 window.__inkGhostStrokeWidth=0;
+window.__inkAcceptedVectorCount=0;
+window.__inkSuggestionChoices=[];
 let humanReferences=null,humanReferencesLoading=false,ghostOptions=[],ghostChoice=0;
 async function loadHumanReferences(){
  if(!assistEnabled||!glyphWorker||humanReferencesLoading)return;
@@ -318,6 +320,7 @@ async function loadHumanReferences(){
 }
 function clearGhost(){
  ghostCandidate=null;ghostOptions=[];ghostChoice=0;
+ window.__inkSuggestionChoices=[];
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
  window.__inkGhostPoints=0;
  window.__inkGhostSegments=0;
@@ -419,6 +422,7 @@ function createGlyphWorker(){
       m.serial===glyphSerial&&ghostPending?.serial===m.serial){
     ghostOptions=(m.alternatives?.length?m.alternatives:
       [{label:m.label,prediction:m.prediction,source:m.source}]);
+    window.__inkSuggestionChoices=ghostOptions.map(o=>o.label);
     ghostChoice=0;
     setGhostChoice(0);
    }
@@ -715,6 +719,7 @@ function acceptGhost(){
   strokes.push({tool:"pen",type:"vector-completion",width:vectors.width,
     points:points.map(p=>[p[0],p[1]])});
  }
+ window.__inkAcceptedVectorCount+=vectors.paths.length;
  clearGhost();paint();schedule(75);
 }
 window.addEventListener("keydown",e=>{
