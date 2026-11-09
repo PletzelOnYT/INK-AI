@@ -1339,7 +1339,17 @@ async function recognize(version){
    result+=ch;
   }
   display(result);
+  const previousGuess=window.__inkLastGuess;
   window.__inkLastGuess=result;
+  // The whole-board OCR is more reliable for multi-stroke glyph identity
+  // than a tightly cropped early partial-letter read. An OCR result can
+  // arrive AFTER the first neural preview; immediately resubmit the
+  // corrected character so an old L/H/k suggestion cannot persist for h.
+  if(assistEnabled&&regions.length===1&&result.length===1&&
+     (result!==previousGuess||window.__inkAssistLabel!==result)){
+   glyphClassMemory.clear();
+   queueGhost();
+  }
  }catch(e){if(version===readVersion)display("Recognition unavailable",true)}
 }
 function createWorker(){
