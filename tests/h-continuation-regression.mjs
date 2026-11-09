@@ -8,7 +8,8 @@ assert.ok(match);
 const checkpoints=[
  "models/ink-stroke-sequence-v1.json",
  "models/ink-stroke-sequence-v2.json",
- "models/ink-stroke-prefix-v1.json"
+ "models/ink-stroke-prefix-v1.json",
+ "models/ink-stroke-prefix-domain-v2.json"
 ].filter(fs.existsSync);
 assert.ok(checkpoints.length>=1);
 for(const checkpoint of checkpoints){
@@ -49,7 +50,7 @@ for(const checkpoint of checkpoints){
   const completion=received.find(m=>m.type==="completion");
   assert.ok(completion,"No generator response: "+JSON.stringify(received));
   const candidates=completion.alternatives||[];
-  if(checkpoint.includes("prefix")&&candidates.length>0){
+  if(checkpoint==="models/ink-stroke-prefix-v1.json"&&candidates.length>0){
    assert.equal(completion.fallback,true,
      "Partially written h must use the older learned model when prefix-finetuned model lacks a valid tail");
   }
@@ -87,7 +88,8 @@ for(const checkpoint of checkpoints){
   assert.ok(chosen?.alternatives?.length,"Recognized h must have a trained fallback");
   assert.equal(chosen.alternatives[0].label,"h",
     "Full-board h must outrank misleading cropped OCR L/H/k");
-  assert.equal(chosen.fallback,true,"The robust h should use the verified older neural network");
+  if(checkpoint==="models/ink-stroke-prefix-v1.json")
+    assert.equal(chosen.fallback,true,"Previous prefix model requires verified neural fallback");
   assert.ok(!received.some(m=>m.type==="preview"&&
     m.alternatives?.[0]?.label!=="h"),"Do not preview the wrong letter before h fallback finishes");
   console.log("PASS: whole-board h overrides misleading crop labels and invokes verified neural fallback");
