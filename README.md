@@ -49,13 +49,26 @@ confidence predictions can be shown as unknown instead of fabricated answers.
 The original CNN recognizes about 85% of the official EMNIST ByClass test
 images, but this **does not** imply 85% accuracy on arbitrary user handwriting,
 joined cursive, or the user's on-screen stroke. Its per-class metrics show
-significant limitations for rare lowercase shapes. An independently validated
-[class-balanced V2 recognition training workflow](./actions/workflows/train-recognition-v2.yml)
-fine-tunes the project's own trained CNN on underrepresented classes and
-**will publish an upgraded recognition model only if official held-out overall,
-macro and lowercase accuracy improve**. The HTML automatically loads a validated
-[recognition V2 checkpoint](./models/ink-cnn-v2.json) if one is published;
-otherwise it uses the existing trained V1 model.
+significant limitations for rare lowercase shapes.
+
+A new [class-balanced V2 recognition model](./models/ink-cnn-v2.json) was fine-tuned
+for 480,000 more training presentations from **the project's own V1 weights**.
+On all 116,323 official EMNIST test images, the class-balanced results are:
+
+| Metric | V1 | V2 |
+| --- | ---: | ---: |
+| Overall accuracy | 84.90% | 84.32% |
+| Macro-average class accuracy | 70.49% | 74.33% |
+| Lowercase macro accuracy | 48.00% | 58.66% |
+
+V2 makes significantly fewer errors on many rare lowercase letters but has a
+small overall accuracy trade-off. It was only published because it cleared the
+pre-established thresholds for minority-class improvement and maximum allowed
+overall regression. Some individual classes, such as uppercase C, remain worse.
+See [the full V2 class-level metrics](./models/recognition-v2-metrics.json) and
+[the safe-training workflow](./actions/workflows/train-recognition-v2.yml).
+The HTML automatically prefers the independently validated V2 model and
+falls back to V1 if unavailable.
 
 ## Drawing controls
 
