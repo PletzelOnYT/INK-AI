@@ -38,7 +38,7 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
   <div class="tools" role="toolbar" aria-label="Drawing tools">
     <button id="pen" class="tool" type="button" aria-label="Pen" title="Pen" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 4 4 4-12 12H4v-4L16 4Z"/><path d="m14 6 4 4"/></svg></button>
     <button id="eraser" class="tool" type="button" aria-label="Eraser" title="Eraser" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.8 13.3-7.4 7.4H7.1l-3.6-3.6a2 2 0 0 1 0-2.8L14.2 3.6a2 2 0 0 1 2.8 0l3.8 3.8a2 2 0 0 1 0 2.8Z"/><path d="m9.5 8.3 7.2 7.2M13.4 20.7H21"/></svg></button>
-    <button id="assist" class="tool" type="button" aria-label="Experimental AI drawing assist" title="AI completes handwritten letters, numbers and symbols · press G to accept" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/><path d="m19 17 .8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"/></svg></button>
+    <button id="assist" class="tool" type="button" aria-label="Experimental AI handwriting completion" title="AI completes handwritten letters, numbers and symbols · press G to accept" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/><path d="m19 17 .8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"/></svg></button>
   </div>
   <div class="board">
     <canvas id="pad" width="1200" height="550" data-tool="pen" aria-label="Write or draw here"></canvas>
@@ -299,8 +299,8 @@ function maskBitmap(candidate){
  let count=0;
  for(let i=0;i<1024;i++){
   const predicted=candidate.prediction[i]/255,already=candidate.partial[i];
-  const extra=Math.max(0,predicted-.20)*Math.max(0,1-Math.min(1,already*1.6));
-  const alpha=Math.round(Math.min(.36,extra*.65)*255);
+  const extra=Math.max(0,predicted-.36)*Math.max(0,1-Math.min(1,already*1.6));
+  const alpha=Math.round(Math.min(.38,extra*1.2)*255);
   const k=i*4;
   img.data[k]=47;img.data[k+1]=47;img.data[k+2]=47;img.data[k+3]=alpha;
   if(alpha>7)count++;
