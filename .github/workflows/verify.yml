@@ -37,6 +37,7 @@ jobs:
           node --check /tmp/ink-check.js
           node tests/worker-smoke.mjs
           node tests/recognition-v2-metrics.mjs
+          node tests/recognition-v3-metrics.mjs
           node --check /tmp/ink-worker-check.js
           node tests/glyph-model-smoke.mjs
           node --check /tmp/ink-stroke-worker.js
