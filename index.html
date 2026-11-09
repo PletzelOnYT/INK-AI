@@ -127,7 +127,9 @@ function sample(output,random,variation){
  const sdY=Math.exp(Math.max(-5,Math.min(.6,output[4*K+choice])));
  const dx=output[K+choice]+normal(random)*sdX*jitter;
  const dy=output[2*K+choice]+normal(random)*sdY*jitter;
- const draw=sig(output[5*K])>0.5;
+ // Pen-up is a learned Bernoulli random variable, not an argmax gate.
+ // This is essential for multi-stroke characters whose lift events are rare.
+ const draw=random()<sig(output[5*K]);
  const stop=sig(output[5*K+1])>0.56;
  return {dx,dy,draw,stop};
 }
@@ -170,7 +172,12 @@ function completeGlyph(prefix,label,seed,variation){
   last=step(token,states,charEmbedding);
  }
  score/=Math.max(1,prefix.length-1);
- const rand=rng(hash(seed,label,variation?19:0));
+ // Stable input-conditioned seed avoids flashing unrelated previews on
+ // repeated repainting of identical user strokes.
+ let inkHash=0;
+ for(const v of prefix)for(const part of v)
+  inkHash=(Math.imul(inkHash,31)+Math.round(part*300))|0;
+ const rand=rng(hash(inkHash^seed,label,variation?19:0));
  let active=[[x,y]],paths=[],moves=0,penUps=0;
  for(let j=0;j<maxSteps;j++){
   if(!last)break;
