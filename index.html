@@ -902,8 +902,41 @@ function request(cmd,payload){
 // A complete hand-drawn caret must not be cut into a long fake "word", and
 // full-character CNNs are not trained to interpret arbitrary partial strokes.
 function shapeFromStroke(region){
- if(strokes.length!==1||strokes[0].tool!=="pen"||
-    strokes[0].type||region.length!==1)return null;
+ if(region.length!==1)return null;
+ const pen=strokes.filter(s=>s.tool==="pen"&&!s.type&&s.points?.length>=2);
+ if(pen.length===2&&strokes.length===2){
+  const spans=pen.map(s=>{
+   const p=s.points;
+   let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+   for(const [x,y] of p){
+    x0=Math.min(x0,x);x1=Math.max(x1,x);
+    y0=Math.min(y0,y);y1=Math.max(y1,y);
+   }
+   const a=p[0],b=p[p.length-1];
+   return {x0,x1,y0,y1,w:x1-x0,h:y1-y0,
+      cx:(x0+x1)/2,cy:(y0+y1)/2,
+      dx:b[0]-a[0],dy:b[1]-a[1]};
+  });
+  const [a,b]=spans;
+  const horizontal=t=>t.w>30&&t.h<Math.max(13,t.w*.18);
+  const vertical=t=>t.h>30&&t.w<Math.max(13,t.h*.18);
+  const xOver=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0));
+  const yOver=Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
+  // Two narrow dots on top of each other form the punctuation colon.
+  if(a.w<22&&a.h<22&&b.w<22&&b.h<22&&
+     Math.abs(a.cx-b.cx)<17&&Math.abs(a.cy-b.cy)>22)return ":";
+  if(horizontal(a)&&horizontal(b)&&
+     xOver>Math.min(a.w,b.w)*.72&&Math.abs(a.cy-b.cy)>18)return "=";
+  if(((horizontal(a)&&vertical(b))||(horizontal(b)&&vertical(a)))&&
+      Math.abs(a.cx-b.cx)<Math.max(20,Math.min(a.w,b.w)*.35)&&
+      Math.abs(a.cy-b.cy)<Math.max(20,Math.min(a.h,b.h)*.35))return "+";
+  const oppositeDiagonals=a.w>30&&a.h>30&&b.w>30&&b.h>30&&
+      a.dx*a.dy*b.dx*b.dy<0&&
+      xOver>Math.min(a.w,b.w)*.5&&yOver>Math.min(a.h,b.h)*.5;
+  if(oppositeDiagonals&&Math.abs(a.cx-b.cx)<25&&
+     Math.abs(a.cy-b.cy)<25)return "X";
+ }
+ if(strokes.length!==1||strokes[0].tool!=="pen"||strokes[0].type)return null;
  const pts=strokes[0].points;
  if(pts.length<3)return null;
  const samples=[pts[0]];
