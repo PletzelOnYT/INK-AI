@@ -49,4 +49,25 @@ for(const [name,tokens,char] of [["h",h,"h"],["c",c,"c"],["x",x,"x"]]){
  console.log("ROLLOUT_DIAGNOSTIC",JSON.stringify({name,count:alts.length,
   ms,metrics}));
 }
+
+// Inspect the trajectory distribution, including candidates currently rejected
+// by the existing critic; this identifies systematic overlong tails.
+const backup=JSON.parse(fs.readFileSync("models/ink-stroke-sequence-v1.json","utf8"));
+for(const [name,net,tokens,char] of [
+ ["h-primary",model,h,"h"],["h-backup",backup,h,"h"],
+ ["c-primary",model,c,"c"],["c-backup",backup,c,"c"]]){
+ const {context}=ctxFor(net),samples=[];
+ for(let i=0;i<12;i++){
+  const out=context.completeGlyph(tokens,char,16+i*997,i>0,52);
+  const pts=out.paths.flat();
+  const ext=pts.map(p=>p[0]);
+  samples.push({v:i,s:Number(out.quality.score.toFixed(2)),
+   log:out.rolloutLogLikelihood===undefined?null:Number(out.rolloutLogLikelihood.toFixed(2)),
+   len:pts.length,penUps:out.penUps,
+   right:ext.length?Number(Math.max(...ext).toFixed(3)):null,
+   end:pts.length?pts.at(-1).map(v=>Number(v.toFixed(3))):null});
+ }
+ console.log("RAW_ROLLOUT",JSON.stringify({name,samples}));
+}
+
 console.log("PASS: neural rollout diagnostics captured from real model weights");
