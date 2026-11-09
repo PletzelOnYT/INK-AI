@@ -329,7 +329,11 @@ document.getElementById("eraser").addEventListener("click",()=>chooseTool("erase
 // Browser side of the real autoregressive stroke-sequence generator.
 // Uses only real mouse/pen trajectories; neural worker returns pen-up/down
 // vectors. No nearest neighbor, font glyph, bitmap, skeleton or templates.
+// Browser side of the real autoregressive stroke-sequence generator.
+// Uses only real mouse/pen trajectories; neural worker returns pen-up/down
+// vectors. No nearest neighbor, font glyph, bitmap, skeleton or templates.
 const STROKE_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v1.json";
+const STROKE_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v2.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphPenRevision=0;
@@ -449,9 +453,12 @@ function createGlyphWorker(){
   const m=e.data;
   if(m.type==="ready"){
    glyphReady=true;glyphBusy=false;
-   window.__inkGlyphReady=true;window.__inkGlyphVersion=3;
+   window.__inkGlyphReady=true;
+   window.__inkGlyphVersion=m.parameters>=1000000?4:3;
    window.__inkGlyphParameters=m.parameters;
-   assistButton.title="Neural handwriting strokes · Tab alternatives · G accept";
+   assistButton.title=m.parameters>=1000000?
+     "1M neural handwriting strokes · Live · Tab alternatives · G accept":
+     "Neural handwriting strokes · Live · Tab alternatives · G accept";
    queueGhost();
   }else if(m.type==="preview"||m.type==="completion"){
    if(m.type==="completion"){
@@ -498,16 +505,21 @@ async function loadGlyphModel(){
  glyphLoading=true;
  assistButton.title="Loading trained pen-trajectory model…";
  try{
-  const sources=location.protocol==="file:"?[STROKE_URL]:
-    ["models/ink-stroke-sequence-v1.json",STROKE_URL];
+  const sources=location.protocol==="file:"?
+    [STROKE_V2_URL,STROKE_URL]:
+    ["models/ink-stroke-sequence-v2.json",STROKE_V2_URL,
+     "models/ink-stroke-sequence-v1.json",STROKE_URL];
   let model=null,lastError=null;
   for(const source of sources){
    try{
-    const r=await fetch(source,{cache:"no-store"});
+    const r=await fetch(source,{cache:source.includes("v2")?"no-store":"default"});
     if(!r.ok)throw Error("Model not published HTTP "+r.status);
-    model=await r.json();
-    if(model.format!=="ink-online-stroke-mdn-v1")throw Error("Wrong sequence model");
-    break;
+    const candidate=await r.json();
+    if(candidate.format!=="ink-online-stroke-mdn-v1")
+      throw Error("Wrong sequence model");
+    if(source.includes("v2") && !(candidate.training?.v2&&candidate.parameter_count>=1000000))
+      throw Error("Unvalidated larger model");
+    model=candidate;break;
    }catch(err){lastError=err;model=null}
   }
   if(!model)throw lastError||Error("No generative weights found");
@@ -543,9 +555,11 @@ async function generateGlyph(){
   const options=read.predictions?.[0]?.top?.slice(0,4)||[];
   if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
   ghostPending={frame:f,serial};
+  const isLive=pointer!==null;
+  const big=window.__inkGlyphParameters>=1000000;
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
-     prefix:input.prefix,options: pointer!==null? options.slice(0,2):options,
-     live:pointer!==null,maxSteps:pointer!==null?26:52});
+     prefix:input.prefix,options: isLive? options.slice(0,big?1:2):options,
+     live:isLive,maxSteps:isLive?(big?20:26):52});
  }catch(err){
   glyphBusy=false;window.__inkAssistInFlight=false;
   window.__inkLastGlyphError=String(err.message||err);
