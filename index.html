@@ -301,7 +301,6 @@ function useNetwork(s){
 function prepareNetwork(o){
  const previous=captureNetwork();
  try{
-   const o=m.model;
    if(o?.format!=="ink-online-stroke-mdn-v1")throw Error("Expected actual online stroke generator");
    if(o.architecture?.input!==3||o.architecture?.mixtures!==5||
       o.architecture?.layers!==2)throw Error("Unsupported GRU trajectory model");
