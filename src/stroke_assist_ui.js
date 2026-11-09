@@ -6,6 +6,7 @@ const STROKE_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/m
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
+let glyphClassMemory=new Map();
 let ghostPending=null,ghostOptions=[],ghostChoice=0;
 window.__inkGlyphReady=false;
 window.__inkAssistModel="online-stroke-gru";
@@ -31,7 +32,10 @@ function clearGhost(){
  window.__inkAssistLabel="";window.__inkGhostSource="none";
  window.__inkSuggestionChoices=[];
 }
-function beginAssistStroke(){glyphStrokeSeed=(glyphStrokeSeed+1)|0}
+function beginAssistStroke(){
+ glyphStrokeSeed=(glyphStrokeSeed+1)|0;
+ glyphClassMemory.clear();
+}
 function queueGhost(){
  if(!assistEnabled||tool!=="pen"){clearGhost();return}
  if(!glyphReady)return;
@@ -206,6 +210,23 @@ async function loadGlyphModel(){
   }
  }finally{glyphLoading=false}
 }
+function stableCharacterOptions(incoming){
+ // Partial glyphs are inherently ambiguous. Keep a short exponentially
+ // decaying memory of the CNN class probabilities across successive pen
+ // movements so the assistant doesn't switch letters every few pixels.
+ for(const [char,score] of glyphClassMemory){
+  const updated=score*.58;
+  if(updated<.004)glyphClassMemory.delete(char);
+  else glyphClassMemory.set(char,updated);
+ }
+ for(const candidate of incoming){
+  if(typeof candidate.char!=="string")continue;
+  const confidence=Math.max(.001,Math.min(1,Number(candidate.confidence)||0));
+  glyphClassMemory.set(candidate.char,(glyphClassMemory.get(candidate.char)||0)+confidence);
+ }
+ return [...glyphClassMemory.entries()].sort((a,b)=>b[1]-a[1])
+  .slice(0,4).map(([char,score])=>({char,confidence:score}));
+}
 async function generateGlyph(){
  if(!assistEnabled||tool!=="pen"||!glyphReady||glyphBusy||!loaded)return;
  const input=completionInput();
@@ -222,7 +243,8 @@ async function generateGlyph(){
   if(epoch!==glyphEpoch||serial!==glyphSerial||!assistEnabled){
    glyphBusy=false;window.__inkAssistInFlight=false;return;
   }
-  const options=read.predictions?.[0]?.top?.slice(0,4)||[];
+  const fresh=read.predictions?.[0]?.top?.slice(0,4)||[];
+  const options=stableCharacterOptions(fresh);
   if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
   ghostPending={frame:f,serial};
   const isLive=pointer!==null;
