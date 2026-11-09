@@ -29,7 +29,9 @@ try:
         assert driver.execute_script("return window.__inkRecognitionVersion===3"),"Validated real-pen V3 was not loaded"
         print("PASS: Chrome loads independently validated pen-adapted V3 recognizer",flush=True)
     elif Path("models/ink-cnn-v2.json").is_file():
-        assert driver.execute_script("return window.__inkRecognitionVersion===2"),"Published V2 was not loaded"
+        # GitHub raw can publish V3 between checkout and this browser run.
+        # Either validated V2 or newer validated V3 is correct here.
+        assert driver.execute_script("return window.__inkRecognitionVersion>=2"),"No validated V2/V3 recognizer loaded"
         acc=driver.execute_script("return window.__inkRecognitionAccuracy")
         assert acc>0.75,acc
         print("PASS: Chrome loads validated V2 fallback",acc,flush=True)
