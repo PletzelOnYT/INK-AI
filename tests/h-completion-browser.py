@@ -48,39 +48,22 @@ try:
       });
     """,[stem,shoulder])
     wait.until(lambda d:d.execute_script("return window.__inkDetectedRegions>=1"))
-    driver.execute_script("++glyphEpoch;")
-    # Force the already recognized 'h' candidate through the same running
-    # trained worker as the assist button; no model logits or output are mocked.
-    stamp=driver.execute_script("""
-      const inp=completionInput();
-      if(!inp||inp.prefix.length<6)return {error:"Missing handwritten pen prefix"};
-      const serial=++glyphSerial,epoch=glyphEpoch;
-      ghostPending={frame:inp.frame,serial};
-      glyphBusy=true;window.__inkAssistInFlight=true;
-      glyphWorker.postMessage({cmd:'generate',serial,epoch,live:false,
-       seed:16,maxSteps:52,prefix:inp.prefix,
-       options:[{char:'h',confidence:1}]});
-      return {serial,steps:inp.prefix.length,frame:inp.frame};
-    """)
-    assert "error" not in stamp,stamp
-    wait.until(lambda d:d.execute_script("""
-      return window.__inkAssistLabel==='h'&&
-        window.__inkGhostSegments>=1&&window.__inkGhostPoints>=3;
-    """))
+    # Use the real OCR -> neural worker -> ghost renderer flow. No synthetic
+    # model message, internal closure access or forced class label.
+    wait.until(lambda d:d.execute_script(
+        "return window.__inkAssistLabel==='h' && window.__inkGhostPoints>=3"))
     measurement=driver.execute_script("""
-      const p=ghostCandidate.paths.flatMap(p=>p);
-      const f=ghostPending.frame;
-      const a=p[0],b=p[p.length-1];
-      return {dy:(b[1]-a[1])/f.size,
-       tailRange:(Math.max(...p.map(z=>z[1]))-Math.min(...p.map(z=>z[1])))/f.size,
+      return {dy:window.__inkGhostTailDy,
+       tailRange:window.__inkGhostTailRange,
        segmentCount:window.__inkGhostSegments,
        points:window.__inkGhostPoints,
        source:window.__inkGhostSource,
        fallback:window.__inkFallbackUsed,
        width:window.__inkGhostStrokeWidth,
-       label:window.__inkAssistLabel};
+       label:window.__inkAssistLabel,
+       recognized:document.getElementById('guess').textContent};
     """)
-    print("ACTUAL SCREENSHOT h GHOST:",stamp,measurement,flush=True)
+    print("ACTUAL SCREENSHOT h GHOST:",measurement,flush=True)
     assert measurement["dy"]>.06,"h must descend, not produce flat horizontal ghost"
     assert measurement["tailRange"]>.08
     assert measurement["width"]<=8
