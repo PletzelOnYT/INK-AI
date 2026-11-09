@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>INK AI — handwriting intelligence</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Arial,sans-serif;background:#080808;color:#f4f4f4}
+*{box-sizing:border-box}body{margin:0}button,input,textarea,select{font:inherit}
+button{cursor:pointer;background:#f4f4f4;color:#090909;border:1px solid #f4f4f4;border-radius:8px;padding:11px 14px;font-weight:650}
+button:hover{background:#ccc}button:disabled{opacity:.35;cursor:not-allowed}
+button.quiet{background:#121212;color:white;border-color:#3b3b3b}
+button.quiet:hover{background:#242424}
+.container{max-width:1300px;margin:0 auto;padding:26px 28px 70px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:25px;border-bottom:1px solid #292929}
+.brand{font-size:23px;font-weight:850;letter-spacing:-1.2px}
+.brand i{font-style:normal;color:#aaa;font-weight:350}
+.pill{font-size:11px;letter-spacing:1.3px;border:1px solid #555;border-radius:30px;padding:7px 10px;color:#ccc;white-space:nowrap}
+h1{font-size:clamp(35px,4vw,55px);letter-spacing:-2px;line-height:1.05;margin:30px 0 12px}p{color:#aaa;line-height:1.55}
+.lead{max-width:720px;margin:0 0 28px}.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr);gap:17px}
+.panel{border:1px solid #303030;background:#0e0e0e;border-radius:14px;min-width:0;overflow:hidden}
+.panelHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:18px 19px;border-bottom:1px solid #252525}
+.panelHead h2{font-size:12px;letter-spacing:1.1px;text-transform:uppercase;color:#d1d1d1;margin:0}
+.meta{font:11px ui-monospace,SFMono-Regular,Consolas,monospace;color:#929292}
+#pad{display:block;width:100%;height:auto;touch-action:none;background:white;cursor:crosshair}
+.canvasWrap{position:relative;background:white}
+.canvasWrap:after{content:'DRAW HERE';position:absolute;top:13px;right:18px;pointer-events:none;color:#bbb;font:11px ui-monospace,Consolas,monospace;letter-spacing:1.1px}
+.actions{padding:13px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.actions .right{margin-left:auto}.help{padding:0 17px 16px;font-size:12px;margin:0}
+.segment{display:flex;border:1px solid #444;border-radius:9px;padding:3px;gap:3px}
+.segment button{padding:8px 11px;background:transparent;color:#aaa;border:none;font-size:12px}
+.segment button.active{background:white;color:black}
+.result{font-size:clamp(28px,3vw,44px);line-height:1.45;min-height:155px;overflow-wrap:anywhere;white-space:pre-wrap;font-weight:580;letter-spacing:-1px;padding:24px 20px 8px}
+.hint{color:#777;font-weight:400;font-size:19px;letter-spacing:0}
+.stats{display:flex;gap:12px;align-items:center;padding:7px 20px 18px;color:#777;font-size:11px;flex-wrap:wrap}
+.edit{border-top:1px solid #252525;padding:19px}
+.edit label{font-size:12px;color:#aaa;display:block;margin:0 0 8px}
+.edit textarea{display:block;width:100%;background:#171717;color:#fff;border:1px solid #404040;border-radius:8px;padding:13px;min-height:95px;resize:vertical;outline:none;font-size:15px}
+.edit textarea:focus{border-color:#aaa}.edit button{width:100%;margin-top:10px}
+.foot{font-size:12px;color:#777;margin:12px 0 0}
+.section{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin-top:17px}
+.tinyCard{padding:18px;border:1px solid #303030;border-radius:12px;background:#0e0e0e;min-width:0}
+.tinyCard b{font-size:25px;display:block;letter-spacing:-.9px}
+.tinyCard span{font-size:11px;color:#858585}
+.panelMore{padding:18px}.panelMore button{margin:3px}
+#status{color:#bbb}#status[data-error="true"]{color:white}
+#charList{margin-top:10px;max-height:170px;overflow:auto;font:12px/1.75 ui-monospace,Consolas,monospace;color:#bbb;word-break:break-word}
+.sep{border-top:1px solid #2a2a2a;margin:16px 0}
+details{font-size:13px;color:#aaa}
+summary{cursor:pointer;color:#dedede}
+a{color:white}#notice{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#fafafa;color:#111;border-radius:9px;padding:13px 18px;box-shadow:0 12px 60px #000;opacity:0;pointer-events:none;transition:opacity .2s;font-size:13px;z-index:20;max-width:90vw}
+#notice.show{opacity:1}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.section{grid-template-columns:1fr 1fr}.container{padding:18px 13px 45px}}
+@media(max-width:520px){.section{grid-template-columns:1fr}header .pill{white-space:normal}.result{min-height:105px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header><div class="brand">INK <i>AI</i></div><div class="pill" id="status" role="status" aria-live="polite">CONNECTING TO YOUR GITHUB MODEL</div></header>
+<h1>Write anything.<br>See what the AI reads.</h1>
+<p class="lead">Live handwriting recognition for numbers, lowercase and uppercase letters, punctuation, and sentences. Trained from scratch on real handwriting; weights hosted exclusively in <a href="https://github.com/PletzelOnYT/INK-AI" target="_blank" rel="noopener">PletzelOnYT/INK-AI</a>.</p>
+<div class="grid">
+<section class="panel">
+<div class="panelHead"><h2>01 / Handwriting surface</h2><span class="meta">PEN · TOUCH · MOUSE</span></div>
+<div class="canvasWrap"><canvas width="1200" height="480" id="pad" aria-label="Handwriting drawing area"></canvas></div>
+<div class="actions">
+<div class="segment" role="group" aria-label="Reading mode"><button class="active" data-mode="text">Text / sentence</button><button data-mode="symbol">One symbol</button></div>
+<button class="quiet" id="undo">Undo</button><button class="quiet" id="clear">Clear</button><button class="quiet right" id="saveImage">Save PNG</button>
+</div>
+<p class="help">It reads on its own after every stroke. Write left to right; use larger gaps between words. No recognition button is needed.</p>
+</section>
+<aside class="panel">
+<div class="panelHead"><h2>02 / Live reading</h2><span class="meta" id="reading">WAITING</span></div>
+<div class="result" id="output" aria-live="polite"><span class="hint">Draw something to begin.</span></div>
+<div class="stats"><span id="confidence">—</span><span id="glyphCount">0 characters</span><span id="speed">—</span></div>
+<div class="edit">
+<label for="correct">Correct the AI's reading to fine-tune it</label>
+<textarea id="correct" placeholder="The correct letters / words go here…" spellcheck="false"></textarea>
+<button id="fineTune" disabled>Fine-tune on this correction</button>
+<p class="foot" id="trainMessage">Fine-tuning changes only your copy of the classifier. No API keys, accounts, or external AI providers.</p>
+</div>
+</aside>
+</div>
+<div class="section">
+<div class="tinyCard"><b id="trainingCount">—</b><span>training presentations in your GitHub model</span></div>
+<div class="tinyCard"><b id="labelCount">—</b><span>supported letters, digits, and symbols</span></div>
+<div class="tinyCard"><b id="tunedCount">0</b><span>personalized corrections on this browser</span></div>
+</div>
+<div class="panel" style="margin-top:17px">
+<div class="panelHead"><h2>03 / Your model, your repository</h2><span class="meta">NO THIRD-PARTY INFERENCE</span></div>
+<div class="panelMore">
+<p style="margin-top:0">The drawing interface downloads its own trained weights from this GitHub repository only. Recognition runs in a dedicated browser worker. No canvas data is sent to GitHub. The Python/PyTorch trainer builds the weights; this HTML performs inference without installing PyTorch.</p>
+<button id="reload" class="quiet">Reload GitHub model</button><button id="export" class="quiet">Export personal tuning</button><button id="import" class="quiet">Import tuning</button><input id="importFile" type="file" accept="application/json" hidden>
+<div class="sep"></div>
+<details><summary>How the AI works and what it cannot do</summary>
+<p>The convolutional neural network uses EMNIST samples from real people and may include HASYv2 examples. The workflow also augments handwriting and creates synthetic punctuation. Similar glyphs such as <b>I / l / 1 / |</b> are intrinsically ambiguous; sentence context can help, but results are not guaranteed. Handwritten connected cursive can defeat character segmentation. Corrections remain in this browser until exported; automatic GitHub writes require a secure authenticated backend, which is intentionally not embedded in public HTML.</p>
+<div class="meta" id="details"></div><div id="charList"></div>
+</details>
+</div>
+</div>
+</div>
+<div id="notice" role="status"></div>
+
+<script>
+"use strict";
+(()=> {
+const REPO="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
+const MODEL_PATH="models/ink-cnn-v1.json";
+const STORAGE="ink-ai-personal-f2-v1";
+const $=(id)=>document.getElementById(id);
+const c=$("pad"),ctx=c.getContext("2d",{willReadFrequently:true});
+let strokes=[],drawing=null,pointer=null,mode="text",worker=null,loaded=false,labels=[],activeVersion=0,activeTimer=0,lastRegions=[],lastPredictions=[],lastRead="",lastValue="",corrections=0,pending=new Map(),idCounter=0;
+ctx.lineCap="round";ctx.lineJoin="round";
+function toast(t){let el=$("notice");el.textContent=t;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),3000)}
+function status(t,error=false){$("status").textContent=t;$("status").dataset.error=error?"true":"false"}
+function download(name,blob){const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1200)}
+function drawAll(){
+ ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);
+ ctx.strokeStyle="#0b0b0b";ctx.lineCap="round";ctx.lineJoin="round";
+ for(const s of [...strokes,...(drawing?[drawing]:[])]){
+  ctx.lineWidth=s.w;
+  const p=s.points;if(!p.length)continue;ctx.beginPath();ctx.moveTo(p[0][0],p[0][1]);
+  if(p.length===1){ctx.lineTo(p[0][0]+.01,p[0][1]+.01)}
+  else for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0],p[i][1]);
+  ctx.stroke();
+ }
+}
+drawAll();
+function position(e){const r=c.getBoundingClientRect();return [
+ Math.min(c.width,Math.max(0,(e.clientX-r.left)*c.width/r.width)),
+ Math.min(c.height,Math.max(0,(e.clientY-r.top)*c.height/r.height))]}
+c.addEventListener("pointerdown",e=>{
+ e.preventDefault();if(pointer!==null)return;pointer=e.pointerId;c.setPointerCapture(e.pointerId);
+ drawing={points:[position(e)],w:Math.max(5,Math.min(17,11*(.72+(e.pressure||.5)*.58)))};
+});
+c.addEventListener("pointermove",e=>{
+ if(e.pointerId!==pointer||!drawing)return;e.preventDefault();drawing.points.push(position(e));drawAll();
+});
+function endStroke(e){
+ if(e.pointerId!==pointer)return;pointer=null;
+ if(drawing){drawing.points.push(position(e));strokes.push(drawing);drawing=null}
+ drawAll();scheduleRead(260);
+}
+c.addEventListener("pointerup",endStroke);c.addEventListener("pointercancel",endStroke);
+$("undo").onclick=()=>{strokes.pop();drawAll();scheduleRead(150)};
+$("clear").onclick=()=>{strokes=[];drawing=null;drawAll();lastRegions=[];lastPredictions=[];lastRead="";lastValue="";$("output").innerHTML='<span class="hint">Draw something to begin.</span>';$("correct").value="";$("reading").textContent="WAITING";$("glyphCount").textContent="0 characters";scheduleRead(70)};
+$("saveImage").onclick=()=>c.toBlob(blob=>blob&&download("INK-AI-drawing.png",blob),"image/png");
+for(const b of document.querySelectorAll("[data-mode]"))b.onclick=()=>{
+ mode=b.dataset.mode;for(const el of document.querySelectorAll("[data-mode]"))el.classList.toggle("active",el===b);
+ scheduleRead(70);
+};
+$("reload").onclick=()=>loadModel(true);
+$("export").onclick=()=>{
+ const item=localStorage.getItem(STORAGE);download("INK-AI-personal-finetuning.json",new Blob([item||"{}"],{type:"application/json"}));
+};
+$("import").onclick=()=>$("importFile").click();
+$("importFile").onchange=async e=>{
+ const f=e.target.files?.[0];if(!f)return;
+ try{const obj=JSON.parse(await f.text());if(obj.format!=="ink-personal-v1"||!Array.isArray(obj.samples))throw Error("Unsupported tuning backup");
+ localStorage.setItem(STORAGE,JSON.stringify(obj));toast("Personal tuning imported.");await loadModel(true);
+ }catch(err){toast("Import failed: "+err.message)}
+ e.target.value="";
+};
+// Every model input is 32x32: centered ink with a padded border.
+function feature(box,pixels){
+ const [x0,y0,x1,y1]=box,w=x1-x0+1,h=y1-y0+1;
+ const off=document.createElement("canvas");off.width=32;off.height=32;
+ const t=off.getContext("2d",{willReadFrequently:true});t.fillStyle="#fff";t.fillRect(0,0,32,32);
+ const crop=document.createElement("canvas");crop.width=Math.max(1,w);crop.height=Math.max(1,h);
+ crop.getContext("2d").putImageData(pixels,-x0,-y0);
+ // putImageData ignores transforms; transfer only the cropped subrectangle.
+ const cw=Math.max(1,Math.round(w*26/Math.max(w,h))),ch=Math.max(1,Math.round(h*26/Math.max(w,h)));
+ t.imageSmoothingEnabled=true;t.imageSmoothingQuality="high";
+ t.drawImage(crop,0,0,w,h,(32-cw)/2,(32-ch)/2,cw,ch);
+ const a=t.getImageData(0,0,32,32).data,bytes=new Float32Array(1024);
+ for(let i=0;i<1024;i++)bytes[i]=1-(a[i*4]+a[i*4+1]+a[i*4+2])/765;
+ return Array.from(bytes);
+}
+function groups(values,maxGap,minLen=1){
+ let out=[],start=-1,last=-1;
+ for(let i=0;i<=values.length;i++){
+  if(i<values.length&&values[i]>0){if(start<0)start=i;last=i}
+  else if(start>=0&&((i-last)>maxGap||i===values.length)){
+   if(last-start+1>=minLen)out.push([start,last]);
+   start=-1;last=-1;
+  }
+ }
+ return out;
+}
+function segment(){
+ const {width:W,height:H}=c,p=ctx.getImageData(0,0,W,H);
+ let binary=new Uint8Array(W*H),row=new Uint16Array(H);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const i=y*W+x,k=i*4;const ink=(p.data[k]+p.data[k+1]+p.data[k+2])<620;
+  if(ink){binary[i]=1;row[y]++}
+ }
+ let lines=groups(row,20,2),regions=[];
+ for(let li=0;li<lines.length;li++){
+  const [top,bottom]=lines[li],cols=new Uint16Array(W);
+  for(let y=top;y<=bottom;y++)for(let x=0;x<W;x++)cols[x]+=binary[y*W+x];
+  let spans=groups(cols,2,2);
+  if(mode==="symbol")continue;
+  // Split only unusually wide connected blobs using projection valleys;
+  // avoid splitting normal M/W by demanding at least two deep gaps.
+  let widths=spans.map(([a,b])=>b-a+1).sort((a,b)=>a-b);
+  const med=widths.length?widths[Math.floor(widths.length/2)]:30;
+  let refined=[];
+  for(const [a,b] of spans){
+   const big=b-a+1;const lineH=bottom-top+1;
+   if(big>Math.max(1.9*med,1.45*lineH)&&big>52){
+    let valleys=[];
+    for(let x=a+12;x<b-11;x++)if(cols[x]<=Math.max(2,.10*lineH)&&cols[x]<=cols[x-1]&&cols[x]<=cols[x+1])valleys.push(x);
+    const cuts=[];let last=a;
+    for(const x of valleys)if(x-last>Math.max(14,med*.6)&&b-x>12){cuts.push(x);last=x}
+    if(cuts.length){let st=a;for(const x of cuts){refined.push([st,x]);st=x+1}refined.push([st,b]);continue}
+   }
+   refined.push([a,b]);
+  }
+  spans=refined.filter(v=>v[1]>=v[0]);
+  let gaps=spans.slice(1).map((s,i)=>s[0]-spans[i][1]-1).filter(g=>g>=0);
+  const sorted=gaps.slice().sort((a,b)=>a-b);
+  const nominal=sorted.length?sorted[Math.floor(sorted.length*.35)]:8;
+  const medianW=widths.length?med:35;
+  const spaceThreshold=Math.max(19,Math.min(100,Math.max(medianW*.74,nominal*2.2)));
+  let prev=null;
+  for(let si=0;si<spans.length;si++){
+   const [l,r]=spans[si];let yy0=bottom,yy1=top;
+   for(let y=top;y<=bottom;y++)for(let x=l;x<=r;x++)if(binary[y*W+x]){yy0=Math.min(y,yy0);yy1=Math.max(y,yy1)}
+   if(yy1<yy0)continue;
+   const gap=prev===null?0:l-prev;
+   regions.push({box:[l,yy0,r,yy1],line:li,space:prev!==null&&gap>spaceThreshold,gap});
+   prev=r;
+  }
+ }
+ if(mode==="symbol"){
+  const xs=[],ys=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(binary[y*W+x]){xs.push(x);ys.push(y)}
+  if(xs.length)regions=[{box:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)],line:0,space:false,gap:0}];
+ }
+ return {regions,pixels:p};
+}
+function ask(cmd,data){return new Promise((resolve,reject)=>{
+ if(!worker){reject(new Error("Model isn't loaded"));return}
+ const id=++idCounter;pending.set(id,{resolve,reject});worker.postMessage({id,cmd,...data});
+ setTimeout(()=>{const p=pending.get(id);if(p){pending.delete(id);p.reject(Error("Inference timed out"))}},30000);
+})}
+function scheduleRead(ms=320){
+ activeVersion++;clearTimeout(activeTimer);if(!loaded)return;
+ $("reading").textContent="AUTO · QUEUED";
+ activeTimer=setTimeout(()=>{if(pointer===null)recognize(activeVersion)},ms);
+}
+async function recognize(version){
+ if(!loaded||version!==activeVersion)return;
+ let started=performance.now();
+ const {regions,pixels}=segment();
+ if(!regions.length){
+  lastRegions=[];lastPredictions=[];$("output").innerHTML='<span class="hint">Draw something to begin.</span>';
+  $("reading").textContent="WAITING";$("glyphCount").textContent="0 characters";return;
+ }
+ $("reading").textContent="READING…";
+ try{
+  const images=regions.map(r=>feature(r.box,pixels));
+  const result=await ask("read",{images});
+  if(version!==activeVersion)return;
+  lastRegions=regions;lastPredictions=result.predictions;
+  let text="",lastLine=regions[0].line,probs=[];
+  for(let i=0;i<regions.length;i++){
+   const reg=regions[i],pred=result.predictions[i];
+   if(i&&reg.line!==lastLine){text+="\n";lastLine=reg.line}
+   else if(i&&reg.space&&mode==="text")text+=" ";
+   let ch=pred.top[0].char;
+   // Isolated single-stroke uppercase I cannot always be distinguished
+   // visually from lowercase l / digit 1; use modest word context.
+   if(mode==="text"&&/^([iIl1|])$/.test(ch)){
+    let before=text.slice(text.lastIndexOf(" ")+1);
+    const next=regions[i+1];
+    if(ch==="i"&&(!before||before.endsWith("\n"))&&(!next||next.space||next.line!==reg.line))ch="I";
+    if(/[0-9]$/.test(before)&&pred.top.some(x=>x.char==="1"))ch="1";
+   }
+   text+=ch;probs.push(pred.top[0].confidence);
+  }
+  lastRead=text;
+  $("output").textContent=text;
+  $("confidence").textContent="Avg. character confidence "+Math.round(probs.reduce((a,b)=>a+b,0)/probs.length*100)+"%";
+  $("glyphCount").textContent=regions.length+" segments";
+  $("speed").textContent=Math.round(performance.now()-started)+" ms";
+  $("reading").textContent="LIVE";
+  const correction=$("correct");
+  if(document.activeElement!==correction||correction.value===lastValue)correction.value=text;
+  lastValue=text;
+  $("fineTune").disabled=false;
+ }catch(e){if(version===activeVersion){$("reading").textContent="ERROR";toast(e.message)}}
+}
+$("fineTune").onclick=async()=>{
+ if(!loaded||!lastRegions.length)return;
+ const intended=$("correct").value;
+ const glyphs=Array.from(intended).filter(x=>!/\s/.test(x));
+ if(glyphs.length!==lastRegions.length){toast("I detected "+lastRegions.length+" character segments, but your correction has "+glyphs.length+". Use Symbol mode for a single glyph.");return}
+ for(const ch of glyphs)if(!labels.includes(ch)){toast("Symbol "+ch+" is not in this trained model yet.");return}
+ $("fineTune").disabled=true;
+ try{
+  const {pixels}=segment(),images=lastRegions.map(r=>feature(r.box,pixels));
+  const current=JSON.parse(localStorage.getItem(STORAGE)||"null");
+  const previous=current&&current.format==="ink-personal-v1"?current.samples:[];
+  const additions=glyphs.map((ch,i)=>({label:ch,image:images[i]}));
+  const samples=[...previous,...additions].slice(-350);
+  await ask("tune",{samples:additions,steps:9});
+  const weights=await ask("getTuning",{});
+  localStorage.setItem(STORAGE,JSON.stringify({format:"ink-personal-v1",modelVersion:"ink-cnn-int8-v1",
+      samples,final:weights.weights,bias:weights.bias}));
+  corrections=samples.length;$("tunedCount").textContent=corrections;
+  $("trainMessage").textContent="Fine-tuned classification weights saved. New handwriting corrections improve your private copy of the model.";
+  toast("Fine-tuned on "+glyphs.length+" character(s).");scheduleRead(100);
+ }catch(e){toast("Fine-tuning failed: "+e.message)}
+ finally{$("fineTune").disabled=false}
+};
+function createWorker(){
+ if(worker)worker.terminate();
+ const source=String.raw\`
+"use strict";
+let labels=[],layers=[],f2=null,base=null;
+function decode(a){
+ const raw=atob(a.weights),q=new Int8Array(raw.length);
+ for(let i=0;i<q.length;i++)q[i]=raw.charCodeAt(i);
+ const w=new Float32Array(q.length);
+ for(let i=0;i<w.length;i++)w[i]=q[i]*a.scale;
+ return {shape:a.shape,w,b:new Float32Array(a.bias)};
+}
+function pool(a,channels,W){
+ let V=W/2,out=new Float32Array(channels*V*V);
+ for(let c=0;c<channels;c++)for(let y=0;y<V;y++)for(let x=0;x<V;x++){
+  let off=c*W*W+y*2*W+x*2;
+  out[c*V*V+y*V+x]=Math.max(0,a[off],a[off+1],a[off+W],a[off+W+1]);
+ }return out;
+}
+function conv(a,L,W){
+ const [O,I,K]=L.shape;const out=new Float32Array(O*W*W),pad=(K-1)/2;
+ for(let o=0;o<O;o++)for(let y=0;y<W;y++)for(let x=0;x<W;x++){
+  let z=L.b[o];const kernelStart=o*I*K*K;
+  for(let i=0;i<I;i++)for(let ky=0;ky<K;ky++){
+   let sy=y+ky-pad;if(sy<0||sy>=W)continue;
+   for(let kx=0;kx<K;kx++){
+    let sx=x+kx-pad;if(sx<0||sx>=W)continue;
+    z+=a[i*W*W+sy*W+sx]*L.w[kernelStart+i*K*K+ky*K+kx];
+   }
+  }
+  out[o*W*W+y*W+x]=z;
+ }return out;
+}
+function dense(a,L,act=false){
+ const [O,I]=L.shape,out=new Float32Array(O);
+ for(let o=0;o<O;o++){
+  let z=L.b[o],base=o*I;
+  for(let i=0;i<I;i++)z+=a[i]*L.w[base+i];
+  out[o]=act?Math.max(0,z):z;
+ }return out;
+}
+function forward(image){
+ let a=Float32Array.from(image);
+ a=pool(conv(a,layers[0],32),12,32);
+ a=pool(conv(a,layers[1],16),24,16);
+ a=pool(conv(a,layers[2],8),32,8);
+ const embedding=dense(a,layers[3],true);
+ const logits=dense(embedding,f2);
+ return {embedding,logits};
+}
+function rank(logits){
+ let mx=Math.max(...logits),probs=logits.map(x=>Math.exp((x-mx)/1.25)),sum=probs.reduce((a,b)=>a+b,0);
+ let top=Array.from(probs,(x,i)=>({char:labels[i],confidence:x/sum}));
+ top.sort((a,b)=>b.confidence-a.confidence);return top.slice(0,5);
+}
+function tune(samples,steps=9){
+ const rate=.08;
+ for(let epoch=0;epoch<steps;epoch++)for(const item of samples){
+  const y=labels.indexOf(item.label);if(y<0)continue;
+  const {embedding,logits}=forward(item.image);
+  const max=Math.max(...logits),probs=Float32Array.from(logits,x=>Math.exp(x-max));
+  let z=0;for(const p of probs)z+=p;
+  for(let i=0;i<probs.length;i++){
+   const diff=((i===y?1:0)-probs[i]/z)*rate;
+   f2.b[i]+=diff;
+   const start=i*embedding.length;
+   for(let j=0;j<embedding.length;j++)f2.w[start+j]+=diff*embedding[j];
+  }
+ }
+}
+onmessage=e=>{
+ const {id,cmd}=e.data;
+ try{
+  let result;
+  if(cmd==="init"){
+   const model=e.data.model;labels=model.labels;layers=model.layers.map(decode);
+   f2=layers[4];base={w:new Float32Array(f2.w),b:new Float32Array(f2.b)};
+   const custom=e.data.custom;
+   if(custom&&custom.final&&custom.bias&&custom.final.length===f2.w.length&&custom.bias.length===f2.b.length){
+    f2.w.set(custom.final);f2.b.set(custom.bias);
+   }
+   result={classes:labels.length};
+  }else if(cmd==="read"){
+   result={predictions:e.data.images.map(im=>({top:rank(forward(im).logits)}))};
+  }else if(cmd==="tune"){
+   tune(e.data.samples,e.data.steps);result={done:true};
+  }else if(cmd==="getTuning"){
+   result={weights:Array.from(f2.w),bias:Array.from(f2.b)};
+  }else if(cmd==="reset"){
+   f2.w.set(base.w);f2.b.set(base.b);result={done:true};
+  }else throw Error("Unknown command "+cmd);
+  postMessage({id,result});
+ }catch(ex){postMessage({id,error:String(ex.message||ex)})}
+};
+\`;
+ const blob=new Blob([source],{type:"text/javascript"});
+ worker=new Worker(URL.createObjectURL(blob));
+ worker.onmessage=e=>{
+  const {id,result,error}=e.data,p=pending.get(id);if(!p)return;
+  pending.delete(id);if(error)p.reject(Error(error));else p.resolve(result);
+ };
+ worker.onerror=e=>{status("INFERENCE WORKER ERROR",true);console.error(e)};
+}
+async function loadModel(refresh=false){
+ loaded=false;$("fineTune").disabled=true;status("DOWNLOADING YOUR GITHUB MODEL");
+ try{
+  const local=!location.protocol.startsWith("file")?MODEL_PATH:REPO;
+  let response=await fetch(local,{cache:refresh?"reload":"default"});
+  if(!response.ok&&local!==REPO)response=await fetch(REPO,{cache:"reload"});
+  if(!response.ok)throw Error("model not published (HTTP "+response.status+")");
+  const model=await response.json();
+  if(model.format!=="ink-cnn-int8-v1"||!Array.isArray(model.layers)||model.layers.length!==5)throw Error("incompatible model weights");
+  labels=model.labels;
+  for(const item of pending.values())item.reject(Error("Model reloading"));pending.clear();
+  createWorker();
+  const custom=JSON.parse(localStorage.getItem(STORAGE)||"null");
+  const r=await ask("init",{model,custom});
+  $("labelCount").textContent=r.classes;
+  $("trainingCount").textContent=(model.training?.training_presentations||0).toLocaleString();
+  corrections=custom?.samples?.length||0;$("tunedCount").textContent=corrections;
+  $("details").textContent="Source: "+(model.training?.data||"unknown")+" | EMNIST held-out accuracy: "+(100*(model.training?.emnist_test_accuracy||0)).toFixed(1)+"%";
+  $("charList").textContent="Supported: "+labels.join(" ");
+  loaded=true;status("LIVE · YOUR OWN MODEL");scheduleRead(90);
+ }catch(err){
+  loaded=false;status("MODEL NOT READY — CHECK GITHUB ACTIONS",true);
+  $("output").innerHTML='<span class="hint">The GitHub training job must publish <b>models/ink-cnn-v1.json</b> before recognition can start.</span>';
+  $("reading").textContent="MODEL PENDING";
+  $("trainMessage").textContent=String(err.message||err)+" · See GitHub Actions for training status.";
+ }
+}
+window.addEventListener("keydown",e=>{
+ if(document.activeElement.tagName==="TEXTAREA")return;
+ if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();$("undo").click()}
+ if(e.key==="Escape")$("clear").click();
+});
+loadModel();
+})();
+</script>
+</body>
+</html>
