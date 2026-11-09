@@ -63,13 +63,25 @@ try:
         [[270,247],[350,247]]
     ]
     res=draw(equal);print("EQUALS SIGN BARS:",res,flush=True)
-    assert res["regions"]==1
+    assert res["regions"]==1 and res["guess"]=="=",res
     colon=[
         [[440,194],[448,194]],
         [[440,244],[448,244]]
     ]
     res=draw(colon);print("COLON DOTS:",res,flush=True)
-    assert res["regions"]==1
+    assert res["regions"]==1 and res["guess"]==":",res
+    plus=[
+        [[260,250],[362,250]],
+        [[311,200],[311,300]]
+    ]
+    res=draw(plus);print("PLUS:",res,flush=True)
+    assert res["regions"]==1 and res["guess"]=="+",res
+    crossed=[
+        [[260,175],[335,260]],
+        [[335,175],[260,260]]
+    ]
+    res=draw(crossed);print("LETTER X:",res,flush=True)
+    assert res["regions"]==1 and res["guess"]=="X",res
     # Conversely independent, widely spaced pen strokes may form characters.
     multi=[
         [[145,160],[145,250]],
