@@ -71,7 +71,7 @@ function rankCorrectionCandidates(options,prefix="",suffix="",preferred="",
   if(baseP>=.87&&ch!==best.char)continue;
   let score=Math.log(Math.max(o.confidence,1e-6));
   const contextWord=(prefix+ch+suffix).toLowerCase();
-  if(/^[a-z]+$/.test(contextWord)&&contextWord.length>=3&&
+  if(/^[a-z]$/i.test(best.char)&&/^[a-z]+$/.test(contextWord)&&contextWord.length>=3&&
      (prefix.length+suffix.length)>=2){
    const rank=dictionary.get(contextWord);
    if(rank!==undefined){
@@ -170,8 +170,7 @@ function offerCorrection(regions,predictions,recognized){
  const preferred=regions.length===1&&recognized.length===1?
    recognized:top[0].char;
  const ranked=rankCorrectionCandidates(
-   [{char:preferred,confidence:top.find(x=>x.char===preferred)?.confidence||top[0].confidence*.35},
-    ...top.filter(x=>x.char!==preferred)],context.prefix,context.suffix,preferred);
+   top,context.prefix,context.suffix,preferred);
  if(!ranked.length){clearGhost();return}
  correctionBox=r.box.slice();
  correctionChoices=ranked;
