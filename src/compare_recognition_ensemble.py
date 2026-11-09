@@ -37,7 +37,7 @@ def main():
     ]
     dataset=RealChars(EMNIST(".data",split="byclass",train=False,download=True),augment=False)
     loader=DataLoader(dataset,batch_size=384,num_workers=2)
-    p1=[],p2=[],labels=[]
+    p1,p2,labels=[],[],[]
     with torch.inference_mode():
       for bi,(x,y) in enumerate(loader):
         a=torch.softmax(models[0](x)/1.25,dim=1)
