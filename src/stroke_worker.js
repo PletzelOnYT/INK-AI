@@ -109,7 +109,7 @@ function likelihood(output,actual){
  return maxDensity+Math.log(sum)+
    Math.log(Math.max(1e-5,actualDraw?draw:1-draw));
 }
-function completeGlyph(prefix,label,seed,variation){
+function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
  const index=characters.indexOf(label);
  if(index<0)throw Error("Unknown handwritten glyph: "+label);
  const charEmbedding=embedding.subarray(index*embedSize,(index+1)*embedSize);
@@ -130,7 +130,7 @@ function completeGlyph(prefix,label,seed,variation){
   inkHash=(Math.imul(inkHash,31)+Math.round(part*300))|0;
  const rand=rng(hash(inkHash^seed,label,variation?19:0));
  let active=[[x,y]],paths=[],moves=0,penUps=0;
- for(let j=0;j<maxSteps;j++){
+ for(let j=0;j<limitSteps;j++){
   if(!last)break;
   const predicted=sample(last,rand,variation);
   let {dx,dy,draw}=predicted;
@@ -189,25 +189,35 @@ self.onmessage=e=>{
   }else if(m.cmd==="generate"){
    if(!network)throw Error("Neural generator is not initialized");
    const prefix=m.prefix,serial=m.serial,epoch=m.epoch;
+   const live=m.live===true;
+   const steps=Math.max(12,Math.min(maxSteps,Number(m.maxSteps)||maxSteps));
    if(!Array.isArray(prefix)||prefix.length<2||prefix.length>120)
     throw Error("Insufficient genuine pen coordinates");
    const options=(m.options||[]).filter(o=>characters.includes(o.char))
-     .slice(0,4);
+     .slice(0,live?2:4);
    const results=[];
    let j=0;
    for(const choice of options){
-    const result=completeGlyph(prefix,choice.char,serial*317+j*571,false);
+    // Deterministic class-conditioned sample for identical pen prefixes;
+    // do NOT reseed every time the UI asks for an update.
+    const result=completeGlyph(prefix,choice.char,j*571,false,steps);
     if(result.moves>2&&result.paths.length)results.push({
       label:choice.char,paths:result.paths,
       penUps:result.penUps,confidence:choice.confidence||0,
       score:result.prefixScore+0.25*Math.log((choice.confidence||0)+.03)
     });
     j++;
+    // Stream the first available vector trajectory without waiting for
+    // additional neural samples to finish. Main thread is free to paint.
+    if(results.length===1&&j===1)self.postMessage({
+      type:"preview",serial,epoch,alternatives:results.slice(),
+      neural:true,engine:"stroke-gru-mdn"
+    });
    }
    // Provide a second learned sample for Tab cycling when classifier
    // candidates are too ambiguous to yield two usable vector trajectories.
-   if(results.length===1){
-    const alt=completeGlyph(prefix,results[0].label,serial*997+31,true);
+   if(results.length===1&&!live){
+    const alt=completeGlyph(prefix,results[0].label,31,true,steps);
     if(alt.moves>2&&alt.paths.length){
      results.push({label:results[0].label,paths:alt.paths,
        penUps:alt.penUps,confidence:results[0].confidence,
