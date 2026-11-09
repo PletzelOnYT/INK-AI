@@ -3,6 +3,7 @@
 // vectors. No nearest neighbor, font glyph, bitmap, skeleton or templates.
 const STROKE_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v1.json";
 const STROKE_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v2.json";
+const STROKE_PREFIX_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-prefix-v1.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
@@ -128,9 +129,12 @@ function createGlyphWorker(){
   if(m.type==="ready"){
    glyphReady=true;glyphBusy=false;
    window.__inkGlyphReady=true;
-   window.__inkGlyphVersion=m.parameters>=1000000?4:3;
+   window.__inkGlyphVersion=m.prefixTuned?5:(m.parameters>=1000000?4:3);
    window.__inkGlyphParameters=m.parameters;
-   assistButton.title=m.parameters>=1000000?
+   window.__inkPrefixTrained=Boolean(m.prefixTuned);
+   assistButton.title=m.prefixTuned?
+     "Prefix-trained neural handwriting · smarter completions · Tab alternatives · G accept":
+     m.parameters>=1000000?
      "1M neural handwriting strokes · Live · Tab alternatives · G accept":
      "Neural handwriting strokes · Live · Tab alternatives · G accept";
    queueGhost();
@@ -179,9 +183,13 @@ async function loadGlyphModel(){
  glyphLoading=true;
  assistButton.title="Loading trained pen-trajectory model…";
  try{
+  // Prefix-trained generator has been evaluated on unseen writers'
+  // *free-running* tail error. Prefer it over a bigger model selected only
+  // by teacher-forced likelihood, when that checkpoint has been published.
   const sources=location.protocol==="file:"?
-    [STROKE_V2_URL,STROKE_URL]:
-    ["models/ink-stroke-sequence-v2.json",STROKE_V2_URL,
+    [STROKE_PREFIX_URL,STROKE_V2_URL,STROKE_URL]:
+    ["models/ink-stroke-prefix-v1.json",STROKE_PREFIX_URL,
+     "models/ink-stroke-sequence-v2.json",STROKE_V2_URL,
      "models/ink-stroke-sequence-v1.json",STROKE_URL];
   let model=null,lastError=null;
   for(const source of sources){
@@ -193,6 +201,10 @@ async function loadGlyphModel(){
       throw Error("Wrong sequence model");
     if(source.includes("v2") && !(candidate.training?.v2&&candidate.parameter_count>=1000000))
       throw Error("Unvalidated larger model");
+    if(source.includes("prefix") && !(
+       candidate.training?.prefix_tuned &&
+       candidate.training?.fine_tuned_own_model==="models/ink-stroke-sequence-v1.json"))
+      throw Error("Unvalidated prefix-completion model");
     model=candidate;break;
    }catch(err){lastError=err;model=null}
   }
