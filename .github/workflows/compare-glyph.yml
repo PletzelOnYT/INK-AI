@@ -4,8 +4,6 @@ on:
     branches: [main]
     paths:
       - "models/ink-glyph-completion-v2.json"
-      - "src/compare_glyph_completion.py"
-      - ".github/workflows/compare-glyph.yml"
   workflow_dispatch:
 permissions:
   contents: write
