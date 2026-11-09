@@ -48,6 +48,11 @@ try:
     """)
     assert ghost_stats["visible"]>0 and ghost_stats["partial"]>0,ghost_stats
     print("PASS: translucent experimental strokes appear without modifying underlying ink",flush=True)
+    # The G shortcut explicitly accepts the translucent suggestion as real ink.
+    ink_before_accept=driver.execute_script("return document.getElementById('pad').toDataURL()")
+    ActionChains(driver).send_keys("g").perform()
+    wait.until(lambda d:d.execute_script("return document.getElementById('pad').toDataURL()")!=ink_before_accept)
+    print("PASS: G accepts predicted stroke as undoable ink",flush=True)
     driver.find_element(By.ID,"assist").click()
     assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="false"
     assert driver.execute_script("return window.__inkGhostPoints")==0
