@@ -101,7 +101,7 @@ a{color:white}#notice{position:fixed;bottom:18px;left:50%;transform:translateX(-
 </aside>
 </div>
 <div class="section">
-<div class="tinyCard"><b id="trainingCount">—</b><span>training presentations in your GitHub model</span></div>
+<div class="tinyCard"><b id="trainingCount">—</b><span>reference examples / training presentations</span></div>
 <div class="tinyCard"><b id="labelCount">—</b><span>supported letters, digits, and symbols</span></div>
 <div class="tinyCard"><b id="tunedCount">0</b><span>personalized corrections on this browser</span></div>
 </div>
@@ -283,7 +283,7 @@ function makeBasicTemplates(){
  }
  labels=BASIC_CHARS;
  $("labelCount").textContent=String(labels.length);
- $("trainingCount").textContent="—";
+ $("trainingCount").textContent=basicTemplates.length.toLocaleString();
  $("details").textContent="Basic fallback uses browser-generated fonts; not human handwriting. Real-handwriting CNN automatically replaces it when GitHub publishes the model.";
  $("charList").textContent="Basic symbols: "+labels.join(" ");
 }
