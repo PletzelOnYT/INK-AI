@@ -50,8 +50,22 @@ try:
     wait.until(lambda d:d.execute_script("return window.__inkDetectedRegions>=1"))
     # Use the real OCR -> neural worker -> ghost renderer flow. No synthetic
     # model message, internal closure access or forced class label.
-    wait.until(lambda d:d.execute_script(
-        "return window.__inkAssistLabel==='h' && window.__inkGhostPoints>=3"))
+    from selenium.common.exceptions import TimeoutException
+    try:
+        WebDriverWait(driver,12).until(lambda d:d.execute_script(
+            "return window.__inkAssistLabel==='h' && window.__inkGhostPoints>=3"))
+    except TimeoutException:
+        evidence=driver.execute_script("""
+          return {recognized:document.getElementById('guess').textContent,
+            whole:window.__inkLastGuess,regions:window.__inkDetectedRegions,
+            label:window.__inkAssistLabel,points:window.__inkGhostPoints,
+            choices:window.__inkSuggestionChoices,requests:window.__inkAssistRequests,
+            model:window.__inkGlyphVersion,fallbackReady:window.__inkFallbackReady,
+            fallbackUsed:window.__inkFallbackUsed,
+            error:window.__inkLastGlyphError};
+        """)
+        print("SCREENSHOT h LIVE RECOGNITION DIAGNOSTIC",evidence,flush=True)
+        raise
     measurement=driver.execute_script("""
       return {dy:window.__inkGhostTailDy,
        tailRange:window.__inkGhostTailRange,
