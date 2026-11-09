@@ -194,7 +194,7 @@ async function loadGlyphModel(){
   let model=null,lastError=null;
   for(const source of sources){
    try{
-    const r=await fetch(source,{cache:source.includes("v2")?"no-store":"default"});
+    const r=await fetch(source,{cache:(source.includes("v2")||source.includes("prefix"))?"no-store":"default"});
     if(!r.ok)throw Error("Model not published HTTP "+r.status);
     const candidate=await r.json();
     if(candidate.format!=="ink-online-stroke-mdn-v1")
