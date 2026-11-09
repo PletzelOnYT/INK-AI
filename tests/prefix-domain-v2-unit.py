@@ -19,8 +19,8 @@ new=prefix_frame(seq,prefix)
 assert new.shape==seq.shape
 positions=torch.cumsum(new[:,:,:2],dim=1)
 visible=positions[:,:prefix]
-assert bool((visible.amin(dim=1).values>=.159).all())
-assert bool((visible.amax(dim=1).values<=.85).all())
+assert bool((visible.amin(dim=1)>=.159).all())
+assert bool((visible.amax(dim=1)<=.85).all())
 # Future pen data cannot leak into normalization of visible strokes.
 mutated=seq.clone()
 mutated[:,prefix:,0]+=1.
