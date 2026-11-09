@@ -17,11 +17,12 @@ driver=webdriver.Chrome(options=opt)
 try:
     driver.get(f"http://127.0.0.1:{server.server_port}/index.html")
     wait=WebDriverWait(driver,45)
-    assert len(driver.find_elements(By.TAG_NAME,"button"))==2
+    assert len(driver.find_elements(By.TAG_NAME,"button"))==3
     assert driver.find_element(By.ID,"pen").get_attribute("aria-pressed")=="true"
-    assert len(driver.find_elements(By.TAG_NAME,"canvas"))==1
+    assert len(driver.find_elements(By.TAG_NAME,"canvas"))==2
+    assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="false"
     assert len(driver.find_elements(By.ID,"guess"))==1
-    print("PASS: only pen/eraser, canvas and live prediction are visible",flush=True)
+    print("PASS: pen/eraser/assist, drawing surface and live prediction are visible",flush=True)
     wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
     canvas=driver.find_element(By.ID,"pad")
     ActionChains(driver).move_to_element_with_offset(canvas,-120,-50).click_and_hold().move_by_offset(0,100).release().perform()
@@ -29,6 +30,28 @@ try:
     text=driver.find_element(By.ID,"guess").text
     assert text
     print("PASS: recognition automatically updates",repr(text),flush=True)
+    # Experimental suggestion is opt-in, and its transparent canvas is separate
+    # from the black ink that the recognizer reads.
+    drawing_before = driver.execute_script("return document.getElementById('pad').toDataURL()")
+    driver.find_element(By.ID,"assist").click()
+    assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="true"
+    assert driver.execute_script("return window.__inkAssistEnabled") is True
+    assert driver.execute_script("return document.getElementById('pad').toDataURL()") == drawing_before
+    ActionChains(driver).move_to_element_with_offset(canvas,-190,-70).click_and_hold().move_by_offset(24,8).move_by_offset(22,11).move_by_offset(22,15).release().perform()
+    wait.until(lambda d:d.execute_script("return window.__inkGhostPoints>=3"))
+    ghost_stats = driver.execute_script("""
+      const g=document.getElementById('ghost');
+      const pixels=g.getContext('2d').getImageData(0,0,g.width,g.height).data;
+      let visible=0,partial=0;
+      for(let i=3;i<pixels.length;i+=4){if(pixels[i]){visible++;if(pixels[i]<255)partial++;}}
+      return {visible,partial};
+    """)
+    assert ghost_stats["visible"]>0 and ghost_stats["partial"]>0,ghost_stats
+    print("PASS: translucent experimental strokes appear without modifying underlying ink",flush=True)
+    driver.find_element(By.ID,"assist").click()
+    assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="false"
+    assert driver.execute_script("return window.__inkGhostPoints")==0
+    print("PASS: experimental assist turns off and clears ghost overlay",flush=True)
     driver.find_element(By.ID,"eraser").click()
     assert driver.find_element(By.ID,"eraser").get_attribute("aria-pressed")=="true"
     assert canvas.get_attribute("data-tool")=="eraser"
