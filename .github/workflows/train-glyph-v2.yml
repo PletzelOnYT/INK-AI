@@ -1,0 +1,71 @@
+name: Train INK AI 1.1M handwriting completion V2
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_glyph_completion_v2.py"
+      - ".github/workflows/train-glyph-v2.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-glyph-v2-training
+  cancel-in-progress: false
+jobs:
+  train-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 175
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install local training packages
+        run: python -m pip install -r requirements.txt
+      - name: Pretrain and fine-tune on real handwritten letters numbers symbols
+        run: |
+          python -u src/train_glyph_completion_v2.py \
+            --samples 100000 --epochs 4 --finetune-epochs 1 --batch 256 --hasy
+      - name: Verify genuine neural weights and measured evaluation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          p=Path("models/ink-glyph-completion-v2.json")
+          assert p.is_file(), "No trained model exported"
+          m=json.loads(p.read_text())
+          stats=json.loads(Path("models/glyph-completion-v2-metrics.json").read_text())
+          assert m["format"]=="ink-glyph-completion-residual-v2"
+          assert 1000000<=m["parameter_count"]<2000000
+          assert len(m["layers"])==4
+          assert m["training"]["trained_from_scratch"]
+          assert m["training"]["real_emnist_characters"]>=90000
+          assert stats["best"]["tested"]>=3000
+          assert 0 < stats["best"]["validation_loss"] < 10
+          assert 0 <= stats["best"]["missing_ink_f1"] <= 1
+          assert m["training"]["training_presentations"]>=90000
+          print("VALIDATED",m["parameter_count"],"parameter handwriting network:",stats)
+          PY
+      - name: Safely publish newest validated checkpoint to GitHub
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          git add models/ink-glyph-completion-v2.json models/glyph-completion-v2-metrics.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish validated 1.1M parameter handwriting completion V2"
+            git push origin HEAD:main
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-ai-handwriting-1m-v2
+          path: |
+            models/ink-glyph-completion-v2.json
+            models/glyph-completion-v2-metrics.json
+          if-no-files-found: ignore
