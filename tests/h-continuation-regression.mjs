@@ -7,7 +7,8 @@ const match=html.match(/<script id="strokeWorkerSource" type="text\/plain">([\s\
 assert.ok(match);
 const checkpoints=[
  "models/ink-stroke-sequence-v1.json",
- "models/ink-stroke-sequence-v2.json"
+ "models/ink-stroke-sequence-v2.json",
+ "models/ink-stroke-prefix-v1.json"
 ].filter(fs.existsSync);
 assert.ok(checkpoints.length>=1);
 for(const checkpoint of checkpoints){
