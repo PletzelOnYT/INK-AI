@@ -1,43 +1,37 @@
-# INK AI — Handwriting recognition + neural sketch completion
+# INK AI — Handwriting recognition and handwriting completion
 
-**INK AI has a minimal interface:** pen, eraser, optional ✨ Neural Assist, a white drawing board, and live handwriting recognition underneath. No registration, training buttons, or third-party inference API.
+**Minimal drawing interface:** a pen, an eraser, optional ✨ **Neural Assist**, a white handwriting board, and the automatically recognized text below. It is designed for **letters, numbers, punctuation, and mathematical symbols** — **not sketches or object drawings**.
 
-Download [index.html](./index.html) and open it in Chrome, Edge, or Safari with internet access. The single HTML file downloads its **own two model files from this repository**; it has no external JavaScript libraries.
+[Open or download the single HTML file](./index.html). You can run it directly in a modern browser with an internet connection. It only downloads the two neural model files from **this GitHub repository**, and uses no external AI services or JavaScript libraries.
 
-## Two completely different trained models
+## Experimental Neural Assist (sparkle)
 
-**1. Handwriting reader** — [models/ink-cnn-v1.json](./models/ink-cnn-v1.json)
+Tap ✨ and start handwriting a character. The system identifies the current partial letter, digit, or symbol with the existing recognizer. A *separately trained neural handwriting-completion network* then predicts possible **missing portions of that same character**. Its suggestion appears as transparent gray ink. As you keep drawing, it updates.
 
-- PyTorch convolutional neural network, trained independently using human EMNIST characters and HASYv2 math symbols.
-- Reads uppercase, lowercase, numbers, punctuation, and simple sequences as you draw.
-- Known problem: I / lowercase l / 1 ambiguity and touching or cursive handwriting.
+Press **G** to accept a suggested completion as real, undoable ink, or continue handwriting without accepting. Faint ink is kept in a separate overlay and is never sent to the recognizer until accepted.
 
-**2. Generative drawing assistant** — [models/ink-sketch-gru-v1.json](./models/ink-sketch-gru-v1.json)
+**What it is:** A real class-conditioned neural completion model, trained to reconstruct partly missing handwritten characters. The system learns from missing parts of human-written glyph images and does not extrapolate geometric curves.
 
-- **Genuine independently trained neural generator**, not line extrapolation.
-- Trained from random weights using 27,253 human sketches from Google's Quick, Draw! dataset across 12 categories (cat, dog, tree, flower, house, car, bird, fish, star, smiley face, bicycle, apple).
-- The recurrent GRU uses a learned mixture of Gaussian pen-movement distributions, pen-up signals, and stop signals to sample **possible future drawing strokes**, conditioned on your earlier strokes.
-- Trained for three passes, 81,759 training presentations. Its held-out generative negative log likelihood is reported in [models/sketch-metrics.json](./models/sketch-metrics.json). That is a loss metric, **not a percentage accuracy or visual-quality guarantee**.
-- Weights are only fetched from this GitHub repo and decoded by a dedicated browser Web Worker.
+**What it is not:** Sketch generation, picture/object completion, a generalized art generator, or a model capable of reliably guessing any intended symbol from a few marks. Unclear partial characters such as `I`, `l`, `1`, `|` may be guessed incorrectly. The suggestion network predicts pixels, so its gray suggestions can be soft-edged rather than perfect human pen strokes.
 
-## Using Neural Assist
+## The two independently trained models
 
-Tap the ✨ sparkle button. Draw a partial shape with the pen and translucent gray **neural suggestions** appear. These suggestions are sampled from the independent sketch generator's learned distribution, not the old geometric algorithm. Press **G** to accept the visible suggestion as ordinary ink, or keep drawing and the suggestions update. Tap ✨ again to switch it off.
+1. **Handwriting recognition:** [models/ink-cnn-v1.json](./models/ink-cnn-v1.json). Convolutional neural network, trained from scratch on EMNIST ByClass and HASYv2 with synthetic punctuation supplements. This predicts which character you are writing.
 
-Ghost strokes live on a separate transparent overlay and **do not alter your actual artwork or OCR prediction until accepted**. The sketch generator can suggest curves and multi-stroke figure completions. Its learned categories are limited, so it will not reliably finish arbitrary scenes or act like a large text-to-image model. It may output poor or incomplete suggestions. The referenced external example video could not be independently inspected, so this implementation should not be described as an exact recreation of that video.
+2. **Neural handwriting completion:** [models/ink-glyph-completion-v1.json](./models/ink-glyph-completion-v1.json). Class-conditional feedforward neural generator, independently trained from random initialization. Training: **45,000 real handwritten EMNIST characters**, **24,247 real handwritten HASYv2 symbols**, plus **9,000 font-generated punctuation samples**. Training runs for 3 epochs and makes **234,741 presentations**. The network is taught with randomly hidden parts of characters and reconstructs missing ink. [Training metrics](./models/glyph-completion-metrics.json) report held-out masked loss, not visual accuracy.
 
-Pen and Eraser still work with mouse, touch, and stylus. **Escape** clears, **Ctrl+Z/Cmd+Z** undoes.
+The complete implementation is a single HTML file containing the browser inference code. Training uses Python/PyTorch in [src/train.py](./src/train.py) and [src/train_glyph_completion.py](./src/train_glyph_completion.py). The finished weights load only from `PletzelOnYT/INK-AI`; the browser does not call other inference providers.
 
-## Reproducible source, no third-party model inference
+## Drawing controls
 
-The code to train each model is in [src/train.py](./src/train.py) and [src/train_sketch.py](./src/train_sketch.py). The training jobs run in GitHub Actions and are separate from the user interface. The model weights are original results of training; no other provider's pre-trained weights are copied or fetched at runtime.
+The **pen** makes black strokes. The **eraser** removes parts of the ink. The **sparkle** turns neural handwriting completion on and off. Press **G** to accept the suggestion, **Escape** to clear the board, or **Ctrl+Z/Cmd+Z** to undo.
 
-## Data rights and attribution
+## Training-data attribution
 
-- **Google Creative Lab, Quick, Draw! Dataset**, [project](https://github.com/googlecreativelab/quickdraw-dataset), [license CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Training on derivative Sketch-RNN-format vector records; original contributing human drawings retain applicable rights.
-- Cohen, Afshar, Tapson & van Schaik (2017), EMNIST dataset from NIST.
-- Martin Thoma (2017), HASYv2 dataset, ODbL.
+- Cohen, Afshar, Tapson and van Schaik (2017), *EMNIST: An Extension of MNIST to Handwritten Letters*, NIST.
+- Martin Thoma (2017), *HASYv2 Dataset*, [Zenodo](https://zenodo.org/records/259444), ODbL.
+- Synthetic punctuation examples are computer-generated, not human handwriting.
 
-The project does **not** claim exclusive ownership of the original training datasets or of third-party research concepts.
+Source datasets retain their original rights and licenses. INK AI does not include anyone else's pretrained model.
 
-[View GitHub Actions validation](./actions/workflows/verify.yml) · [View sketch-model training job](./actions/workflows/train-sketch.yml)
+[Verify the browser and neural tests](./actions/workflows/verify.yml)
