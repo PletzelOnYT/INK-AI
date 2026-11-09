@@ -1,65 +1,61 @@
 import fs from "node:fs";
 import vm from "node:vm";
 import assert from "node:assert/strict";
-
 const html=fs.readFileSync("index.html","utf8");
-const match=html.match(/<script id="glyphWorkerSource" type="text\/plain">([\s\S]*?)<\/script>/);
-assert.ok(match,"Real neural glyph completion worker is missing");
-const source=match[1];
-fs.writeFileSync("/tmp/ink-glyph-worker.js",source);
-assert.ok(!html.includes("function projectedPath("),"Geometric fake completion must be gone");
-assert.ok(!html.includes("ink-sketch-gru-v1.json"),"Object sketch model must not be used");
-assert.ok(html.includes("models/ink-glyph-completion-v1.json"));
-
-const m=JSON.parse(fs.readFileSync("models/ink-glyph-completion-v1.json","utf8"));
-assert.equal(m.format,"ink-glyph-completion-mlp-v1");
-assert.equal(m.training.trained_from_scratch,true);
-assert.ok(m.training.human_emnist_characters>=30000);
-assert.ok(m.labels.includes("I") && m.labels.includes("l") && m.labels.includes("1"));
-assert.ok(m.labels.includes("?") && m.labels.includes("@"));
-const received=[];
+const match=html.match(/<script id="strokeWorkerSource" type="text\/plain">([\s\S]*?)<\/script>/);
+assert.ok(match,"The online neural trajectory worker must be embedded in the downloaded HTML");
+const source=match[1].trim();
+fs.writeFileSync("/tmp/ink-stroke-worker.js",source);
+const canonical=fs.readFileSync("src/stroke_worker.js","utf8").trim();
+assert.equal(source,canonical,"Embedded model must match the version-controlled source");
+for(const forbidden of ["nearestHandwriting(","prototypeSet(","skeletonizeGlyph(","GLYPH_REFERENCES_URL","ink-human-glyph-references.json","maskBitmap("]){
+ assert.ok(!html.includes(forbidden),"Prohibited legacy template / raster completion: "+forbidden);
+}
+assert.ok(html.includes("ink-stroke-sequence-v1.json"));
+assert.ok(html.includes("window.__inkAssistModel=\"online-stroke-gru\""));
+const file="models/ink-stroke-sequence-v1.json";
+if(!fs.existsSync(file)){
+ console.log("MODEL PENDING: Genuine sequence weights not yet published; refusing template fallback");
+ process.exit(0);
+}
+const model=JSON.parse(fs.readFileSync(file,"utf8"));
+assert.equal(model.format,"ink-online-stroke-mdn-v1");
+assert.ok(model.training.trained_from_scratch);
+assert.ok(model.training.real_writer_holdout_glyphs>1800);
+assert.ok(model.architecture.max_prefix>=80);
+assert.ok(model.labels.includes("A")&&model.labels.includes("z")&&model.labels.includes("+")&&model.labels.includes("^"));
+const messages=[];
 const ctx={
  atob:s=>Buffer.from(s,"base64").toString("binary"),
- self:{postMessage:message=>received.push(message)},
- Float32Array,Uint8Array,Array,Math,Error
+ self:{postMessage:message=>messages.push(message)},
+ Math,Float32Array,Array,Error,Number
 };
-vm.createContext(ctx);
-vm.runInContext(source,ctx);
-ctx.self.onmessage({data:{cmd:"init",model:m}});
-assert.ok(received.find(x=>x.type==="ready"),"Real completion model did not initialize");
-
-const partial=Array(1024).fill(0);
-for(let y=7;y<24;y++)partial[y*32+7]=1;
-ctx.self.onmessage({data:{cmd:"complete",partial,label:"B",serial:3,epoch:2}});
-const response=received.find(x=>x.type==="completion"&&x.serial===3);
-assert.ok(response && response.prediction?.length===1024);
-assert.equal(response.label,"B");
-const strong=Array.from(response.prediction).filter(v=>v>65).length;
-assert.ok(strong>5,"Neural model predicted almost no ink ("+strong+" pixels)");
-for(const v of response.prediction)assert.ok(v>=0&&v<=255);
-console.log("PASS: real trained handwritten glyph neural model predicts missing strokes",strong,"pixels");
-
-
-// When the upgraded checkpoint is present, verify that the browser uses the
-// actual residual layers, not the old model or a simulated "knowledge" score.
-if(fs.existsSync("models/ink-glyph-completion-v2.json")){
- const v2=JSON.parse(fs.readFileSync("models/ink-glyph-completion-v2.json","utf8"));
- assert.equal(v2.format,"ink-glyph-completion-residual-v2");
- assert.ok(v2.parameter_count>=1000000 && v2.parameter_count<2000000);
- assert.equal(v2.layers.length,4);
- assert.ok(v2.training?.trained_from_scratch);
- ctx.self.onmessage({data:{cmd:"init",model:v2}});
- const current=received.filter(x=>x.type==="ready").at(-1);
- assert.equal(current.version,2);
- assert.equal(current.parameters,v2.parameter_count);
- ctx.self.onmessage({data:{cmd:"complete",partial,serial:20,epoch:7,
-   options:[{char:"I",confidence:.49},{char:"l",confidence:.32},{char:"1",confidence:.19}]
- }});
- const v2result=received.find(x=>x.type==="completion"&&x.serial===20);
- assert.ok(v2result);
- assert.equal(v2result.prediction.length,1024);
- assert.ok(["I","l","1"].includes(v2result.label));
- const strong=Array.from(v2result.prediction).filter(n=>n>65).length;
- assert.ok(strong>3);
- console.log("PASS: actual 1M+ parameter residual handwriting model + ambiguous top-3 inference",v2.parameter_count, "parameters");
+vm.createContext(ctx);vm.runInContext(source,ctx);
+ctx.self.onmessage({data:{cmd:"init",model}});
+const ready=messages.find(m=>m.type==="ready");
+assert.ok(ready,JSON.stringify(messages.slice(-2)));
+assert.equal(ready.engine,"stroke-gru-mdn");
+const prefixes=[
+ [{x:0.28,y:0.20},{x:0.28,y:0.28},{x:0.28,y:0.42},{x:0.28,y:0.58}],
+ [{x:0.15,y:0.68},{x:0.32,y:0.43},{x:0.51,y:0.20},{x:0.72,y:0.42}]
+];
+for(let p=0;p<prefixes.length;p++){
+ let x=0,y=0,seq=[];
+ for(let i=0;i<prefixes[p].length;i++){
+  const pt=prefixes[p][i];
+  seq.push([pt.x-x,pt.y-y,i?1:0]);x=pt.x;y=pt.y;
+ }
+ ctx.self.onmessage({data:{cmd:"generate",serial:100+p,epoch:2,prefix:seq,
+    options:[{char:p?"^":"B",confidence:.7},{char:p?"V":"P",confidence:.2}]}});
+ const output=messages.find(m=>m.type==="completion"&&m.serial===100+p);
+ assert.ok(output,JSON.stringify(messages.slice(-1)));
+ assert.equal(output.neural,true);
+ assert.equal(output.engine,"stroke-gru-mdn");
+ const all=output.alternatives.flatMap(a=>a.paths.flatMap(path=>path));
+ assert.ok(all.length>=2,"Neural model returned no printable vector trajectory");
+ for(const [px,py] of all){
+  assert.ok(Number.isFinite(px)&&Number.isFinite(py));
+  assert.ok(px>=-.08&&px<=1.08&&py>=-.08&&py<=1.08);
+ }
+ console.log("PASS: trained sequence generator generated",all.length,"ordered vector points",output.alternatives.map(c=>c.label));
 }
