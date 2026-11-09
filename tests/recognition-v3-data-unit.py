@@ -25,4 +25,7 @@ for i in range(2):
     assert x.shape==(1,32,32)
     assert label==LOOKUP[records[i][0]]
 assert len(CHARS)==102
+# The handwritten pen input must remain centered and antialiased in 32x32
+# without looking like a full-black image or a one-pixel raster artifact.
+assert 20 < float(image.sum()) < 220,float(image.sum())
 print("PASS: real human pen trajectories are rasterized into canvas-normalized grayscale glyphs",flush=True)
