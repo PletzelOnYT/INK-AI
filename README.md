@@ -26,6 +26,37 @@ V2's generator evaluates the handwriting classifier's **three most likely letter
 
 The complete implementation is a single HTML file containing browser inference code. Training uses Python/PyTorch in [src/train.py](./src/train.py), [src/train_glyph_completion.py](./src/train_glyph_completion.py) (legacy), and [src/train_glyph_completion_v2.py](./src/train_glyph_completion_v2.py) (V2). The finished weights load only from `PletzelOnYT/INK-AI`; the browser does not call other inference providers.
 
+## Character recognition: screenshot regression and V2 improvements
+
+The November 8 Mac screenshot showed a single roof-shaped handwritten stroke
+mistaken for a long sequence of unrelated characters. This was a **segmentation
+bug**: a formerly implemented "vertical valley" heuristic incorrectly split a
+single connected diagonal line into many letter boxes. INK AI now **never
+divides connected ink solely because it is wide**.
+
+The original drawn roof is reproduced in
+[`tests/recognition-regression-browser.py`](./tests/recognition-regression-browser.py).
+It must produce exactly **one** region and the caret **`^`**. Additional
+real-Chrome checks cover one continuous V, long zigzags, three independent
+letters, and detached multi-stroke symbols `=`, `:`, `+`, and `X`.
+
+The recognizer now uses conservative single-stroke geometry where unambiguous,
+and combines nearby dots/crossbars rather than splitting symbols into multiple
+lines. It also uses neighboring letters to help disambiguate uppercase vs.
+lowercase characters that EMNIST frequently renders nearly identically. Low
+confidence predictions can be shown as unknown instead of fabricated answers.
+
+The original CNN recognizes about 85% of the official EMNIST ByClass test
+images, but this **does not** imply 85% accuracy on arbitrary user handwriting,
+joined cursive, or the user's on-screen stroke. Its per-class metrics show
+significant limitations for rare lowercase shapes. An independently validated
+[class-balanced V2 recognition training workflow](./actions/workflows/train-recognition-v2.yml)
+fine-tunes the project's own trained CNN on underrepresented classes and
+**will publish an upgraded recognition model only if official held-out overall,
+macro and lowercase accuracy improve**. The HTML automatically loads a validated
+[recognition V2 checkpoint](./models/ink-cnn-v2.json) if one is published;
+otherwise it uses the existing trained V1 model.
+
 ## Drawing controls
 
 The **pen** makes black strokes. The **eraser** removes parts of the ink. The **sparkle** turns neural handwriting completion on and off. Press **Tab** to see alternative character completions, **G/Enter** to accept a vector stroke suggestion, **Escape** to clear the board, or **Ctrl+Z/Cmd+Z** to undo.
