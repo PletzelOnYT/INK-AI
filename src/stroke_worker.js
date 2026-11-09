@@ -235,10 +235,23 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
  return {paths,moves,penUps,prefixScore:score,stopReached,
   quality:continuationQuality(prefix,paths,label,penUps,stopReached)};
 }
-self.onmessage=e=>{
- const m=e.data;
+// Keep two independently trained recurrent nets in the SAME worker.
+// A prefix-fine-tuned checkpoint can improve average free-roll error yet
+// fail a particular unfinished glyph (e.g. the reported lowercase h).
+// In that situation revert to the verified older *neural* network for this
+// one character. No templates, raster lookups, or fake generated lines.
+let mainNetworkState=null,backupNetworkState=null;
+function captureNetwork(){
+ return {network,characters,embedding,layers,outputWeight,outputBias,
+  hiddenSize,embedSize,kCount,outputRows,maxSteps};
+}
+function useNetwork(s){
+ ({network,characters,embedding,layers,outputWeight,outputBias,
+   hiddenSize,embedSize,kCount,outputRows,maxSteps}=s);
+}
+function prepareNetwork(o){
+ const previous=captureNetwork();
  try{
-  if(m.cmd==="init"){
    const o=m.model;
    if(o?.format!=="ink-online-stroke-mdn-v1")throw Error("Expected actual online stroke generator");
    if(o.architecture?.input!==3||o.architecture?.mixtures!==5||
@@ -263,12 +276,10 @@ self.onmessage=e=>{
    }
    if(outputWeight.shape[0]!==outputRows||
       outputWeight.shape[1]!==hiddenSize)throw Error("Corrupt trajectory head");
-   self.postMessage({type:"ready",engine:"stroke-gru-mdn",
-     parameters:o.parameter_count,classes:characters.length,
-     prefixTuned:Boolean(o.training?.prefix_tuned),
-     realSamples:o.training.real_training_glyphs});
-  }else if(m.cmd==="generate"){
-   if(!network)throw Error("Neural generator is not initialized");
+  return captureNetwork();
+ }finally{useNetwork(previous)}
+}
+function generateCandidates(m,isFallback=false){
    const prefix=m.prefix,serial=m.serial,epoch=m.epoch;
    const live=m.live===true;
    const gestureSeed=(Number(m.seed)||0)|0;
@@ -327,10 +338,42 @@ self.onmessage=e=>{
     if(second)results.push(second);
    }
    results.sort((a,b)=>b.score-a.score);
-   self.postMessage({type:"completion",serial,epoch,
-       alternatives:results,neural:true,engine:"stroke-gru-mdn"});
+   if(isFallback)for(const result of results)result.source="validated-older-neural-generator";
+   return results;
+}
+self.onmessage=e=>{
+ const m=e.data;
+ try{
+  if(m.cmd==="init"){
+   mainNetworkState=prepareNetwork(m.model);
+   useNetwork(mainNetworkState);
+   self.postMessage({type:"ready",engine:"stroke-gru-mdn",
+     parameters:network.parameter_count,classes:characters.length,
+     prefixTuned:Boolean(network.training?.prefix_tuned),
+     realSamples:network.training.real_training_glyphs});
+  }else if(m.cmd==="fallback"){
+   if(!mainNetworkState)throw Error("Initialize primary model first");
+   backupNetworkState=prepareNetwork(m.model);
+   self.postMessage({type:"fallback-ready",
+      parameters:backupNetworkState.network.parameter_count});
+  }else if(m.cmd==="generate"){
+   if(!mainNetworkState)throw Error("Neural generator is not initialized");
+   useNetwork(mainNetworkState);
+   let results=generateCandidates(m);
+   let usedFallback=false;
+   if(!results.length&&backupNetworkState){
+    try{
+     useNetwork(backupNetworkState);
+     results=generateCandidates(m,true);
+     usedFallback=results.length>0;
+    }finally{useNetwork(mainNetworkState)}
+   }
+   self.postMessage({type:"completion",serial:m.serial,epoch:m.epoch,
+      alternatives:results,neural:true,engine:"stroke-gru-mdn",
+      fallback:usedFallback});
   }else throw Error("Unknown neural generation command");
  }catch(error){
+  if(mainNetworkState)useNetwork(mainNetworkState);
   self.postMessage({type:"error",serial:m.serial,epoch:m.epoch,
     message:String(error?.message||error)});
  }
