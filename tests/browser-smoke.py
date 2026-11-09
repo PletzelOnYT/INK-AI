@@ -1,5 +1,6 @@
 """Verify the simplified UI contains only the canvas and predicted text."""
 import http.server, threading
+from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -36,6 +37,10 @@ try:
     driver.find_element(By.ID,"assist").click()
     assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="true"
     assert driver.execute_script("return window.__inkAssistEnabled") is True
+    if Path("models/ink-glyph-completion-v2.json").exists():
+        wait.until(lambda d:d.execute_script("return window.__inkGlyphVersion===2"))
+        assert driver.execute_script("return window.__inkGlyphParameters>=1000000")
+        print("PASS: real browser loaded 1.1M parameter V2 handwriting generator",flush=True)
     assert driver.execute_script("return document.getElementById('pad').toDataURL()") == drawing_before
     ActionChains(driver).move_to_element_with_offset(canvas,-190,-70).click_and_hold().move_by_offset(24,8).move_by_offset(22,11).move_by_offset(22,15).release().perform()
     wait.until(lambda d:d.execute_script("return window.__inkGhostPoints>=3"))
