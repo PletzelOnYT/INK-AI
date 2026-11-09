@@ -15,7 +15,7 @@ concurrency:
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 100
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,7 +33,8 @@ jobs:
       - name: Tune actual pen-lift probabilities from real online handwriting
         run: |
           python -u src/train_pen_lift_head_v3.py \
-            --epochs 5 --per-epoch 21000 --batch 96
+            --epochs 12 --per-epoch 32000 --batch 96 \
+            --loss balanced-bce --lift-weight 11
       - name: Enforce independent pen-up and drawing geometry quality gates
         run: |
           python - <<'PY'
@@ -46,6 +47,8 @@ jobs:
               model=json.loads(Path("models/ink-stroke-penlift-v3.json").read_text())
               assert model["format"]=="ink-online-stroke-mdn-v1"
               assert model["training"]["penlift_calibrated_v3"] is True
+              assert model["training"]["pen_lift_bias_calibrated"] is True
+              assert isinstance(r["best_bias_offset"],(int,float))
               assert model["training"]["fine_tuned_own_model"]=="models/ink-stroke-prefix-domain-v2.json"
               assert r["candidate"]["independent"]["pen_lift_f1"]>=.20
               assert r["candidate"]["independent"]["pen_lift_precision"]>=.20

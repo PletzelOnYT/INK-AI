@@ -27,24 +27,35 @@ from train_prefix_domain_v2 import validate_rollout
 PEN_ROW=5*MIXTURES
 
 @torch.inference_mode()
-def evaluate_pen_lifts(model,data,limit=None):
+def collect_pen_logits(model, data, limit=None):
+    """Collect probabilities from real NEXT-token pen-lift labels only.
+
+    Do not count padding as pen down. Each new stroke's first token has
+    draw=0, including the continuation after a genuinely lifted pen.
+    """
     model.eval()
     if limit is not None:
         data=torch.utils.data.Subset(data,list(range(min(limit,len(data)))))
     loader=DataLoader(data,batch_size=96,num_workers=2)
-    tp=fp=fn=tn=0
+    scores=[];targets=[]
     for seq,labels,length in loader:
         emb=model.embedding(labels)
         h,_=model.rnn(torch.cat([seq,
             emb[:,None,:].expand(-1,MAX_STEPS,-1)],dim=2))
         out=model.head(h[:,:-1])
         valid=torch.arange(MAX_STEPS-1)[None,:]<length[:,None]-1
-        truth=(seq[:,1:,2]<.5)&valid
-        guess=(out[:,:,PEN_ROW]<0)&valid
-        tp+=int((truth&guess).sum())
-        fp+=int((~truth&guess&valid).sum())
-        fn+=int((truth&~guess).sum())
-        tn+=int((~truth&~guess&valid).sum())
+        scores.append(out[:,:,PEN_ROW][valid].detach().cpu())
+        targets.append((seq[:,1:,2]<.5)[valid].detach().cpu())
+    return torch.cat(scores),torch.cat(targets)
+
+
+def pen_lift_metrics(logits,truth,offset=0.0):
+    """A calibrated logit < 0 predicts a lift (0 means pen-up)."""
+    guess=logits+offset<0
+    tp=int((truth&guess).sum())
+    fp=int((~truth&guess).sum())
+    fn=int((truth&~guess).sum())
+    tn=int((~truth&~guess).sum())
     prec=tp/max(1,tp+fp);rec=tp/max(1,tp+fn)
     return {
       "pen_lift_f1":round(2*prec*rec/max(prec+rec,1e-9),6),
@@ -55,6 +66,35 @@ def evaluate_pen_lifts(model,data,limit=None):
       "normal_pen_down_accuracy":round(tn/max(1,tn+fp),6)
     }
 
+
+def choose_pen_bias(logits,truth,min_down_accuracy=.97):
+    """Tune only on calibration writers; never peek at independent writers.
+
+    Weighted BCE makes the rare lift signal learnable, but a 0.5 decision
+    threshold is not generally optimal for rare events. This changes a
+    single learned Bernoulli-head bias; no geometry weights are modified.
+    """
+    candidates=[]
+    for step in range(-96,17):  # offsets -12 through +2 in 1/8 increments
+        offset=step/8.
+        metrics=pen_lift_metrics(logits,truth,offset)
+        if metrics["normal_pen_down_accuracy"]>=min_down_accuracy:
+            candidates.append((offset,metrics))
+    if not candidates:
+        return 0.,pen_lift_metrics(logits,truth)
+    # Prefer precision-controlled operating points, then F1; never accept
+    # catastrophic pen-down false positives in pursuit of recall.
+    return max(candidates,key=lambda item:(
+        item[1]["pen_lift_precision"]>=.20,
+        item[1]["pen_lift_f1"],
+        item[1]["pen_lift_precision"],
+        -abs(item[0])))
+
+
+@torch.inference_mode()
+def evaluate_pen_lifts(model,data,limit=None):
+    return pen_lift_metrics(*collect_pen_logits(model,data,limit))
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--source",default="models/ink-stroke-prefix-domain-v2.json")
@@ -62,6 +102,8 @@ def main():
     p.add_argument("--epochs",type=int,default=5)
     p.add_argument("--per-epoch",type=int,default=21000)
     p.add_argument("--batch",type=int,default=96)
+    p.add_argument("--loss",choices=["balanced-bce","focal"],default="balanced-bce")
+    p.add_argument("--lift-weight",type=float,default=11.)
     p.add_argument("--data",default=".data/ujipenchars2")
     a=p.parse_args()
     torch.manual_seed(SEED+2601);np.random.seed(SEED+2601)
@@ -116,7 +158,11 @@ def main():
             valid=(torch.arange(MAX_STEPS-1)[None,:]<length[:,None]-1)
             bce=nn.functional.binary_cross_entropy_with_logits(
                  pred,truth,reduction="none")
-            reweight=torch.where(truth<.5,11.0,1.0)
+            reweight=torch.where(truth<.5,a.lift_weight,1.0)
+            if a.loss=="focal":
+                probability=torch.sigmoid(pred)
+                pt=torch.where(truth>.5,probability,1-probability)
+                bce=bce*((1-pt).clamp(min=1e-5)**1.5)
             loss=(bce*reweight*valid).sum()/valid.sum().clamp(min=1)
             optim.zero_grad(set_to_none=True);loss.backward()
             torch.nn.utils.clip_grad_norm_([lift_w,lift_b],2.)
@@ -125,20 +171,30 @@ def main():
         with torch.no_grad():
             model.head.weight[PEN_ROW].copy_(lift_w)
             model.head.bias[PEN_ROW].copy_(lift_b)
-        cal=evaluate_pen_lifts(model,calibration)
+        cal_logits,cal_truth=collect_pen_logits(model,calibration)
+        bias_offset,cal=choose_pen_bias(cal_logits,cal_truth)
+        # Copy the calibrated head bias only into the evaluated/exported net.
+        # The trainable lift_b stays uncalibrated for the next optimizer epoch.
+        with torch.no_grad():
+            model.head.bias[PEN_ROW].add_(bias_offset)
         row={"epoch":epoch,"train_loss":round(loss_total/max(num,1),6),
-             "calibration":cal,"seen":seen}
+             "calibration":cal,"bias_offset":bias_offset,
+             "method":a.loss,"lift_weight":a.lift_weight,"seen":seen}
         history.append(row)
         print("PEN LIFT EPOCH:",json.dumps(row),flush=True)
         # Select using calibration writers; independent writers remain unseen.
         objective=cal["pen_lift_f1"]+.03*cal["normal_pen_down_accuracy"]
         if best is None or objective>best["objective"]:
-            best={"epoch":epoch,"objective":objective,"calibration":cal}
+            best={"epoch":epoch,"objective":objective,
+                  "calibration":cal,"bias_offset":bias_offset}
             export(model,a.output,{
                "heldout_pen_lift_f1":cal["pen_lift_f1"],
                "heldout_glyphs":len(calibration)},{
                "fine_tuned_own_model":a.source,
                "penlift_calibrated_v3":True,
+               "pen_lift_bias_calibrated":True,
+               "pen_lift_calibration_offset":bias_offset,
+               "pen_lift_training_loss":a.loss,
                "prefix_tuned":True,"prefix_domain_v2":True,
                "real_training_glyphs":len(train),
                "real_writer_holdout_glyphs":len(held),
@@ -162,8 +218,10 @@ def main():
        "candidate":{"calibration":best["calibration"],"independent":final,
                    "prefix_position":position},
        "train_glyphs":len(train),"test_glyphs":len(independent),
-       "best_epoch":best["epoch"],"seen":seen,"epochs":history,
-       "criterion":"Pen-up F1 precision and recall on writers excluded from training and epoch selection, with prefix trajectory position error <= 106% of baseline"
+       "best_epoch":best["epoch"],"best_bias_offset":best["bias_offset"],
+       "loss":a.loss,"lift_weight":a.lift_weight,
+       "seen":seen,"epochs":history,
+       "criterion":"Select a pen-state bias on calibration writers only. Release requires independent-writer precision, recall, F1, specificity and rollout-position gates."
     }
     Path("models/penlift-v3-metrics.json").write_text(json.dumps(report,indent=2))
     if not accepted:
