@@ -54,6 +54,8 @@ try:
  for name,paths in cases:
   output=draw(paths)
   print("HANDWRITTEN_WORD",name,output,flush=True)
- print("PASS: word-shaped handwritten browser cases completed",flush=True)
+  assert output["regions"]==3, (name,output)
+  assert output["guess"]==name, (name,output)
+ print("PASS: all three reported word-shape recognition regressions in real Chrome",flush=True)
 finally:
  driver.quit();server.shutdown()
