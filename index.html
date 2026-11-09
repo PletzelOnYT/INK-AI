@@ -278,6 +278,7 @@ self.onmessage=e=>{
 (() => {
 const MODEL_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
 const RECOGNITION_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v2.json";
+const RECOGNITION_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v3.json";
 const canvas=document.getElementById("pad"), ctx=canvas.getContext("2d",{willReadFrequently:true}), guess=document.getElementById("guess");
 const ghostCanvas=document.getElementById("ghost"),ghostCtx=ghostCanvas.getContext("2d");
 const assistButton=document.getElementById("assist");
@@ -1011,18 +1012,28 @@ self.onmessage=e=>{
 async function load(){
  display("Loading AI…",true);
  try{
-  let model=null,upgrade=false;
-  const sources=location.protocol==="file:"?[RECOGNITION_V2_URL]:
-      ["models/ink-cnn-v2.json",RECOGNITION_V2_URL];
-  for(const source of sources){
-   try{
-    const r=await fetch(source,{cache:"no-store"});
-    if(!r.ok)continue;
-    const candidate=await r.json();
-    if(candidate.format!=="ink-cnn-int8-v1"||candidate.layers?.length!==5)continue;
-    if(candidate.training?.finetuned_from!=="models/ink-cnn-v1.json")continue;
-    model=candidate;upgrade=true;break;
-   }catch(_){/* V2 is optional until safe fine-tuning passes */}
+  let model=null,version=1;
+  const candidates=[
+   {version:3,relative:"models/ink-cnn-v3.json",remote:RECOGNITION_V3_URL,
+       parent:"models/ink-cnn-v2.json"},
+   {version:2,relative:"models/ink-cnn-v2.json",remote:RECOGNITION_V2_URL,
+       parent:"models/ink-cnn-v1.json"}
+  ];
+  for(const entry of candidates){
+   const urls=location.protocol==="file:"?[entry.remote]:
+     [entry.relative,entry.remote];
+   for(const url of urls){
+    try{
+     const r=await fetch(url,{cache:"no-store"});
+     if(!r.ok)continue;
+     const candidate=await r.json();
+     if(candidate.format!=="ink-cnn-int8-v1"||candidate.layers?.length!==5)continue;
+     if(candidate.training?.finetuned_from!==entry.parent)continue;
+     if(candidate.labels?.length!==102||candidate.input?.join(",")!=="1,32,32")continue;
+     model=candidate;version=entry.version;break;
+    }catch(_){/* Newer checkpoint is optional. Original model remains safe. */}
+   }
+   if(model)break;
   }
   if(!model){
    const response=await fetch(MODEL_URL,{cache:"no-store"});
@@ -1033,8 +1044,9 @@ async function load(){
     throw Error("Bad model data");
   createWorker();
   await request("init",{model});
-  window.__inkRecognitionVersion=upgrade?2:1;
+  window.__inkRecognitionVersion=version;
   window.__inkRecognitionAccuracy=model.training?.emnist_test_accuracy||0;
+  window.__inkRecognitionPenAccuracy=model.training?.uji_independent_accuracy||null;
   loaded=true;window.__inkReady=true;
   display("Draw something",true);
   if(strokes.length)schedule(80);
