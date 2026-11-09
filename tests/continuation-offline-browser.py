@@ -60,7 +60,7 @@ try:
     assert info["points"]>=3 and info["segments"]>=1,info
     assert info["down"]>.06,"Lowercase h must descend, not grow a flat tail"
     assert info["count"]>15 and info["channelDiff"]<=2,info
-    assert 10<=info["maxAlpha"]<=100,"Ghost ink should be translucent",info
+    assert 10<=info["maxAlpha"]<=100, ("Ghost ink should be translucent", info)
     before=driver.execute_script("return document.getElementById('pad').toDataURL()")
     ActionChains(driver).send_keys("g").perform()
     wait.until(lambda d:d.execute_script("return window.__inkAcceptedVectorCount>=1"))
