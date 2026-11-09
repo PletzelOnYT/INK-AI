@@ -6,6 +6,7 @@ on:
       - "index.html"
       - "src/**"
       - "tests/**"
+      - "models/ink-glyph-completion-v1.json"
       - ".github/workflows/verify.yml"
   workflow_dispatch:
 permissions:
@@ -32,9 +33,9 @@ jobs:
           node --check /tmp/ink-check.js
           node tests/worker-smoke.mjs
           node --check /tmp/ink-worker-check.js
-          if test -s models/ink-sketch-gru-v1.json; then
-            node tests/sketch-model-smoke.mjs
-            node --check /tmp/ink-sketch-worker.js
+          if test -s models/ink-glyph-completion-v1.json; then
+            node tests/glyph-model-smoke.mjs
+            node --check /tmp/ink-glyph-worker.js
           fi
 
       - name: Run real Chrome smoke test (includes missing-model fallback)
