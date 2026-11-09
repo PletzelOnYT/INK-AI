@@ -10,7 +10,7 @@ Tap ✨ and start handwriting a character. The system identifies the current par
 
 Press **G** to accept a suggested completion as real, undoable ink, or continue handwriting without accepting. Faint ink is kept in a separate overlay and is never sent to the recognizer until accepted.
 
-**What it is:** A real class-conditioned neural completion model, trained to reconstruct partly missing handwritten characters. The system learns from missing parts of human-written glyph images and does not extrapolate geometric curves.
+**What it is:** A real larger class-conditioned neural completion model, trained and fine-tuned to reconstruct partly missing handwritten characters. The system learns from masked parts of human-written glyph images, not geometric curve extrapolation. It does not have human stroke-order data, so suggestions are reconstructed pixels rather than perfectly predicted pen movements.
 
 **What it is not:** Sketch generation, picture/object completion, a generalized art generator, or a model capable of reliably guessing any intended symbol from a few marks. Unclear partial characters such as `I`, `l`, `1`, `|` may be guessed incorrectly. The suggestion network predicts pixels, so its gray suggestions can be soft-edged rather than perfect human pen strokes.
 
@@ -18,9 +18,11 @@ Press **G** to accept a suggested completion as real, undoable ink, or continue 
 
 1. **Handwriting recognition:** [models/ink-cnn-v1.json](./models/ink-cnn-v1.json). Convolutional neural network, trained from scratch on EMNIST ByClass and HASYv2 with synthetic punctuation supplements. This predicts which character you are writing.
 
-2. **Neural handwriting completion:** [models/ink-glyph-completion-v1.json](./models/ink-glyph-completion-v1.json). Class-conditional feedforward neural generator, independently trained from random initialization. Training: **45,000 real handwritten EMNIST characters**, **24,247 real handwritten HASYv2 symbols**, plus **9,000 font-generated punctuation samples**. Training runs for 3 epochs and makes **234,741 presentations**. The network is taught with randomly hidden parts of characters and reconstructs missing ink. [Training metrics](./models/glyph-completion-metrics.json) report held-out masked loss, not visual accuracy.
+2. **Neural handwriting completion (V2):** [models/ink-glyph-completion-v2.json](./models/ink-glyph-completion-v2.json). A **1,106,848-parameter class-conditional residual neural network** trained from random initialization. Dataset: **100,000 real handwritten EMNIST letters/digits**, **24,247 real handwritten HASYv2 symbols**, plus **12,000 explicitly synthetic punctuation examples**. The 4-epoch training is followed by a lower-learning-rate **fine-tuning stage on 74,386 difficult/confusable character examples**. The total training presentations are **619,374**. There are nine kinds of simulated incomplete handwriting and a missing-ink overlap objective to reduce vague gray haze. [V2 training metrics](./models/glyph-completion-v2-metrics.json) include masked completion F1. The previous [V1 network](./models/ink-glyph-completion-v1.json) remains as a safe fallback if V2 weights cannot be loaded.
 
-The complete implementation is a single HTML file containing the browser inference code. Training uses Python/PyTorch in [src/train.py](./src/train.py) and [src/train_glyph_completion.py](./src/train_glyph_completion.py). The finished weights load only from `PletzelOnYT/INK-AI`; the browser does not call other inference providers.
+V2's generator evaluates the handwriting classifier's **three most likely letters/symbols**, comparing how each proposed completion explains the actual visible ink instead of blindly trusting the top OCR guess. See the [side-by-side held-out benchmark](./models/glyph-completion-comparison.json) when published. No extra AI service, sketch dataset, or externally pretrained weights are used.
+
+The complete implementation is a single HTML file containing browser inference code. Training uses Python/PyTorch in [src/train.py](./src/train.py), [src/train_glyph_completion.py](./src/train_glyph_completion.py) (legacy), and [src/train_glyph_completion_v2.py](./src/train_glyph_completion_v2.py) (V2). The finished weights load only from `PletzelOnYT/INK-AI`; the browser does not call other inference providers.
 
 ## Drawing controls
 
