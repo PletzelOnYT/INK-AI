@@ -234,8 +234,8 @@ function segment(){
   }
  }
  if(mode==="symbol"){
-  const xs=[],ys=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(binary[y*W+x]){xs.push(x);ys.push(y)}
-  if(xs.length)regions=[{box:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)],line:0,space:false,gap:0}];
+  let minx=W,miny=H,maxx=-1,maxy=-1;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(binary[y*W+x]){minx=Math.min(minx,x);miny=Math.min(miny,y);maxx=Math.max(maxx,x);maxy=Math.max(maxy,y)}
+  if(maxx>=0)regions=[{box:[minx,miny,maxx,maxy],line:0,space:false,gap:0}];
  }
  return {regions,pixels:p};
 }
@@ -316,7 +316,7 @@ $("fineTune").onclick=async()=>{
 };
 function createWorker(){
  if(worker)worker.terminate();
- const source=String.raw\`
+ const source=String.raw`
 "use strict";
 let labels=[],layers=[],f2=null,base=null;
 function decode(a){
@@ -408,7 +408,7 @@ onmessage=e=>{
   postMessage({id,result});
  }catch(ex){postMessage({id,error:String(ex.message||ex)})}
 };
-\`;
+`;
  const blob=new Blob([source],{type:"text/javascript"});
  worker=new Worker(URL.createObjectURL(blob));
  worker.onmessage=e=>{
