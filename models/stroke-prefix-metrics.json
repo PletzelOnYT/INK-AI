@@ -1,0 +1,71 @@
+{
+  "eligible": true,
+  "source": "models/ink-stroke-sequence-v1.json",
+  "trained_parameters": 373563,
+  "train_real_characters": 6210,
+  "synthetic_symbols": 6000,
+  "writer_disjoint_calibration_glyphs": 1551,
+  "writer_disjoint_independent_glyphs": 1550,
+  "base": {
+    "calibration": {
+      "free_rollout_position_error": 0.212665,
+      "free_rollout_pen_accuracy": 0.993345,
+      "evaluated_steps": 6762
+    },
+    "independent": {
+      "free_rollout_position_error": 0.211183,
+      "free_rollout_pen_accuracy": 0.993947,
+      "evaluated_steps": 6608
+    }
+  },
+  "best": {
+    "epoch": 3,
+    "calibration": {
+      "free_rollout_position_error": 0.193708,
+      "free_rollout_pen_accuracy": 0.993345,
+      "evaluated_steps": 6762
+    },
+    "presentations": 37763
+  },
+  "independent": {
+    "free_rollout_position_error": 0.195801,
+    "free_rollout_pen_accuracy": 0.993947,
+    "evaluated_steps": 6608
+  },
+  "improvement_fraction": 0.0728373022449724,
+  "pen_accuracy_delta": 0.0,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": -4.41894,
+      "calibration": {
+        "free_rollout_position_error": 0.201758,
+        "free_rollout_pen_accuracy": 0.993345,
+        "evaluated_steps": 6762
+      },
+      "seconds": 25.6
+    },
+    {
+      "epoch": 2,
+      "train_loss": -4.45773,
+      "calibration": {
+        "free_rollout_position_error": 0.197829,
+        "free_rollout_pen_accuracy": 0.993345,
+        "evaluated_steps": 6762
+      },
+      "seconds": 26.9
+    },
+    {
+      "epoch": 3,
+      "train_loss": -4.63904,
+      "calibration": {
+        "free_rollout_position_error": 0.193708,
+        "free_rollout_pen_accuracy": 0.993345,
+        "evaluated_steps": 6762
+      },
+      "seconds": 25.7
+    }
+  ],
+  "presentations": 37763,
+  "note": "Validation measures free-running 14-step pen-path deviation, not subjective rendered character correctness"
+}
