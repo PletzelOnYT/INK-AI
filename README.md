@@ -2,7 +2,7 @@
 
 **Minimal drawing interface:** a pen, an eraser, optional ✨ **Neural Assist**, a white handwriting board, and the automatically recognized text below. It is designed for **letters, numbers, punctuation, and mathematical symbols** — **not sketches or object drawings**.
 
-[Open or download the single HTML file](./index.html). You can run it directly in a modern browser with an internet connection. It only downloads the two neural model files from **this GitHub repository**, and uses no external AI services or JavaScript libraries.
+[Open or download the single HTML file](./index.html). You can run it directly in a modern browser with an internet connection. It downloads its own trained recognition and handwriting-completion models, plus an optional bank of human handwriting examples, **only from this GitHub repository**. It uses no external AI inference services, API keys, or JavaScript libraries.
 
 ## Experimental Neural Assist (sparkle)
 
