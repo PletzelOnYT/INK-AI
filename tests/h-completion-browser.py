@@ -78,6 +78,18 @@ try:
        recognized:document.getElementById('guess').textContent};
     """)
     print("ACTUAL SCREENSHOT h GHOST:",measurement,flush=True)
+    options=driver.execute_script("return window.__inkSuggestionChoices")
+    if len(options)>=2:
+        WebDriverWait(driver,8).until(lambda d:d.execute_script(
+            "return window.__inkCompletionReranks>=1"))
+        quality=driver.execute_script("""
+          return {reranks:window.__inkCompletionReranks,
+            probability:window.__inkCompletionConfidence,
+            model:window.__inkCompletionModel};
+        """)
+        print("INDEPENDENT CNN-GUIDED NEURAL CANDIDATE RANKING:",quality,flush=True)
+        assert 0<=quality["probability"]<=1
+
     assert measurement["dy"]>.06,"h must descend, not produce flat horizontal ghost"
     assert measurement["tailRange"]>.08
     assert measurement["width"]<=8
