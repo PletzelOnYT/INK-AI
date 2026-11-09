@@ -32,6 +32,10 @@ jobs:
           node --check /tmp/ink-check.js
           node tests/worker-smoke.mjs
           node --check /tmp/ink-worker-check.js
+          if test -s models/ink-sketch-gru-v1.json; then
+            node tests/sketch-model-smoke.mjs
+            node --check /tmp/ink-sketch-worker.js
+          fi
 
       - name: Run real Chrome smoke test (includes missing-model fallback)
         run: |
