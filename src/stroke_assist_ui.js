@@ -26,6 +26,30 @@ window.__inkAssistRequests=0;
 window.__inkLastPreviewLatencyMs=0;
 window.__inkLastPreviewTime=0;
 window.__inkAssistInFlight=false;
+window.__inkFallbackReady=false;
+window.__inkFallbackUsed=0;
+let glyphFallbackLoading=false;
+async function loadValidatedBackup(){
+ if(glyphFallbackLoading||!glyphWorker)return;
+ glyphFallbackLoading=true;
+ try{
+  const urls=location.protocol==="file:"?[STROKE_URL]:
+      ["models/ink-stroke-sequence-v1.json",STROKE_URL];
+  for(const url of urls){
+   try{
+    const response=await fetch(url,{cache:"default"});
+    if(!response.ok)continue;
+    const model=await response.json();
+    if(model.format!=="ink-online-stroke-mdn-v1"||
+       model.parameter_count>=1000000||
+       model.training?.prefix_tuned)continue;
+    glyphWorker.postMessage({cmd:"fallback",model});
+    return;
+   }catch(_){/* Existing primary model stays usable */}
+  }
+ }finally{glyphFallbackLoading=false}
+}
+
 function clearGhost(){
  ghostCandidate=null;ghostOptions=[];ghostChoice=0;ghostPending=null;
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
@@ -133,14 +157,19 @@ function createGlyphWorker(){
    window.__inkGlyphParameters=m.parameters;
    window.__inkPrefixTrained=Boolean(m.prefixTuned);
    assistButton.title=m.prefixTuned?
-     "Prefix-trained neural handwriting · smarter completions · Tab alternatives · G accept":
+     "Prefix-trained neural handwriting · per-character fallback · Tab alternatives · G accept":
      m.parameters>=1000000?
      "1M neural handwriting strokes · Live · Tab alternatives · G accept":
      "Neural handwriting strokes · Live · Tab alternatives · G accept";
+   if(m.prefixTuned||m.parameters>=1000000)loadValidatedBackup();
    queueGhost();
+  }else if(m.type==="fallback-ready"){
+   window.__inkFallbackReady=true;
+   if(assistEnabled)queueGhost();
   }else if(m.type==="preview"||m.type==="completion"){
    if(m.type==="completion"){
     glyphBusy=false;window.__inkAssistInFlight=false;
+    if(m.fallback)window.__inkFallbackUsed++;
    }
    // Even when new pointer data arrived, DISPLAY the most recent completed
    // prediction rather than starving the preview by dropping every result.
@@ -149,6 +178,9 @@ function createGlyphWorker(){
       m.epoch===glyphEpoch&&m.serial===glyphSerial&&
       ghostPending?.serial===m.serial){
      const possibilities=(m.alternatives||[]).filter(o=>o.paths?.some(p=>p.length>1));
+     if(!possibilities.length&&m.type==="completion"){
+      clearGhost();
+     }
      if(possibilities.length){
       ghostOptions=possibilities;
       window.__inkSuggestionChoices=ghostOptions.map(o=>o.label);
