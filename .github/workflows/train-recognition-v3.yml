@@ -1,0 +1,77 @@
+name: Train real-pen handwriting recognizer V3
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_recognition_v3.py"
+      - ".github/workflows/train-recognition-v3.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-real-pen-recognizer-v3
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Test real-pen input rasterization and unchanged class order
+        run: |
+          python3 -m py_compile src/train_recognition_v3.py
+          python tests/recognition-v3-data-unit.py
+      - name: Fine-tune own CNN on genuine UJI online handwriting and EMNIST
+        run: |
+          python -u src/train_recognition_v3.py --epochs 4 --samples-per-epoch 64000 --batch 192
+      - name: Verify independently measured quality gates
+        run: |
+          python - <<'PY'
+          import json,math
+          from pathlib import Path
+          result=json.loads(Path("models/recognition-v3-metrics.json").read_text())
+          assert result["uji_independent_glyphs"]>=1100
+          assert result["baseline_v2"]["pen_independent"]["tested"]>=1100
+          if result["eligible"]:
+              m=json.loads(Path("models/ink-cnn-v3.json").read_text())
+              assert m["format"]=="ink-cnn-int8-v1"
+              assert len(m["layers"])==5
+              assert m["training"]["finetuned_from"]=="models/ink-cnn-v2.json"
+              a=result["baseline_v2"]["pen_independent"]["overall"]
+              b=result["independent_pen_v3"]["overall"]
+              assert b>=a+.025
+              assert result["best"]["emnist"]["overall"]>=result["baseline_v2"]["emnist_browser_style"]["overall"]-.055
+              print("V3 accepted on unseen pen-writer handwriting:",a,"to",b)
+          else:
+              print("V3 REJECTED by independent evaluation: retaining existing V2")
+          PY
+      - name: Publish metrics and only the validated model
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/recognition-v3-metrics.json
+          if test -s models/ink-cnn-v3.json; then git add models/ink-cnn-v3.json; fi
+          git commit -m "Publish measured real-pen handwriting recognition adaptation"
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-ai-recognition-v3-evidence
+          path: |
+            models/recognition-v3-metrics.json
+            models/ink-cnn-v3.json
+          if-no-files-found: ignore
