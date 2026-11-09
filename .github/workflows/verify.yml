@@ -32,3 +32,9 @@ jobs:
           node --check /tmp/ink-check.js
           node tests/worker-smoke.mjs
           node --check /tmp/ink-worker-check.js
+
+      - name: Run real Chrome smoke test (includes missing-model fallback)
+        run: |
+          python3 -m pip install --quiet selenium
+          command -v google-chrome || command -v chromium
+          python3 tests/browser-smoke.py
