@@ -755,7 +755,11 @@ function segment(){
      const col=Math.max(rx0+1,Math.min(rx1-1,Math.round(cut)));
      let inkAtCut=0;
      for(let y=ry0;y<=ry1;y++)inkAtCut+=ink[y*w+col];
-     if(inkAtCut>Math.max(17,rh*.32))continue;
+     // Thick hand-drawn loops can have a substantial seam column even when
+     // the two independent pen gestures only touch at a single endpoint.
+     // Distinct pen lifts + narrow x-overlap + separation remain the primary
+     // checks; allow a thicker contact zone here.
+     if(inkAtCut>Math.max(27,rh*.72))continue;
      cuts.push(col);
     }
     if(!cuts.length){refined.push(region);continue}
