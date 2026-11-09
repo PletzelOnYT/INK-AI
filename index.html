@@ -9,7 +9,15 @@
 :root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;background:#080808}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;overflow-x:hidden}
-main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:15px;padding:20px 0}
+main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:20px 0}
+.tools{display:flex;align-items:center;justify-content:center;gap:3px;align-self:center;padding:5px;background:#1b1b1b;border:1px solid #404040;border-radius:16px;box-shadow:0 6px 20px #0006}
+.tool{width:48px;height:46px;display:grid;place-items:center;background:transparent;color:#ccc;border:0;border-radius:12px;cursor:pointer;transition:background .1s,color .1s}
+.tool:hover{background:#343434;color:#fff}
+.tool[aria-pressed="true"]{background:#fff;color:#0c0c0c}
+.tool svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tool:focus-visible{outline:2px solid white;outline-offset:2px}
+#pad[data-tool="eraser"]{cursor:cell}
+
 #pad{display:block;width:100%;aspect-ratio:2.18/1;background:#fff;border-radius:14px;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
 #guess{min-height:95px;padding:18px 20px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;color:#fff;font-size:clamp(24px,3vw,43px);font-weight:570;line-height:1.25;letter-spacing:-.02em}
 #guess[data-muted="true"]{color:#8e8e8e;font-size:clamp(15px,2vw,23px);font-weight:400;letter-spacing:0}
@@ -18,7 +26,11 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 </head>
 <body>
 <main>
-  <canvas id="pad" width="1200" height="550" aria-label="Write or draw here"></canvas>
+  <div class="tools" role="toolbar" aria-label="Drawing tools">
+    <button id="pen" class="tool" type="button" aria-label="Pen" title="Pen" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 4 4 4-12 12H4v-4L16 4Z"/><path d="m14 6 4 4"/></svg></button>
+    <button id="eraser" class="tool" type="button" aria-label="Eraser" title="Eraser" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.8 13.3-7.4 7.4H7.1l-3.6-3.6a2 2 0 0 1 0-2.8L14.2 3.6a2 2 0 0 1 2.8 0l3.8 3.8a2 2 0 0 1 0 2.8Z"/><path d="m9.5 8.3 7.2 7.2M13.4 20.7H21"/></svg></button>
+  </div>
+  <canvas id="pad" width="1200" height="550" data-tool="pen" aria-label="Write or draw here"></canvas>
   <div id="guess" data-muted="true" aria-live="polite">Loading AI…</div>
 </main>
 <script>
@@ -26,17 +38,28 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 (() => {
 const MODEL_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
 const canvas=document.getElementById("pad"), ctx=canvas.getContext("2d",{willReadFrequently:true}), guess=document.getElementById("guess");
-let strokes=[],current=null,pointer=null,worker=null,loaded=false,requestId=0,readVersion=0,readTimer=0;
+let strokes=[],current=null,pointer=null,worker=null,loaded=false,requestId=0,readVersion=0,readTimer=0,tool="pen";
 const requests=new Map();
 window.__inkReady=false;
 window.__inkEngine="cnn";
 function display(text,muted=false){guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
+function chooseTool(next){
+ if(next!=="pen"&&next!=="eraser")return;
+ tool=next;canvas.dataset.tool=next;
+ for(const name of ["pen","eraser"]){
+  document.getElementById(name).setAttribute("aria-pressed",String(name===next));
+ }
+}
+document.getElementById("pen").addEventListener("click",()=>chooseTool("pen"));
+document.getElementById("eraser").addEventListener("click",()=>chooseTool("eraser"));
 function paint(){
  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
- ctx.strokeStyle="#111";ctx.lineWidth=12;ctx.lineJoin="round";ctx.lineCap="round";
+ ctx.lineJoin="round";ctx.lineCap="round";
  for(const stroke of (current?[...strokes,current]:strokes)){
-  const points=stroke;
-  if(!points.length)continue;
+  const points=stroke.points;
+  if(!points?.length)continue;
+  ctx.strokeStyle=stroke.tool==="eraser"?"#fff":"#111";
+  ctx.lineWidth=stroke.tool==="eraser"?46:12;
   ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
   if(points.length===1)ctx.lineTo(points[0][0]+.01,points[0][1]+.01);
   for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);
@@ -56,17 +79,17 @@ function reset(){
 canvas.addEventListener("pointerdown",e=>{
  e.preventDefault();
  if(pointer!==null)return;
- pointer=e.pointerId;current=[pos(e)];
+ pointer=e.pointerId;current={tool,points:[pos(e)]};
  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
 });
-canvas.addEventListener("dblclick",e=>{e.preventDefault();reset()});
+
 canvas.addEventListener("pointermove",e=>{
  if(pointer!==e.pointerId||!current)return;
- e.preventDefault();current.push(pos(e));paint();
+ e.preventDefault();current.points.push(pos(e));paint();
 });
 function finish(e){
  if(pointer!==e.pointerId)return;
- if(current){current.push(pos(e));strokes.push(current)}
+ if(current){current.points.push(pos(e));strokes.push(current)}
  pointer=null;current=null;paint();schedule(180);
 }
 canvas.addEventListener("pointerup",finish);
