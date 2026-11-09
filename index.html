@@ -361,52 +361,198 @@ async function generateGlyph(){
   glyphBusy=false;window.__inkLastGlyphError=String(e.message||e);
  }
 }
-function maskBitmap(candidate){
- const c=document.createElement("canvas");c.width=c.height=32;
- const t=c.getContext("2d"),img=t.createImageData(32,32);
- let count=0;
- for(let i=0;i<1024;i++){
-  const predicted=candidate.prediction[i]/255,already=candidate.partial[i];
-  // V2 has much higher missing-ink recall than V1, but also overdraws.
-  // Calibrate only the displayed ghost: filter low-probability haze.
-  const cutoff=window.__inkGlyphVersion===2 ? .49 : .36;
-  const strength=window.__inkGlyphVersion===2?1.6:1.2;
-  const extra=Math.max(0,predicted-cutoff)*
-       Math.max(0,1-Math.min(1,already*1.6));
-  const alpha=Math.round(Math.min(.40,extra*strength)*255);
-  const k=i*4;
-  img.data[k]=47;img.data[k+1]=47;img.data[k+2]=47;img.data[k+3]=alpha;
-  if(alpha>7)count++;
+// Convert the 32×32 neural probability map into a *thin stroke centerline*.
+// Previous releases directly enlarged soft neural pixels, producing sploches.
+// Skeletonization extracts vector paths and never scales raster blobs onto ink.
+function skeletonizeGlyph(candidate){
+ const p=candidate.prediction,observed=candidate.partial;
+ const binary=new Uint8Array(1024),prob=new Float32Array(1024);
+ let peak=0;
+ for(let y=1;y<31;y++)for(let x=1;x<31;x++){
+  const i=y*32+x;
+  const center=p[i]/255;
+  const avg=(4*center+p[i-1]/255+p[i+1]/255+p[i-32]/255+p[i+32]/255)/8;
+  prob[i]=avg;
+  peak=Math.max(peak,avg);
  }
- t.putImageData(img,0,0);
- return {bitmap:c,count};
+ // Calibrate for the measured V2 precision/recall tradeoff. Reject low
+ // probability fog instead of drawing it as an opaque blurry patch.
+ const cutoff=Math.max(.49,Math.min(.60,peak*.73));
+ for(let y=1;y<31;y++)for(let x=1;x<31;x++){
+  const i=y*32+x;
+  if(prob[i]>=cutoff)binary[i]=1;
+ }
+ const neighbors=i=>{
+  const y=(i/32)|0,x=i%32;
+  if(x<1||x>30||y<1||y>30)return [0,0,0,0,0,0,0,0];
+  return [binary[i-32],binary[i-31],binary[i+1],binary[i+33],
+          binary[i+32],binary[i+31],binary[i-1],binary[i-33]];
+ };
+ // Zhang–Suen iterative thinning; preserves glyph topology as far as 32px
+ // source data permits while shrinking variable-width strokes to one pixel.
+ for(let iter=0;iter<28;iter++){
+  let removed=0;
+  for(let phase=0;phase<2;phase++){
+   const discard=[];
+   for(let y=1;y<31;y++)for(let x=1;x<31;x++){
+    const i=y*32+x;if(!binary[i])continue;
+    const a=neighbors(i);
+    const count=a.reduce((u,v)=>u+v,0);
+    if(count<2||count>6)continue;
+    let transitions=0;
+    for(let k=0;k<8;k++)if(!a[k]&&a[(k+1)%8])transitions++;
+    if(transitions!==1)continue;
+    if(phase===0){
+     if(a[0]*a[2]*a[4]!==0||a[2]*a[4]*a[6]!==0)continue;
+    }else{
+     if(a[0]*a[2]*a[6]!==0||a[0]*a[4]*a[6]!==0)continue;
+    }
+    discard.push(i);
+   }
+   for(const i of discard){binary[i]=0;removed++}
+  }
+  if(!removed)break;
+ }
+ // Trace the 8-neighbor skeleton graph into individual pen paths.
+ const coordinates=[];
+ for(let i=33;i<991;i++){
+  if(binary[i])coordinates.push(i);
+ }
+ const adjacency=new Map();
+ for(const i of coordinates){
+  const y=i>>5,x=i&31;
+  const linked=[];
+  for(const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[1,1],[-1,1],[-1,-1]]){
+   const nx=x+dx,ny=y+dy;
+   if(nx<1||nx>30||ny<1||ny>30)continue;
+   const j=ny*32+nx;if(!binary[j])continue;
+   // Eliminate redundant diagonal links when an orthogonal route exists.
+   if(dx&&dy&&(binary[y*32+nx]||binary[ny*32+x]))continue;
+   linked.push(j);
+  }
+  adjacency.set(i,linked);
+ }
+ const visited=new Set(),routes=[];
+ const edge=(a,b)=>a<b?a*1024+b:b*1024+a;
+ function travel(start,next){
+  const path=[start],seen=new Set([start]);let prev=start,current=next;
+  visited.add(edge(start,next));
+  while(path.length<170){
+   path.push(current);seen.add(current);
+   const options=(adjacency.get(current)||[]).filter(i=>i!==prev);
+   if(options.length!==1)break;
+   const after=options[0],key=edge(current,after);
+   if(visited.has(key))break;
+   visited.add(key);
+   prev=current;current=after;
+   if(current===start){path.push(start);break}
+  }
+  return path;
+ }
+ for(const i of coordinates){
+  const adj=adjacency.get(i);
+  if(adj.length===2)continue;
+  for(const j of adj){
+   const k=edge(i,j);
+   if(!visited.has(k))routes.push(travel(i,j));
+  }
+ }
+ for(const i of coordinates)for(const j of adjacency.get(i)){
+  const k=edge(i,j);
+  if(!visited.has(k))routes.push(travel(i,j));
+ }
+ // Exclude the user's real strokes with a small two-pixel neighborhood.
+ // Keep a single attachment point so the suggested line joins the ink.
+ const isReal=i=>{
+  const x=i&31,y=i>>5;
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+   if(dx*dx+dy*dy>5)continue;
+   const xx=x+dx,yy=y+dy;
+   if(xx>=0&&xx<32&&yy>=0&&yy<32&&observed[yy*32+xx]>.46)return true;
+  }
+  return false;
+ };
+ const frame=candidate.frame;
+ const width=Math.max(3.5,Math.min(9.5,frame.size/32*1.05));
+ const paths=[];
+ let visual=0;
+ for(const route of routes){
+  if(route.length<2)continue;
+  let piece=[];
+  function addPiece(){
+   if(piece.length<2){piece=[];return}
+   let length=0,energy=0;
+   for(let j=1;j<piece.length;j++){
+    const dx=(piece[j]&31)-(piece[j-1]&31);
+    const dy=(piece[j]>>5)-(piece[j-1]>>5);
+    length+=Math.hypot(dx,dy);
+   }
+   for(const i of piece)energy+=prob[i];
+   const average=energy/piece.length;
+   // Suppress stray blur filaments and tiny disconnected fragments;
+   // dot/crossbar completions are permitted when confidently predicted.
+   if(length<2.5||average<cutoff-.025){piece=[];return}
+   const points=piece.map(i=>[frame.x+((i&31)+.5)*frame.size/32,
+      frame.y+((i>>5)+.5)*frame.size/32]);
+   paths.push(points);
+   visual+=piece.length;
+   piece=[];
+  }
+  for(let j=0;j<route.length;j++){
+   const i=route[j],real=isReal(i);
+   if(!real){
+    if(!piece.length&&j>0)piece.push(route[j-1]);
+    piece.push(i);
+   }else if(piece.length){
+    piece.push(i);addPiece();
+   }
+  }
+  addPiece();
+ }
+ return {paths,width,visual,peak,cutoff};
+}
+function smoothStroke(g,points){
+ if(!points.length)return;
+ g.beginPath();
+ g.moveTo(points[0][0],points[0][1]);
+ if(points.length===2){
+  g.lineTo(points[1][0],points[1][1]);
+ }else{
+  for(let j=1;j<points.length-1;j++){
+   const a=points[j],b=points[j+1];
+   g.quadraticCurveTo(a[0],a[1],(a[0]+b[0])/2,(a[1]+b[1])/2);
+  }
+  const final=points[points.length-1];
+  g.lineTo(final[0],final[1]);
+ }
+ g.stroke();
 }
 function renderGhost(){
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
+ window.__inkGhostPoints=0;
  if(!ghostCandidate||!assistEnabled||tool!=="pen")return;
- const mask=maskBitmap(ghostCandidate);
- ghostCtx.save();ghostCtx.imageSmoothingEnabled=true;
- ghostCtx.imageSmoothingQuality="high";
- const f=ghostCandidate.frame;
- ghostCtx.drawImage(mask.bitmap,f.x,f.y,f.size,f.size);
+ const vectors=skeletonizeGlyph(ghostCandidate);
+ ghostCandidate.vectors=vectors;
+ ghostCtx.save();
+ ghostCtx.strokeStyle="rgba(58,58,58,.30)";
+ ghostCtx.lineWidth=vectors.width;
+ ghostCtx.lineCap="round";ghostCtx.lineJoin="round";
+ for(const line of vectors.paths)smoothStroke(ghostCtx,line);
  ghostCtx.restore();
- window.__inkGhostPoints=mask.count;
+ window.__inkGhostPoints=vectors.visual;
+ window.__inkGhostStrokeWidth=vectors.width;
+ window.__inkGhostSegments=vectors.paths.length;
 }
 function acceptGhost(){
  if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate)return;
- const candidate=ghostCandidate,mask=maskBitmap(candidate);
- if(!mask.count)return;
- // Keep the neural completion as one undoable/erasable raster stroke.
- const im=mask.bitmap.getContext("2d").getImageData(0,0,32,32);
- for(let i=0;i<1024;i++){
-  const k=i*4;
-  if(im.data[k+3]>8){
-   im.data[k]=17;im.data[k+1]=17;im.data[k+2]=17;
-   im.data[k+3]=Math.min(255,im.data[k+3]*3);
-  }
+ const vectors=ghostCandidate.vectors;
+ if(!vectors?.paths?.length)return;
+ // Accept actual, editable stroke paths. Never paste blurry 32px image tiles.
+ for(const points of vectors.paths){
+  strokes.push({tool:"pen",type:"vector-completion",width:vectors.width,
+    points:points.map(p=>[p[0],p[1]])});
  }
- strokes.push({tool:"pen",type:"neural-mask",frame:candidate.frame,data:Array.from(im.data)});
- clearGhost();paint();schedule(65);
+ clearGhost();paint();schedule(75);
 }
 window.addEventListener("keydown",e=>{
  if(e.key.toLowerCase()==="g"&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.repeat&&
@@ -419,19 +565,10 @@ function paint(){
  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
  ctx.lineJoin="round";ctx.lineCap="round";
  for(const stroke of (current?[...strokes,current]:strokes)){
-  if(stroke.type==="neural-mask"&&stroke.data&&stroke.frame){
-   const patch=document.createElement("canvas");patch.width=patch.height=32;
-   patch.getContext("2d").putImageData(
-    new ImageData(Uint8ClampedArray.from(stroke.data),32,32),0,0);
-   ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
-   const f=stroke.frame;ctx.drawImage(patch,f.x,f.y,f.size,f.size);
-   ctx.restore();
-   continue;
-  }
   const points=stroke.points;
   if(!points?.length)continue;
   ctx.strokeStyle=stroke.tool==="eraser"?"#fff":"#111";
-  ctx.lineWidth=stroke.tool==="eraser"?46:12;
+  ctx.lineWidth=stroke.tool==="eraser"?46:(stroke.width||12);
   ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
   if(points.length===1)ctx.lineTo(points[0][0]+.01,points[0][1]+.01);
   for(let i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);
