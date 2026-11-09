@@ -41,9 +41,20 @@ try:
         wait.until(lambda d:d.execute_script("return window.__inkGlyphVersion===2"))
         assert driver.execute_script("return window.__inkGlyphParameters>=1000000")
         print("PASS: real browser loaded 1.1M parameter V2 handwriting generator",flush=True)
+    if Path("models/ink-human-glyph-references.json").exists():
+        wait.until(lambda d:d.execute_script("return window.__inkHumanExamples>=10000"))
+        print("PASS: genuine individual handwriting reference bank loaded",driver.execute_script("return window.__inkHumanExamples"),flush=True)
     assert driver.execute_script("return document.getElementById('pad').toDataURL()") == drawing_before
     ActionChains(driver).move_to_element_with_offset(canvas,-190,-70).click_and_hold().move_by_offset(24,8).move_by_offset(22,11).move_by_offset(22,15).release().perform()
     wait.until(lambda d:d.execute_script("return window.__inkGhostPoints>=3"))
+    assert driver.execute_script("return window.__inkGhostSegments>=1")
+    stroke_width=driver.execute_script("return window.__inkGhostStrokeWidth")
+    assert 3.0<=stroke_width<=10.0,stroke_width
+    if Path("models/ink-human-glyph-references.json").exists():
+        source=driver.execute_script("return window.__inkGhostSource")
+        assert source in ("real-handwriting","trained-generator"),source
+        print("PASS: authentic handwriting bank assists stroke suggestions",source,flush=True)
+    print("PASS: clean vector ghost line, width",stroke_width,"px",flush=True)
     ghost_stats = driver.execute_script("""
       const g=document.getElementById('ghost');
       const pixels=g.getContext('2d').getImageData(0,0,g.width,g.height).data;
@@ -57,7 +68,8 @@ try:
     ink_before_accept=driver.execute_script("return document.getElementById('pad').toDataURL()")
     ActionChains(driver).send_keys("g").perform()
     wait.until(lambda d:d.execute_script("return document.getElementById('pad').toDataURL()")!=ink_before_accept)
-    print("PASS: G accepts predicted stroke as undoable ink",flush=True)
+    assert driver.execute_script("return window.__inkAcceptedVectorCount>=1")
+    print("PASS: G accepts smooth *vector strokes* instead of pasted fuzzy bitmaps",flush=True)
     driver.find_element(By.ID,"assist").click()
     assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="false"
     assert driver.execute_script("return window.__inkGhostPoints")==0
