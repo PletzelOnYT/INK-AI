@@ -1,0 +1,294 @@
+{
+  "test_accuracy": 0.8496256114439965,
+  "training_presentations": 2988716,
+  "emnist_training_images": 697932,
+  "hasy_selected": 24247,
+  "per_class": {
+    "0": {
+      "tested": 5778,
+      "accuracy": 0.8789
+    },
+    "1": {
+      "tested": 6330,
+      "accuracy": 0.9619
+    },
+    "2": {
+      "tested": 5869,
+      "accuracy": 0.9816
+    },
+    "3": {
+      "tested": 5969,
+      "accuracy": 0.9933
+    },
+    "4": {
+      "tested": 5619,
+      "accuracy": 0.9753
+    },
+    "5": {
+      "tested": 5190,
+      "accuracy": 0.9557
+    },
+    "6": {
+      "tested": 5705,
+      "accuracy": 0.9749
+    },
+    "7": {
+      "tested": 6139,
+      "accuracy": 0.9863
+    },
+    "8": {
+      "tested": 5633,
+      "accuracy": 0.9753
+    },
+    "9": {
+      "tested": 5686,
+      "accuracy": 0.9824
+    },
+    "A": {
+      "tested": 1062,
+      "accuracy": 0.9765
+    },
+    "B": {
+      "tested": 648,
+      "accuracy": 0.9398
+    },
+    "C": {
+      "tested": 1739,
+      "accuracy": 0.9367
+    },
+    "D": {
+      "tested": 779,
+      "accuracy": 0.9332
+    },
+    "E": {
+      "tested": 851,
+      "accuracy": 0.9436
+    },
+    "F": {
+      "tested": 1440,
+      "accuracy": 0.8924
+    },
+    "G": {
+      "tested": 447,
+      "accuracy": 0.8814
+    },
+    "H": {
+      "tested": 521,
+      "accuracy": 0.9463
+    },
+    "I": {
+      "tested": 2048,
+      "accuracy": 0.2729
+    },
+    "J": {
+      "tested": 626,
+      "accuracy": 0.885
+    },
+    "K": {
+      "tested": 382,
+      "accuracy": 0.7932
+    },
+    "L": {
+      "tested": 810,
+      "accuracy": 0.8827
+    },
+    "M": {
+      "tested": 1485,
+      "accuracy": 0.9724
+    },
+    "N": {
+      "tested": 1351,
+      "accuracy": 0.9637
+    },
+    "O": {
+      "tested": 4156,
+      "accuracy": 0.391
+    },
+    "P": {
+      "tested": 1397,
+      "accuracy": 0.864
+    },
+    "Q": {
+      "tested": 413,
+      "accuracy": 0.9031
+    },
+    "R": {
+      "tested": 809,
+      "accuracy": 0.9295
+    },
+    "S": {
+      "tested": 3508,
+      "accuracy": 0.8597
+    },
+    "T": {
+      "tested": 1576,
+      "accuracy": 0.9353
+    },
+    "U": {
+      "tested": 2002,
+      "accuracy": 0.9595
+    },
+    "V": {
+      "tested": 796,
+      "accuracy": 0.6809
+    },
+    "W": {
+      "tested": 806,
+      "accuracy": 0.8263
+    },
+    "X": {
+      "tested": 432,
+      "accuracy": 0.6458
+    },
+    "Y": {
+      "tested": 798,
+      "accuracy": 0.7845
+    },
+    "Z": {
+      "tested": 464,
+      "accuracy": 0.6401
+    },
+    "a": {
+      "tested": 1644,
+      "accuracy": 0.8181
+    },
+    "b": {
+      "tested": 853,
+      "accuracy": 0.8687
+    },
+    "c": {
+      "tested": 432,
+      "accuracy": 0.0
+    },
+    "d": {
+      "tested": 1683,
+      "accuracy": 0.9828
+    },
+    "e": {
+      "tested": 4092,
+      "accuracy": 0.9783
+    },
+    "f": {
+      "tested": 400,
+      "accuracy": 0.2125
+    },
+    "g": {
+      "tested": 589,
+      "accuracy": 0.4618
+    },
+    "h": {
+      "tested": 1479,
+      "accuracy": 0.9425
+    },
+    "i": {
+      "tested": 427,
+      "accuracy": 0.3255
+    },
+    "j": {
+      "tested": 317,
+      "accuracy": 0.4984
+    },
+    "k": {
+      "tested": 466,
+      "accuracy": 0.5687
+    },
+    "l": {
+      "tested": 2535,
+      "accuracy": 0.0817
+    },
+    "m": {
+      "tested": 464,
+      "accuracy": 0.0
+    },
+    "n": {
+      "tested": 1898,
+      "accuracy": 0.9226
+    },
+    "o": {
+      "tested": 466,
+      "accuracy": 0.0
+    },
+    "p": {
+      "tested": 368,
+      "accuracy": 0.4185
+    },
+    "q": {
+      "tested": 505,
+      "accuracy": 0.2376
+    },
+    "r": {
+      "tested": 2320,
+      "accuracy": 0.9315
+    },
+    "s": {
+      "tested": 437,
+      "accuracy": 0.0
+    },
+    "t": {
+      "tested": 2965,
+      "accuracy": 0.9309
+    },
+    "u": {
+      "tested": 482,
+      "accuracy": 0.0083
+    },
+    "v": {
+      "tested": 468,
+      "accuracy": 0.3868
+    },
+    "w": {
+      "tested": 467,
+      "accuracy": 0.6531
+    },
+    "x": {
+      "tested": 470,
+      "accuracy": 0.5553
+    },
+    "y": {
+      "tested": 381,
+      "accuracy": 0.3491
+    },
+    "z": {
+      "tested": 451,
+      "accuracy": 0.2483
+    }
+  },
+  "ambiguous_confusion": {
+    "I": {
+      "as_I": 559,
+      "as_l": 60,
+      "as_1": 1389,
+      "as_i": 3,
+      "as_L": 1
+    },
+    "l": {
+      "as_I": 64,
+      "as_l": 207,
+      "as_1": 2163,
+      "as_i": 1,
+      "as_L": 33
+    },
+    "1": {
+      "as_I": 32,
+      "as_l": 140,
+      "as_1": 6089,
+      "as_i": 1,
+      "as_L": 5
+    },
+    "i": {
+      "as_I": 50,
+      "as_l": 6,
+      "as_1": 198,
+      "as_i": 139,
+      "as_L": 0
+    },
+    "L": {
+      "as_I": 0,
+      "as_l": 10,
+      "as_1": 5,
+      "as_i": 2,
+      "as_L": 715
+    }
+  },
+  "model": "models/ink-cnn-v1.json"
+}
