@@ -295,49 +295,48 @@ function generateCandidates(m,isFallback=false){
    const perLabel=live?(hiddenSize>=300?2:4):(hiddenSize>=300?6:12);
    for(let j=0;j<options.length;j++){
     const choice=options[j];
-    let strongest=null;
+    const candidates=[];
     for(let attempt=0;attempt<perLabel;attempt++){
-     const variant=attempt>0;
-     const sampleSeed=gestureSeed+j*571+attempt*997;
-     const result=completeGlyph(prefix,choice.char,sampleSeed,variant,steps);
+     const result=completeGlyph(prefix,choice.char,
+       gestureSeed+j*571+attempt*997,attempt>0,steps);
      if(result.moves<2||!result.paths.length)continue;
-     const q=result.quality;
-     const value=q.score+Math.min(1.8,result.prefixScore*.04)+
+     const value=result.quality.score+
+       Math.min(1.8,result.prefixScore*.04)+
        .17*Math.log((choice.confidence||0)+.03);
      if(value<-.9)continue;
-     if(!strongest||value>strongest.score){
-      strongest={label:choice.char,paths:result.paths,
+     candidates.push({
+       label:choice.char,paths:result.paths,
        penUps:result.penUps,confidence:choice.confidence||0,
-       score:value,reason:q.reason,quality:q.score,variant:attempt};
-     }
+       score:value,reason:result.quality.reason,
+       quality:result.quality.score,variant:attempt
+     });
     }
-    if(strongest){
-     results.push(strongest);
-     // Only announce coherent neural geometry, never a rejected flat tail.
-     if(results.length===1&&(!m.preferred||strongest.label===m.preferred))
-       self.postMessage({
-        type:"preview",serial,epoch,alternatives:results.slice(),
-        neural:true,engine:"stroke-gru-mdn"
-       });
+    candidates.sort((a,b)=>b.score-a.score);
+    let accepted=0;
+    for(const candidate of candidates){
+      if(accepted>=(live?1:3))break;
+      const end=candidate.paths.at(-1)?.at(-1);
+      if(!end)continue;
+      // Keep only genuinely distinct handwritten continuations. Sending
+      // repeated identical strokes makes Tab useless.
+      const duplicate=results.some(previous=>{
+        if(previous.label!==candidate.label)return false;
+        const other=previous.paths.at(-1)?.at(-1);
+        if(!other)return false;
+        return Math.hypot(end[0]-other[0],end[1]-other[1])<.045&&
+          previous.paths.length===candidate.paths.length;
+      });
+      if(duplicate)continue;
+      results.push(candidate);accepted++;
+    }
+    if(accepted&&results.length===accepted&&
+       (!m.preferred||choice.char===m.preferred)){
+      self.postMessage({type:"preview",serial,epoch,
+       alternatives:[results[0]],neural:true,engine:"stroke-gru-mdn"});
     }
    }
-   // An optional second class-consistent sample makes Tab useful if the
-   // recognizer supplied only one plausible character identity.
-   if(results.length===1&&!live){
-    const top=results[0],label=top.label;
-    let second=null;
-    for(let attempt=0;attempt<4;attempt++){
-     const alt=completeGlyph(prefix,label,gestureSeed+707+attempt*1093,true,steps);
-     if(alt.moves<2||alt.quality.score<-.9)continue;
-     const score=alt.quality.score+.17*Math.log((top.confidence||0)+.03);
-     if(!second||score>second.score)second={
-       label,paths:alt.paths,penUps:alt.penUps,confidence:top.confidence,
-       score,reason:alt.quality.reason,quality:alt.quality.score,
-       variant:"second-neural-sample"
-     };
-    }
-    if(second)results.push(second);
-   }
+   // Full results include several independent genuine neural rollouts, so
+   // the browser can score the finished glyph with the separate OCR network.
    results.sort((a,b)=>b.score-a.score);
    if(isFallback)for(const result of results)result.source="validated-older-neural-generator";
    return results;
@@ -363,7 +362,7 @@ self.onmessage=e=>{
    let results=generateCandidates(m);
    let usedFallback=false;
    const hasPreferred=()=>!m.preferred||results.some(r=>r.label===m.preferred);
-   if((!results.length||!hasPreferred())&&backupNetworkState){
+   if((!results.length||!hasPreferred()||(!m.live&&m.searchFallback===true))&&backupNetworkState){
     try{
      useNetwork(backupNetworkState);
      const options=m.preferred?
@@ -371,7 +370,12 @@ self.onmessage=e=>{
        m.options;
      const backup=generateCandidates({...m,options},true);
      if(backup.length){
-      results=[...backup,...results.filter(x=>!backup.some(b=>b.label===x.label))];
+      const primaryPreferred=results.filter(x=>x.label===m.preferred);
+      // For offline scoring, keep both independent generators as candidates.
+      // In fast live mode, prefer the known-good fallback for missing glyphs.
+      results=(!m.live&&m.searchFallback)?
+        [...primaryPreferred,...backup,...results.filter(x=>x.label!==m.preferred)]:
+        [...backup,...results.filter(x=>!backup.some(b=>b.label===x.label))];
       usedFallback=true;
      }
     }finally{useNetwork(mainNetworkState)}
