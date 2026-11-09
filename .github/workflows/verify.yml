@@ -13,6 +13,8 @@ on:
       - "models/ink-stroke-sequence-v1.json"
       - "models/ink-stroke-sequence-v2.json"
       - "models/ink-stroke-prefix-v1.json"
+      - "models/ink-stroke-prefix-domain-v2.json"
+      - "models/stroke-prefix-domain-v2-metrics.json"
       - ".github/workflows/verify.yml"
   workflow_dispatch:
 permissions:
@@ -45,6 +47,7 @@ jobs:
           node tests/h-continuation-regression.mjs
           node tests/stroke-sequence-v2-acceptance.mjs
           node tests/prefix-quality-acceptance.mjs
+          node tests/prefix-domain-quality.mjs
           node --check /tmp/ink-stroke-worker.js
           node --check src/stroke_worker.js
           node --check src/stroke_assist_ui.js
