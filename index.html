@@ -125,7 +125,7 @@ function display(text,muted=false){guess.textContent=text;guess.dataset.muted=mu
 function chooseTool(next){
  if(next!=="pen"&&next!=="eraser")return;
  tool=next;canvas.dataset.tool=next;
- if(tool!=="pen"){clearGhost()}
+ if(tool!=="pen"){++glyphEpoch;clearGhost()}
  queueGhost();
  for(const name of ["pen","eraser"]){
   document.getElementById(name).setAttribute("aria-pressed",String(name===next));
@@ -136,13 +136,14 @@ document.getElementById("eraser").addEventListener("click",()=>chooseTool("erase
 
 // Experimental Assist uses independently trained generative weights. NO
 // curve extrapolation, font completion, heuristics, or other providers.
-const SKETCH_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-sketch-gru-v1.json";
-let sketchWorker=null,sketchReady=false,sketchLoading=false,sketchTimer=0;
-let sketchBusy=false,sketchSerial=0,sketchActiveSerial=0,sketchRetry=0,sketchDirty=false,sketchEpoch=0;
-window.__inkSketchReady=false;
-window.__inkSketchEngine="neural-gru";
-window.__inkLastSketchModelError="";
-
+// Only the independent LETTER/DIGIT/SYMBOL completion model is allowed here.
+// No Quick Draw sketches, no movement extrapolation, no third-party inference.
+const GLYPH_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-glyph-completion-v1.json";
+let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
+let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
+window.__inkGlyphReady=false;
+window.__inkAssistModel="handwriting-only";
+window.__inkLastGlyphError="";
 function clearGhost(){
  ghostCandidate=null;
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
@@ -150,165 +151,193 @@ function clearGhost(){
 }
 function queueGhost(){
  if(!assistEnabled||tool!=="pen"){clearGhost();return}
- if(!sketchReady){clearGhost();return}
- // Throttle generation to ~10 updates/sec; keep the drawing loop immediate.
- if(sketchBusy){sketchDirty=true;return}
- if(sketchTimer)return;
- sketchTimer=setTimeout(()=>{
-  sketchTimer=0;generateGhost();
- },95);
+ if(!glyphReady){clearGhost();return}
+ if(glyphBusy){glyphDirty=true;return}
+ if(glyphTimer)return;
+ glyphTimer=setTimeout(()=>{
+  glyphTimer=0;generateGlyph();
+ },115);
 }
 function updateAssist(){
  assistEnabled=!assistEnabled;
  window.__inkAssistEnabled=assistEnabled;
  assistButton.setAttribute("aria-pressed",String(assistEnabled));
  assistButton.classList.toggle("assist-on",assistEnabled);
+ ++glyphEpoch;
  if(!assistEnabled){
-  ++sketchEpoch;sketchDirty=false;
-  clearTimeout(sketchTimer);sketchTimer=0;clearGhost();
+  clearTimeout(glyphTimer);glyphTimer=0;glyphDirty=false;clearGhost();
  }else{
-  if(!sketchReady)loadSketchModel();
+  if(!glyphReady)loadGlyphModel();
   queueGhost();
  }
 }
 assistButton.addEventListener("click",updateAssist);
 
-function sketchPrefix(){
- // Convert actual ink into pen-movement tokens in Quick Draw's coordinate
- // system; these are inputs to the generative neural model, not fake paths.
- const penStrokes=(current?[...strokes,current]:strokes)
-   .filter(s=>s.tool==="pen"&&s.points?.length>=2);
- if(!penStrokes.length)return null;
- let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
- for(const stroke of penStrokes)for(const p of stroke.points){
-  left=Math.min(left,p[0]);top=Math.min(top,p[1]);
-  right=Math.max(right,p[0]);bottom=Math.max(bottom,p[1]);
+function bounding(stroke){
+ let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;
+ for(const p of stroke.points){
+  left=Math.min(left,p[0]);right=Math.max(right,p[0]);
+  top=Math.min(top,p[1]);bottom=Math.max(bottom,p[1]);
  }
- const extent=Math.max(90,right-left,bottom-top);
- const scale=180/extent,stepMin=Math.max(3.5,7.5/scale);
- const tokens=[];
- let previous=null;
- for(let i=0;i<penStrokes.length;i++){
-  const stroke=penStrokes[i];
-  const sample=[stroke.points[0]];
-  for(let j=1;j<stroke.points.length;j++){
-   const p=stroke.points[j],q=sample[sample.length-1];
-   if(Math.hypot(p[0]-q[0],p[1]-q[1])>=stepMin ||
-      j===stroke.points.length-1){
-    sample.push(p);
-   }
-  }
-  if(sample.length<2)continue;
-  for(let j=0;j<sample.length;j++){
-   const p=sample[j];
-   if(previous!==null){
-    const dx=Math.max(-4,Math.min(4,(p[0]-previous[0])*scale/20));
-    const dy=Math.max(-4,Math.min(4,(p[1]-previous[1])*scale/20));
-    tokens.push([dx,dy,0]);
-   }
-   previous=p;
-  }
-  if(tokens.length && stroke!==current)tokens[tokens.length-1][2]=1;
- }
- if(tokens.length<4||!previous)return null;
- return {prefix:tokens.slice(-72),anchor:previous,
-         screenScale:20/scale};
+ return {left,right,top,bottom};
 }
-function createSketchWorker(){
- if(sketchWorker)sketchWorker.terminate();
- const source=document.getElementById("sketchWorkerSource").textContent;
+function completionInput(){
+ const recent=(current?[...strokes,current]:strokes)
+  .filter(s=>s.tool==="pen"&&s.points?.length>=2);
+ if(!recent.length)return null;
+ const chosen=[recent[recent.length-1]];
+ let bounds=bounding(chosen[0]);
+ // Group pen strokes that likely belong to this character (e.g. H, i, %).
+ for(let i=recent.length-2;i>=Math.max(0,recent.length-7);i--){
+  const item=recent[i],b=bounding(item);
+  const dx=Math.max(0,b.left-bounds.right,bounds.left-b.right);
+  const dy=Math.max(0,b.top-bounds.bottom,bounds.top-b.bottom);
+  if(dx>33||dy>50)break;
+  if(Math.max(bounds.right,b.right)-Math.min(bounds.left,b.left)>240)break;
+  chosen.unshift(item);
+  bounds={left:Math.min(bounds.left,b.left),right:Math.max(bounds.right,b.right),
+   top:Math.min(bounds.top,b.top),bottom:Math.max(bounds.bottom,b.bottom)};
+ }
+ const width=bounds.right-bounds.left,height=bounds.bottom-bounds.top;
+ const size=Math.min(270,Math.max(100,1.43*Math.max(width,height)));
+ const frame={x:bounds.left-size*.17,y:bounds.top-size*.17,size};
+ // Stable approximately 32x32 handwriting frame, aligned with the centered
+ // partial-letter masks used when training. It can include new empty space
+ // into which the neural model predicts the missing character strokes.
+ const c=document.createElement("canvas");c.width=c.height=32;
+ const t=c.getContext("2d",{willReadFrequently:true});
+ t.fillStyle="#fff";t.fillRect(0,0,32,32);
+ t.imageSmoothingEnabled=true;t.imageSmoothingQuality="high";
+ const scale=32/size;
+ t.drawImage(canvas,-frame.x*scale,-frame.y*scale,canvas.width*scale,canvas.height*scale);
+ const pixels=t.getImageData(0,0,32,32).data;
+ const partial=new Array(1024);
+ let amount=0;
+ for(let i=0;i<1024;i++){
+  partial[i]=1-(pixels[i*4]+pixels[i*4+1]+pixels[i*4+2])/765;
+  if(partial[i]>.22)amount++;
+ }
+ if(amount<4)return null;
+ return {frame,partial};
+}
+function createGlyphWorker(){
+ if(glyphWorker)glyphWorker.terminate();
+ const source=document.getElementById("glyphWorkerSource").textContent;
  const url=URL.createObjectURL(new Blob([source],{type:"text/javascript"}));
- sketchWorker=new Worker(url);
- URL.revokeObjectURL(url);
- sketchWorker.onmessage=e=>{
+ glyphWorker=new Worker(url);URL.revokeObjectURL(url);
+ glyphWorker.onmessage=e=>{
   const m=e.data;
   if(m.type==="ready"){
-   sketchReady=true;sketchBusy=false;window.__inkSketchReady=true;
-   assistButton.title="Neural Sketch Assist ready · press G to accept";
+   glyphReady=true;glyphBusy=false;window.__inkGlyphReady=true;
+   assistButton.title="AI handwriting completion ready · G to accept suggestion";
    queueGhost();
-  }else if(m.type==="prediction"){
-   sketchBusy=false;
-   if(!assistEnabled||tool!=="pen"||m.epoch!==sketchEpoch)return;
-   if(m.serial>=sketchActiveSerial){
-    sketchActiveSerial=m.serial;
-    ghostCandidate=m.paths||[];
+  }else if(m.type==="completion"){
+   glyphBusy=false;
+   if(assistEnabled&&tool==="pen"&&m.epoch===glyphEpoch&&
+      m.serial===glyphSerial&&ghostPending?.serial===m.serial){
+    ghostCandidate={frame:ghostPending.frame,partial:ghostPending.partial,
+       prediction:m.prediction,label:m.label};
     renderGhost();
    }
-   // Recover the latest pointer state if a previous neural inference was busy.
-   const needRefresh=sketchDirty||pointer!==null;
-   sketchDirty=false;
-   if(needRefresh)queueGhost();
+   const dirty=glyphDirty;glyphDirty=false;
+   if(dirty||pointer!==null)queueGhost();
   }else if(m.type==="error"){
-   sketchBusy=false;
-   window.__inkLastSketchModelError=m.message||"Neural generator failed";
-   assistButton.title="Neural Assist unavailable: "+window.__inkLastSketchModelError;
+   glyphBusy=false;window.__inkLastGlyphError=m.message||"Completion failed";
+   assistButton.title=window.__inkLastGlyphError;
   }
  };
- sketchWorker.onerror=e=>{
-  sketchReady=false;sketchBusy=false;window.__inkSketchReady=false;
-  window.__inkLastSketchModelError="Sketch worker failed";
+ glyphWorker.onerror=()=>{
+  glyphReady=false;glyphBusy=false;window.__inkGlyphReady=false;
+  window.__inkLastGlyphError="Handwriting worker failed";
  };
 }
-async function loadSketchModel(){
- if(sketchReady||sketchLoading)return;
- sketchLoading=true;
- assistButton.title="Loading independently trained sketch generator from GitHub…";
+let ghostPending=null;
+async function loadGlyphModel(){
+ if(glyphReady||glyphLoading)return;
+ glyphLoading=true;assistButton.title="Loading neural handwritten letter/number/symbol model…";
  try{
-  const response=await fetch(SKETCH_URL,{cache:"no-store"});
-  if(!response.ok)throw Error("Neural sketch model not published ("+response.status+")");
+  const response=await fetch(GLYPH_URL,{cache:"no-store"});
+  if(!response.ok)throw Error("Handwriting completion weights unavailable ("+response.status+")");
   const model=await response.json();
-  if(model.format!=="ink-generative-gru-v1")throw Error("Incompatible sketch weights");
-  createSketchWorker();
-  sketchWorker.postMessage({cmd:"init",model});
-  window.__inkLastSketchModelError="";
- }catch(error){
-  window.__inkLastSketchModelError=String(error.message||error);
-  assistButton.title="Neural sketch model pending on GitHub — no fake suggestions";
+  if(model.format!=="ink-glyph-completion-mlp-v1")throw Error("Wrong neural model format");
+  createGlyphWorker();
+  glyphWorker.postMessage({cmd:"init",model});
+  window.__inkLastGlyphError="";
+ }catch(err){
+  window.__inkLastGlyphError=String(err.message||err);
+  assistButton.title="Handwriting completion model not published yet. No fake suggestions.";
   if(assistEnabled){
-   clearTimeout(sketchRetry);
-   sketchRetry=setTimeout(()=>{if(assistEnabled&&!sketchReady)loadSketchModel()},30000);
+   clearTimeout(glyphRetry);
+   glyphRetry=setTimeout(()=>{if(assistEnabled&&!glyphReady)loadGlyphModel()},30000);
   }
- }finally{sketchLoading=false}
+ }finally{glyphLoading=false}
 }
-function generateGhost(){
- if(!assistEnabled||!sketchReady||sketchBusy||tool!=="pen")return;
- const data=sketchPrefix();
- if(!data){clearGhost();return}
- sketchBusy=true;
- const serial=++sketchSerial;
- sketchWorker.postMessage({cmd:"predict",serial,epoch:sketchEpoch,...data});
+async function generateGlyph(){
+ if(!assistEnabled||tool!=="pen"||!glyphReady||glyphBusy||!loaded)return;
+ const input=completionInput();
+ if(!input){clearGhost();return}
+ glyphBusy=true;
+ const serial=++glyphSerial,epoch=glyphEpoch;
+ try{
+  // Existing separately trained CNN chooses the character identity.
+  // Then a SECOND independently trained neural model predicts missing ink.
+  const result=await request("read",{images:[input.partial]});
+  if(epoch!==glyphEpoch||serial!==glyphSerial||!assistEnabled){
+   glyphBusy=false;return;
+  }
+  const label=result.predictions[0]?.top?.[0]?.char;
+  if(!label){glyphBusy=false;return}
+  ghostPending={...input,serial};
+  glyphWorker.postMessage({cmd:"complete",epoch,serial,label,partial:input.partial});
+ }catch(e){
+  glyphBusy=false;window.__inkLastGlyphError=String(e.message||e);
+ }
+}
+function maskBitmap(candidate){
+ const c=document.createElement("canvas");c.width=c.height=32;
+ const t=c.getContext("2d"),img=t.createImageData(32,32);
+ let count=0;
+ for(let i=0;i<1024;i++){
+  const predicted=candidate.prediction[i]/255,already=candidate.partial[i];
+  const extra=Math.max(0,predicted-.20)*Math.max(0,1-Math.min(1,already*1.6));
+  const alpha=Math.round(Math.min(.36,extra*.65)*255);
+  const k=i*4;
+  img.data[k]=47;img.data[k+1]=47;img.data[k+2]=47;img.data[k+3]=alpha;
+  if(alpha>7)count++;
+ }
+ t.putImageData(img,0,0);
+ return {bitmap:c,count};
 }
 function renderGhost(){
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
- let count=0;
- const paths=Array.isArray(ghostCandidate)?ghostCandidate:[];
- const g=ghostCtx;
- g.save();
- g.strokeStyle="rgba(55,55,55,0.32)";
- g.lineCap="round";g.lineJoin="round";g.lineWidth=10;
- for(const path of paths){
-  if(path.length<2)continue;
-  count+=path.length;
-  g.beginPath();
-  g.moveTo(path[0][0],path[0][1]);
-  for(let i=1;i<path.length;i++)g.lineTo(path[i][0],path[i][1]);
-  g.stroke();
- }
- g.restore();
- window.__inkGhostPoints=count;
+ if(!ghostCandidate||!assistEnabled||tool!=="pen")return;
+ const mask=maskBitmap(ghostCandidate);
+ ghostCtx.save();ghostCtx.imageSmoothingEnabled=true;
+ ghostCtx.imageSmoothingQuality="high";
+ const f=ghostCandidate.frame;
+ ghostCtx.drawImage(mask.bitmap,f.x,f.y,f.size,f.size);
+ ghostCtx.restore();
+ window.__inkGhostPoints=mask.count;
 }
 function acceptGhost(){
- if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate?.length)return;
- const paths=ghostCandidate.filter(p=>p.length>=2);
- if(!paths.length)return;
- for(const points of paths){
-  strokes.push({tool:"pen",points:points.map(p=>[p[0],p[1]])});
+ if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate)return;
+ const candidate=ghostCandidate,mask=maskBitmap(candidate);
+ if(!mask.count)return;
+ // Keep the neural completion as one undoable/erasable raster stroke.
+ const im=mask.bitmap.getContext("2d").getImageData(0,0,32,32);
+ for(let i=0;i<1024;i++){
+  const k=i*4;
+  if(im.data[k+3]>8){
+   im.data[k]=17;im.data[k+1]=17;im.data[k+2]=17;
+   im.data[k+3]=Math.min(255,im.data[k+3]*3);
+  }
  }
- clearGhost();paint();schedule(75);
+ strokes.push({tool:"pen",type:"neural-mask",frame:candidate.frame,data:Array.from(im.data)});
+ clearGhost();paint();schedule(65);
 }
 window.addEventListener("keydown",e=>{
  if(e.key.toLowerCase()==="g"&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.repeat&&
-    !(e.target instanceof HTMLInputElement)&&!(e.target instanceof HTMLTextAreaElement)){
+  !(e.target instanceof HTMLInputElement)&&!(e.target instanceof HTMLTextAreaElement)){
   acceptGhost();
  }
 });
@@ -335,7 +364,7 @@ function pos(e){
          Math.max(0,Math.min(canvas.height,(e.clientY-box.top)*canvas.height/box.height))];
 }
 function reset(){
- strokes=[];current=null;pointer=null;clearGhost();paint();++readVersion;
+ ++glyphEpoch;strokes=[];current=null;pointer=null;clearGhost();paint();++readVersion;
  clearTimeout(readTimer);display(loaded?"Draw something":"Loading AI…",true);
 }
 canvas.addEventListener("pointerdown",e=>{
