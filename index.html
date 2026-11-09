@@ -262,6 +262,7 @@ window.__inkRecognitionAccuracy=0;
 window.__inkDetectedRegions=0;
 window.__inkLastGuess="";
 window.__inkShapeOverride="";
+window.__inkTopCandidates=[];
 window.__inkAssistEnabled=false;
 window.__inkGhostPoints=0;
 function display(text,muted=false){guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
@@ -1028,6 +1029,23 @@ async function recognize(version){
    if(/[A-Z]/.test(ch))return "upper";
    return "";
   }
+  function wordStyle(i){
+   let start=i,end=i;
+   while(start>0&&regions[start].line===regions[start-1].line&&!regions[start].space)start--;
+   while(end+1<regions.length&&regions[end+1].line===regions[i].line&&!regions[end+1].space)end++;
+   let lower=0,upper=0;
+   for(let n=start;n<=end;n++){
+    const ch=predictions[n]?.top?.[0]?.char||"";
+    // Same-looking handwritten cases are not evidence of case:
+    // EMNIST often cannot distinguish C/c, O/o, S/s, M/m etc.
+    if(/[cosmuvwxzCOSMUVWXZ]/.test(ch))continue;
+    if(/[a-z]/.test(ch))lower++;
+    if(/[A-Z]/.test(ch))upper++;
+   }
+   return lower>=2&&lower>upper*2?"lower":
+      upper>=2&&upper>lower*2?"upper":"neutral";
+  }
+  window.__inkTopCandidates=predictions.map(p=>p.top.slice(0,3));
   for(let i=0;i<regions.length;i++){
    if(i&&regions[i].line!==lastLine){result+="\n";lastLine=regions[i].line}
    else if(i&&regions[i].space)result+=" ";
@@ -1042,6 +1060,24 @@ async function recognize(version){
      else if(candidate(i,"i")&&ch!=="I")ch="i";
     }else if((before==="upper"||after==="upper")&&candidate(i,"I"))ch="I";
    }
+   // Contextual case disambiguation for shapes that even real EMNIST writers
+   // draw nearly identically in uppercase and lowercase. Never invent extra
+   // characters or split a continuous stroke to apply this correction.
+   const style=wordStyle(i);
+   const visuallyAmbiguous="COSMUVWXZ";
+   if(style==="lower"&&visuallyAmbiguous.includes(ch)){
+    const lowercase=ch.toLowerCase();
+    const alt=candidate(i,lowercase);
+    if(alt||options[0].confidence<.92)ch=lowercase;
+   }else if(style==="upper"&&visuallyAmbiguous.toLowerCase().includes(ch)){
+    const uppercase=ch.toUpperCase();
+    const alt=candidate(i,uppercase);
+    if(alt||options[0].confidence<.92)ch=uppercase;
+   }
+   // A very uncertain output is better presented as unknown than as a
+   // made-up confident character. This does not affect actual model logits.
+   if(options[0].confidence<.075&&
+      (options[0].confidence-(options[1]?.confidence||0))<.016)ch="?";
    result+=ch;
   }
   display(result);
