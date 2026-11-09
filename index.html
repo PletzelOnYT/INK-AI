@@ -46,6 +46,157 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
   </div>
   <div id="guess" data-muted="true" aria-live="polite">Loading AI…</div>
 </main>
+<script id="sketchWorkerSource" type="text/plain">
+"use strict";
+// Real autoregressive neural inference for a GRU trained on Quick Draw
+// pen trajectories. The old geometric/curvature predictor is not used.
+let model=null,hiddenSize=0,mixtures=0,scalePx=20;
+let ih,hh,bih,bhh,head,bhead;
+function decode(layer){
+ const str=atob(layer.b64);
+ const w=new Float32Array(str.length);
+ for(let i=0;i<str.length;i++){
+  const c=str.charCodeAt(i);w[i]=(c>127?c-256:c)*layer.scale;
+ }
+ return {w,shape:layer.shape};
+}
+function sigmoid(x){return x>=0?1/(1+Math.exp(-x)):Math.exp(x)/(1+Math.exp(x))}
+function evaluateStep(input,oldHidden){
+ const H=hiddenSize,R=3*H;
+ const gi=new Float32Array(R),gh=new Float32Array(R);
+ // PyTorch's GRU gate order: reset, update, new (r,z,n).
+ for(let r=0;r<R;r++){
+  const ix=r*3,hx=r*H;
+  gi[r]=bih[r]+ih.w[ix]*input[0]+ih.w[ix+1]*input[1]+ih.w[ix+2]*input[2];
+  let v=bhh[r];
+  for(let j=0;j<H;j++)v+=hh.w[hx+j]*oldHidden[j];
+  gh[r]=v;
+ }
+ const h=new Float32Array(H);
+ for(let j=0;j<H;j++){
+  const reset=sigmoid(gi[j]+gh[j]);
+  const update=sigmoid(gi[H+j]+gh[H+j]);
+  const value=Math.tanh(gi[2*H+j]+reset*gh[2*H+j]);
+  h[j]=(1-update)*value+update*oldHidden[j];
+ }
+ const rows=head.shape[0];
+ const logits=new Float32Array(rows);
+ for(let i=0;i<rows;i++){
+  let v=bhead[i];const off=i*H;
+  for(let j=0;j<H;j++)v+=head.w[off+j]*h[j];
+  logits[i]=v;
+ }
+ return {h,logits};
+}
+function randomStream(seed){
+ let z=(seed|0)||0x49a62b11;
+ return ()=>{
+  z^=z<<13;z^=z>>>17;z^=z<<5;
+  return (z>>>0)/4294967296;
+ };
+}
+function normal(rng){
+ return Math.sqrt(-2*Math.log(Math.max(1e-9,rng())))
+   *Math.cos(2*Math.PI*rng());
+}
+function chooseMove(output,rng){
+ const K=mixtures;
+ let high=-Infinity;
+ for(let i=0;i<K;i++)high=Math.max(high,output[i]);
+ const weights=[],temperature=.88;
+ let sum=0;
+ for(let i=0;i<K;i++){const p=Math.exp((output[i]-high)/temperature);weights.push(p);sum+=p}
+ let sample=rng()*sum,k=K-1;
+ for(let i=0;i<K;i++){sample-=weights[i];if(sample<=0){k=i;break}}
+ const sx=Math.exp(Math.max(-3,Math.min(1.65,output[3*K+k])));
+ const sy=Math.exp(Math.max(-3,Math.min(1.65,output[4*K+k])));
+ // Small stochasticity is sampled FROM the learned Gaussian distribution.
+ const dx=output[K+k]+normal(rng)*sx*.37;
+ const dy=output[2*K+k]+normal(rng)*sy*.37;
+ const up=sigmoid(output[5*K])>.54;
+ const stop=sigmoid(output[5*K+1])>.69;
+ return {step:[
+     Math.max(-4,Math.min(4,dx)),
+     Math.max(-4,Math.min(4,dy)),
+     up?1:0
+   ], stop};
+}
+function generateOnce(prefix,anchor,screenScale,seed){
+ let state=new Float32Array(hiddenSize),out;
+ // Teacher forcing: start symbol, then the observed movement tokens.
+ out=evaluateStep([0,0,1],state);state=out.h;
+ for(const token of prefix){
+  out=evaluateStep(token,state);
+  state=out.h;
+ }
+ const random=randomStream(seed);
+ const paths=[];
+ let points=[[anchor[0],anchor[1]]],x=anchor[0],y=anchor[1];
+ let lifted=(prefix[prefix.length-1]?.[2]||0)>.5;
+ const count=Math.min(34,model.architecture.max_generate||34);
+ for(let i=0;i<count;i++){
+  const choice=chooseMove(out.logits,random);
+  const step=choice.step;
+  let dx=step[0]*screenScale,dy=step[1]*screenScale;
+  // Bound large sampled jumps to the whiteboard; do not invent trajectory.
+  const length=Math.hypot(dx,dy);
+  if(length>155){dx*=155/length;dy*=155/length}
+  x+=dx;y+=dy;
+  if(!Number.isFinite(x)||!Number.isFinite(y)||x<4||x>1196||y<4||y>546)break;
+  if(lifted){
+   if(points.length>1)paths.push(points);
+   points=[[x,y]];
+   lifted=false;
+  }else{
+   points.push([x,y]);
+  }
+  if(step[2]>.5){lifted=true;if(points.length>1)paths.push(points);points=[]}
+  if(choice.stop&&i>=8)break;
+  out=evaluateStep(step,state);
+  state=out.h;
+ }
+ if(points.length>1)paths.push(points);
+ return paths;
+}
+self.onmessage=e=>{
+ const {cmd}=e.data;
+ try{
+  if(cmd==="init"){
+   const payload=e.data.model;
+   if(payload.format!=="ink-generative-gru-v1")throw Error("Bad generator format");
+   model=payload;hiddenSize=payload.architecture.hidden;
+   mixtures=payload.architecture.mixtures;
+   scalePx=payload.architecture.scale_px;
+   if(hiddenSize<8||hiddenSize>256||mixtures!==5)throw Error("Unsupported network dimensions");
+   ih=decode(payload.weights.weight_ih);
+   hh=decode(payload.weights.weight_hh);
+   bih=Float32Array.from(payload.weights.bias_ih);
+   bhh=Float32Array.from(payload.weights.bias_hh);
+   head=decode(payload.weights.head_w);
+   bhead=Float32Array.from(payload.weights.head_b);
+   if(ih.w.length!==3*hiddenSize*3||hh.w.length!==3*hiddenSize*hiddenSize||
+      head.w.length!==(mixtures*5+2)*hiddenSize)throw Error("Invalid generator shapes");
+   self.postMessage({type:"ready"});
+  }else if(cmd==="predict"){
+   if(!model)throw Error("Neural generator not initialized");
+   const {prefix,anchor,screenScale,serial}=e.data;
+   if(!Array.isArray(prefix)||prefix.length<4)throw Error("Not enough pen movements");
+   let hash=(prefix.length*19297 + Math.round(anchor[0]/26)*31+
+             Math.round(anchor[1]/26)*127)|0;
+   const paths=[];
+   // Two independently sampled plausible continuations from the learned
+   // Gaussian mixture (not geometric curves). Keep both semi-transparent.
+   for(let k=0;k<2;k++){
+    const generated=generateOnce(prefix,anchor,screenScale,hash+k*17391);
+    paths.push(...generated);
+   }
+   self.postMessage({type:"prediction",serial,paths,neural:true});
+  }
+ }catch(error){
+  self.postMessage({type:"error",message:String(error?.message||error)});
+ }
+};
+</script>
 <script>
 "use strict";
 (() => {
