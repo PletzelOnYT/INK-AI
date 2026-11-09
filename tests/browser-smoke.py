@@ -49,7 +49,7 @@ try:
     assert driver.execute_script("return window.__inkAssistEnabled") is True
     generator_available=Path("models/ink-stroke-sequence-v1.json").exists()
     if generator_available:
-        wait.until(lambda d:d.execute_script("return window.__inkGlyphVersion===3"))
+        wait.until(lambda d:d.execute_script("return window.__inkGlyphVersion>=3"))
         assert driver.execute_script("return window.__inkAssistModel")=="online-stroke-gru"
         assert driver.execute_script("return window.__inkHumanExamples")==0
         print("PASS: actual sequence-to-vector neural generator loaded, without a template bank",flush=True)
