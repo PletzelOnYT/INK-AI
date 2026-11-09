@@ -335,6 +335,7 @@ function generateCandidates(m,isFallback=false){
    if(!Array.isArray(prefix)||prefix.length<2||prefix.length>120)
     throw Error("Insufficient genuine pen coordinates");
    const options=(m.options||[]).filter(o=>characters.includes(o.char))
+     .sort((a,b)=>Number(b.char===m.preferred)-Number(a.char===m.preferred))
      .slice(0,live?2:4);
    const results=[];
    // Multiple independent genuine GRU rollouts. Select trajectories using
@@ -362,10 +363,11 @@ function generateCandidates(m,isFallback=false){
     if(strongest){
      results.push(strongest);
      // Only announce coherent neural geometry, never a rejected flat tail.
-     if(results.length===1)self.postMessage({
-       type:"preview",serial,epoch,alternatives:results.slice(),
-       neural:true,engine:"stroke-gru-mdn"
-     });
+     if(results.length===1&&(!m.preferred||strongest.label===m.preferred))
+       self.postMessage({
+        type:"preview",serial,epoch,alternatives:results.slice(),
+        neural:true,engine:"stroke-gru-mdn"
+       });
     }
    }
    // An optional second class-consistent sample makes Tab useful if the
@@ -409,12 +411,26 @@ self.onmessage=e=>{
    useNetwork(mainNetworkState);
    let results=generateCandidates(m);
    let usedFallback=false;
-   if(!results.length&&backupNetworkState){
+   const hasPreferred=()=>!m.preferred||results.some(r=>r.label===m.preferred);
+   if((!results.length||!hasPreferred())&&backupNetworkState){
     try{
      useNetwork(backupNetworkState);
-     results=generateCandidates(m,true);
-     usedFallback=results.length>0;
+     const options=m.preferred?
+       (m.options||[]).filter(x=>x.char===m.preferred):
+       m.options;
+     const backup=generateCandidates({...m,options},true);
+     if(backup.length){
+      results=[...backup,...results.filter(x=>!backup.some(b=>b.label===x.label))];
+      usedFallback=true;
+     }
     }finally{useNetwork(mainNetworkState)}
+   }
+   // Never show a visibly different glyph when whole-board OCR has already
+   // identified the intended character; keep other models for Tab only.
+   if(m.preferred){
+    if(!hasPreferred())results=[];
+    else results.sort((a,b)=>Number(b.label===m.preferred)-
+                         Number(a.label===m.preferred)||b.score-a.score);
    }
    self.postMessage({type:"completion",serial:m.serial,epoch:m.epoch,
       alternatives:results,neural:true,engine:"stroke-gru-mdn",
@@ -467,6 +483,9 @@ document.getElementById("eraser").addEventListener("click",()=>chooseTool("erase
 // curve extrapolation, font completion, heuristics, or other providers.
 // Only the independent LETTER/DIGIT/SYMBOL completion model is allowed here.
 // No Quick Draw sketches, no movement extrapolation, no third-party inference.
+// Browser side of the real autoregressive stroke-sequence generator.
+// Uses only real mouse/pen trajectories; neural worker returns pen-up/down
+// vectors. No nearest neighbor, font glyph, bitmap, skeleton or templates.
 // Browser side of the real autoregressive stroke-sequence generator.
 // Uses only real mouse/pen trajectories; neural worker returns pen-up/down
 // vectors. No nearest neighbor, font glyph, bitmap, skeleton or templates.
@@ -796,7 +815,17 @@ async function generateGlyph(){
    glyphBusy=false;window.__inkAssistInFlight=false;return;
   }
   const fresh=read.predictions?.[0]?.top?.slice(0,4)||[];
-  const options=stableCharacterOptions(fresh);
+  let options=stableCharacterOptions(fresh);
+  // A full multi-stroke glyph is much more informative than a partial crop.
+  // In the screenshot the board OCR says "h" but the cropped assistant OCR
+  // said L/H/k. Put h FIRST and insist on a neural completion of h.
+  const whole=window.__inkDetectedRegions===1?window.__inkLastGuess:null;
+  const preferred=typeof whole==="string"&&whole.length===1&&
+    !/\s/.test(whole)?whole:null;
+  if(preferred){
+   options=[{char:preferred,confidence:1},
+     ...options.filter(c=>c.char!==preferred)].slice(0,4);
+  }
   if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
   ghostPending={frame:f,serial};
   const isLive=pointer!==null;
@@ -804,7 +833,7 @@ async function generateGlyph(){
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
      prefix:input.prefix,options: isLive? options.slice(0,big?1:2):options,
      live:isLive,maxSteps:isLive?(big?20:26):52,
-     seed:glyphStrokeSeed});
+     preferred,seed:glyphStrokeSeed});
  }catch(err){
   glyphBusy=false;window.__inkAssistInFlight=false;
   window.__inkLastGlyphError=String(err.message||err);
