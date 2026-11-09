@@ -67,6 +67,15 @@ try:
         """)
         assert ghost_stats["shown"]>0 and ghost_stats["partial"]>0
         print("PASS: generated smooth translucent lines contain no bitmap blobs",flush=True)
+        choices=driver.execute_script("return window.__inkSuggestionChoices")
+        assert len(choices)>=2,"Tab must have at least two generative completion choices"
+        ink_unchanged=driver.execute_script("return document.getElementById('pad').toDataURL()")
+        preview_before=driver.execute_script("return document.getElementById('ghost').toDataURL()")
+        ActionChains(driver).send_keys("\ue004").perform()  # Tab
+        preview_after=driver.execute_script("return document.getElementById('ghost').toDataURL()")
+        assert preview_before!=preview_after,"Tab must cycle to a different neural vector preview"
+        assert driver.execute_script("return document.getElementById('pad').toDataURL()")==ink_unchanged
+        print("PASS: Tab cycles distinct smooth neural strokes without changing the underlying drawing",flush=True)
         before=driver.execute_script("return document.getElementById('pad').toDataURL()")
         ActionChains(driver).send_keys("g").perform()
         wait.until(lambda d:d.execute_script("return window.__inkAcceptedVectorCount>=1"))
