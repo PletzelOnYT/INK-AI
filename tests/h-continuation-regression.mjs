@@ -36,6 +36,11 @@ for(const checkpoint of checkpoints){
   }
  }
  let passed=false;let best=null;
+ if(checkpoint.includes("prefix")){
+  const backup=JSON.parse(fs.readFileSync("models/ink-stroke-sequence-v1.json","utf8"));
+  ctx.self.onmessage({data:{cmd:"fallback",model:backup}});
+  assert.ok(received.some(x=>x.type==="fallback-ready"),"Validated neural backup did not load");
+ }
  for(const live of [false,true]){
   received.length=0;
   ctx.self.onmessage({data:{cmd:"generate",serial:live?401:400,
@@ -44,6 +49,10 @@ for(const checkpoint of checkpoints){
   const completion=received.find(m=>m.type==="completion");
   assert.ok(completion,"No generator response: "+JSON.stringify(received));
   const candidates=completion.alternatives||[];
+  if(checkpoint.includes("prefix")&&candidates.length>0){
+   assert.equal(completion.fallback,true,
+     "Partially written h must use the older learned model when prefix-finetuned model lacks a valid tail");
+  }
   for(const o of candidates){
    assert.equal(o.label,"h");
    const paths=o.paths;
@@ -68,4 +77,4 @@ for(const checkpoint of checkpoints){
  }
  assert.ok(passed,"A partially written h should yield at least one learned downward tail; not just suppress all suggestions");
 }
-console.log("PASS: screenshot-specific lowercase h regression — curved/downward neural continuation rather than gray horizontal line");
+console.log("PASS: screenshot h regression — live descending vector, quality rejection, and automatic verified neural fallback");
