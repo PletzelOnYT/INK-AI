@@ -1,0 +1,49 @@
+name: Compare original and upgraded handwriting AI
+on:
+  push:
+    branches: [main]
+    paths:
+      - "models/ink-glyph-completion-v2.json"
+      - "src/compare_glyph_completion.py"
+      - ".github/workflows/compare-glyph.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-completion-benchmark
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Run identical EMNIST test inputs through V1 and V2
+        run: |
+          test -s models/ink-glyph-completion-v2.json
+          python -u src/compare_glyph_completion.py --samples 4000
+      - name: Publish independently measured side-by-side results
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          git add models/glyph-completion-comparison.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish measured V1 vs V2 missing handwriting completion accuracy"
+            git push origin HEAD:main
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-completion-side-by-side
+          path: models/glyph-completion-comparison.json
+          if-no-files-found: ignore
