@@ -351,6 +351,7 @@ self.onmessage=e=>{
      parameters:network.parameter_count,classes:characters.length,
      prefixTuned:Boolean(network.training?.prefix_tuned),
      prefixDomain:Boolean(network.training?.prefix_domain_v2),
+     penLift:Boolean(network.training?.penlift_calibrated_v3),
      realSamples:network.training.real_training_glyphs});
   }else if(m.cmd==="fallback"){
    if(!mainNetworkState)throw Error("Initialize primary model first");
