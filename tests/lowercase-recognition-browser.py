@@ -53,9 +53,20 @@ try:
       ("C_upper_alone",[tall_C]),
       ("plain_vertical",[[[580,210],[580,238],[580,270],[580,305]]]),
     ]
+    expected={"lower_c_alone":"c","c_inside_ci":"ci",
+              "i_alone":"i","i_offset_dot":"i",
+              "plain_vertical":"|"}
     for label,paths in cases:
         result=draw(paths)
         print("CASE",label,result,flush=True)
-    print("PASS: targeted lowercase recognition diagnostics captured in real Chrome",flush=True)
+        if label in expected:
+            assert result["guess"]==expected[label], (label,result)
+        if label=="colon":
+            assert "i" not in result["guess"],result
+        if label=="C_upper_alone":
+            # Tall handwritten C and narrow brackets can be genuinely
+            # ambiguous; check that we don't invent several characters.
+            assert result["regions"]==1,result
+    print("PASS: lowercase c, dotted i (including offset dot), and punctuation safeguards in Chrome",flush=True)
 finally:
     driver.quit();server.shutdown()
