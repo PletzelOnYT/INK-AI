@@ -1,0 +1,72 @@
+{
+  "history": [
+    {
+      "stage": "train",
+      "epoch": 1,
+      "train_loss": -1.80492,
+      "heldout_nll": -3.11593,
+      "heldout_pen_state_accuracy": 0.9758,
+      "heldout_glyphs": 3101
+    },
+    {
+      "stage": "train",
+      "epoch": 2,
+      "train_loss": -3.09332,
+      "heldout_nll": -3.87901,
+      "heldout_pen_state_accuracy": 0.98951,
+      "heldout_glyphs": 3101
+    },
+    {
+      "stage": "train",
+      "epoch": 3,
+      "train_loss": -3.49548,
+      "heldout_nll": -3.1393,
+      "heldout_pen_state_accuracy": 0.98951,
+      "heldout_glyphs": 3101
+    },
+    {
+      "stage": "train",
+      "epoch": 4,
+      "train_loss": -3.68094,
+      "heldout_nll": -3.64195,
+      "heldout_pen_state_accuracy": 0.98951,
+      "heldout_glyphs": 3101
+    },
+    {
+      "stage": "train",
+      "epoch": 5,
+      "train_loss": -3.67944,
+      "heldout_nll": -3.35428,
+      "heldout_pen_state_accuracy": 0.98951,
+      "heldout_glyphs": 3101
+    },
+    {
+      "stage": "train",
+      "epoch": 6,
+      "train_loss": -3.71749,
+      "heldout_nll": -3.10015,
+      "heldout_pen_state_accuracy": 0.98951,
+      "heldout_glyphs": 3101
+    },
+    {
+      "stage": "fine-tune",
+      "epoch": 1,
+      "train_loss": -4.40791,
+      "heldout_nll": -4.168,
+      "heldout_pen_state_accuracy": 0.98951,
+      "heldout_glyphs": 3101
+    },
+    {
+      "stage": "fine-tune",
+      "epoch": 2,
+      "train_loss": -4.64917,
+      "heldout_nll": -4.31849,
+      "heldout_pen_state_accuracy": 0.98951,
+      "heldout_glyphs": 3101
+    }
+  ],
+  "best": -4.31849,
+  "training_presentations": 111120,
+  "dataset": "UJI Pen Characters v2 writer-disjoint with labeled synthetic math symbols",
+  "model": "models/ink-stroke-sequence-v1.json"
+}
