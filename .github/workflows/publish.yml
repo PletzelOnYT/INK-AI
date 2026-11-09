@@ -1,0 +1,50 @@
+name: Publish completed INK AI model safely
+on:
+  workflow_run:
+    workflows: ["Train INK AI handwriting model"]
+    types: [completed]
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: ink-ai-model-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: ${{ github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Download trained model from training run
+        uses: actions/download-artifact@v4
+        with:
+          name: ink-ai-trained-model
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: models
+      - name: Confirm artifact contains a trained model
+        run: |
+          test -s models/ink-cnn-v1.json
+          python3 - <<'PY'
+          import json
+          with open('models/ink-cnn-v1.json') as f:
+            m=json.load(f)
+          assert m['format']=='ink-cnn-int8-v1'
+          assert len(m['layers'])==5
+          assert m['training']['real_emnist_train']>600000
+          print(m['training'])
+          PY
+      - name: Publish onto latest main without overwriting other changes
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/ink-cnn-v1.json models/metrics.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish real-handwriting model from completed training artifact"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
