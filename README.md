@@ -8,7 +8,7 @@
 
 The new generator is a **class-conditioned, autoregressive, 2-layer GRU mixture-density network**. It consumes the ordered strokes actually drawn by the user, including pen-up boundaries, and predicts a probability distribution for the *next* (Δx, Δy), whether the pen is down, and whether the character has ended.
 
-The network samples future **multi-stroke pen trajectories**, not a bitmap, 32×32 glyph reconstruction, skeletonized pixel mask, traced font, or nearest matching saved example. Its only geometric rules constrain out-of-bounds jumps and smoothly render the neural model's own vector points.
+The network samples future **multi-stroke pen trajectories**, not a bitmap, 32×32 glyph reconstruction, skeletonized pixel mask, traced font, or nearest matching saved example. Its only geometric rules constrain out-of-bounds jumps and smoothly render the neural model's own vector points. It samples pen-lift decisions from the model's learned probabilities rather than attaching every stroke together.
 
 - Pen: draw real black strokes. Eraser: remove visible ink.
 - Sparkle: enable translucent gray neural vector suggestions.
@@ -30,7 +30,11 @@ UJI includes real trajectories for uppercase and lowercase ASCII letters, digits
 - Independent browser inference: [`src/stroke_worker.js`](./src/stroke_worker.js), embedded verbatim into the downloadable HTML.
 - UI interface: [`src/stroke_assist_ui.js`](./src/stroke_assist_ui.js), embedded in the HTML.
 - Trained model: [`models/ink-stroke-sequence-v1.json`](./models/ink-stroke-sequence-v1.json), once the [training workflow](./actions/workflows/train-stroke-sequence.yml) successfully publishes it.
-- Held-out writer validation: [`models/stroke-sequence-metrics.json`](./models/stroke-sequence-metrics.json), when available.
+- Held-out writer validation: [`models/stroke-sequence-metrics.json`](./models/stroke-sequence-metrics.json).
+
+**Published checkpoint:** 373,563 trainable parameters; 6,210 genuine human pen-trajectory training glyphs from UJI; 3,101 writer-disjoint held-out glyphs; 7,680 synthetic mathematical/punctuation trajectory examples; 111,120 training presentations over 6 training and 2 fine-tuning epochs. Best held-out teacher-forced negative log likelihood: **−4.31849**, pen-state classification accuracy: **98.951%**. A negative Gaussian log-likelihood is mathematically valid and is *not* a percentage accuracy. These metrics do not prove that generated future handwriting looks correct to humans.
+
+Automated Chrome tests confirm that five partial character examples produce nonempty narrow neural vector suggestions, that **Tab** cycles distinct proposals, and that **G** accepts strokes without affecting the pen/eraser. A separate unit test verifies that the recurrent worker emits genuine pen lifts for at least one of five multi-stroke symbol prefixes; the current measured result is **3/5**, not perfect multi-stroke reliability.
 
 **Limitations:** Character completion is inherently ambiguous. The GRU predicts one plausible continuation, not the user's intended letter with certainty. UJI does not record pressure/timing, so those aren't learned. Model evaluation must distinguish teacher-forced held-out sequence loss from actual rendered completion quality. Train/test samples from different writers are separated. Full multi-character cursive words and unsupported symbols are not guaranteed to be correct.
 
