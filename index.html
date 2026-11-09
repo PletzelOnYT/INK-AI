@@ -51,6 +51,19 @@ details{font-size:13px;color:#aaa}
 summary{cursor:pointer;color:#dedede}
 a{color:white}#notice{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#fafafa;color:#111;border-radius:9px;padding:13px 18px;box-shadow:0 12px 60px #000;opacity:0;pointer-events:none;transition:opacity .2s;font-size:13px;z-index:20;max-width:90vw}
 #notice.show{opacity:1}
+
+/* Transparent loading telemetry: model bytes and neural initialization are separate phases. */
+.modelLoading{border:1px solid #343434;background:#0e0e0e;border-radius:12px;padding:16px 18px;margin:0 0 19px}
+.modelLoadingTop{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.modelLoadingTop strong{font-size:12px;font-weight:650;letter-spacing:.3px}
+.modelLoadingTop output{font:700 16px ui-monospace,SFMono-Regular,Consolas,monospace;font-variant-numeric:tabular-nums}
+.modelTrack{height:9px;background:#252525;border-radius:12px;overflow:hidden;border:1px solid #393939}
+.modelFill{height:100%;width:0%;background:#fff;transition:width .12s ease-out}
+.modelLoading.indeterminate .modelFill{width:35%;animation:inkLoadingSlide 1.25s ease-in-out infinite}
+@keyframes inkLoadingSlide{0%{transform:translateX(-110%)}100%{transform:translateX(300%)}}
+.modelLoadingDetail{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#929292;font:11px ui-monospace,Consolas,monospace;margin-top:10px}
+.modelLoading[data-state="ready"] .modelFill{width:100%}
+.modelLoading[data-state="error"] .modelFill{background:#929292}
 @media(max-width:900px){.grid{grid-template-columns:1fr}.section{grid-template-columns:1fr 1fr}.container{padding:18px 13px 45px}}
 @media(max-width:520px){.section{grid-template-columns:1fr}header .pill{white-space:normal}.result{min-height:105px}}
 </style>
@@ -60,6 +73,11 @@ a{color:white}#notice{position:fixed;bottom:18px;left:50%;transform:translateX(-
 <header><div class="brand">INK <i>AI</i></div><div class="pill" id="status" role="status" aria-live="polite">CONNECTING TO YOUR GITHUB MODEL</div></header>
 <h1>Write anything.<br>See what the AI reads.</h1>
 <p class="lead">Live handwriting recognition for numbers, lowercase and uppercase letters, punctuation, and sentences. Trained from scratch on real handwriting; weights hosted exclusively in <a href="https://github.com/PletzelOnYT/INK-AI" target="_blank" rel="noopener">PletzelOnYT/INK-AI</a>.</p>
+<section id="modelLoading" class="modelLoading" data-state="pending" aria-label="Model loading progress">
+<div class="modelLoadingTop"><strong id="modelStep">Checking your GitHub model…</strong><output id="modelPercent" aria-live="polite">0%</output></div>
+<div class="modelTrack" id="modelTrack" role="progressbar" aria-label="Model download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="modelFill" id="modelFill"></div></div>
+<div class="modelLoadingDetail"><span id="modelDetail">Waiting for model download</span><span><a href="https://github.com/PletzelOnYT/INK-AI/actions" target="_blank" rel="noopener">Training status</a></span></div>
+</section>
 <div class="grid">
 <section class="panel">
 <div class="panelHead"><h2>01 / Handwriting surface</h2><span class="meta">PEN · TOUCH · MOUSE</span></div>
@@ -114,6 +132,58 @@ let strokes=[],drawing=null,pointer=null,mode="text",worker=null,loaded=false,la
 ctx.lineCap="round";ctx.lineJoin="round";
 function toast(t){let el=$("notice");el.textContent=t;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),3000)}
 function status(t,error=false){$("status").textContent=t;$("status").dataset.error=error?"true":"false"}
+function modelProgress(pct,step,detail,state="loading"){
+ const node=$("modelLoading"),bar=$("modelTrack");
+ node.dataset.state=state;node.classList.toggle("indeterminate",pct===null&&state==="loading");
+ $("modelStep").textContent=step;
+ $("modelDetail").textContent=detail;
+ if(pct===null){
+  $("modelPercent").textContent="…";bar.removeAttribute("aria-valuenow");
+ }else{
+  const number=Math.max(0,Math.min(100,Math.round(pct)));
+  $("modelPercent").textContent=number+"%";
+  $("modelFill").style.width=number+"%";
+  bar.setAttribute("aria-valuenow",String(number));
+ }
+}
+function prettyBytes(n){if(n<1024)return n+" B";if(n<1048576)return (n/1024).toFixed(1)+" KB";return (n/1048576).toFixed(2)+" MB"}
+async function fetchModelWithProgress(url,refresh=false){
+ modelProgress(0,"Connecting to GitHub…","Requesting trained model weights");
+ let response;
+ try{response=await fetch(url,{cache:refresh?"reload":"default"})}
+ catch(e){throw new Error("Cannot connect to GitHub: "+(e?.message||e))}
+ if(!response.ok)throw new Error("model not published (HTTP "+response.status+")");
+ const rawLength=response.headers.get("content-length");
+ const total=rawLength&&Number(rawLength)>0?Number(rawLength):0;
+ const mime=response.headers.get("content-type")||"";
+ let text;
+ if(response.body&&typeof response.body.getReader==="function"){
+  const reader=response.body.getReader();
+  let pieces=[],received=0;
+  try{
+   while(true){
+    const {done,value}=await reader.read();
+    if(done)break;
+    if(value){
+     pieces.push(value);received+=value.byteLength;
+     const pct=total?Math.min(100,100*received/total):null;
+     const details=total?prettyBytes(received)+" / "+prettyBytes(total):prettyBytes(received)+" downloaded (size not reported)";
+     modelProgress(pct,"Downloading model weights…",details);
+    }
+   }
+  }finally{reader.releaseLock()}
+  const merged=new Uint8Array(received);let off=0;
+  for(const part of pieces){merged.set(part,off);off+=part.byteLength}
+  text=new TextDecoder("utf-8").decode(merged);
+ }else{
+  modelProgress(null,"Downloading model weights…","Browser does not expose stream progress");
+  text=await response.text();
+ }
+ modelProgress(100,"Download complete","Parsing "+prettyBytes(new TextEncoder().encode(text).byteLength)+" of model data");
+ let result;
+ try{result=JSON.parse(text)}catch(e){throw new Error("Downloaded file is not valid model JSON")}
+ return result;
+}
 function download(name,blob){const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1200)}
 function drawAll(){
  ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);
@@ -389,7 +459,11 @@ onmessage=e=>{
  try{
   let result;
   if(cmd==="init"){
-   const model=e.data.model;labels=model.labels;layers=model.layers.map(decode);
+   const model=e.data.model;labels=model.labels;layers=[];
+   for(let i=0;i<model.layers.length;i++){
+     layers.push(decode(model.layers[i]));
+     postMessage({phase:"initializing",done:i+1,total:model.layers.length});
+   }
    f2=layers[4];base={w:new Float32Array(f2.w),b:new Float32Array(f2.b)};
    const custom=e.data.custom;
    if(custom&&custom.final&&custom.bias&&custom.final.length===f2.w.length&&custom.bias.length===f2.b.length){
@@ -412,22 +486,37 @@ onmessage=e=>{
  const blob=new Blob([source],{type:"text/javascript"});
  worker=new Worker(URL.createObjectURL(blob));
  worker.onmessage=e=>{
+  if(e.data?.phase==="initializing"){
+   modelProgress(Math.round(e.data.done/e.data.total*100),"Preparing neural network…",
+    "Decoded "+e.data.done+" of "+e.data.total+" model layers");
+   return;
+  }
   const {id,result,error}=e.data,p=pending.get(id);if(!p)return;
   pending.delete(id);if(error)p.reject(Error(error));else p.resolve(result);
  };
  worker.onerror=e=>{status("INFERENCE WORKER ERROR",true);console.error(e)};
 }
 async function loadModel(refresh=false){
- loaded=false;$("fineTune").disabled=true;status("DOWNLOADING YOUR GITHUB MODEL");
+ loaded=false;$("fineTune").disabled=true;
+ status("CHECKING YOUR GITHUB MODEL");
+ modelProgress(0,"Looking for trained model…","Your repository: PletzelOnYT/INK-AI");
  try{
-  const local=!location.protocol.startsWith("file")?MODEL_PATH:REPO;
-  let response=await fetch(local,{cache:refresh?"reload":"default"});
-  if(!response.ok&&local!==REPO)response=await fetch(REPO,{cache:"reload"});
-  if(!response.ok)throw Error("model not published (HTTP "+response.status+")");
-  const model=await response.json();
+  let model;
+  const urls=location.protocol==="file:"?[REPO]:[MODEL_PATH,REPO];
+  let lastError=null;
+  for(const url of urls){
+   try{model=await fetchModelWithProgress(url,refresh);break}
+   catch(err){
+    lastError=err;
+    // Hosted pages may not have the relative model file; retry your own GitHub raw URL.
+    if(url===REPO||!(err.message||"").includes("HTTP 404"))break;
+   }
+  }
+  if(!model)throw lastError||new Error("Model not available");
   if(model.format!=="ink-cnn-int8-v1"||!Array.isArray(model.layers)||model.layers.length!==5)throw Error("incompatible model weights");
   labels=model.labels;
   for(const item of pending.values())item.reject(Error("Model reloading"));pending.clear();
+  modelProgress(0,"Initializing neural network…","Preparing 5 model layers for recognition");
   createWorker();
   const custom=JSON.parse(localStorage.getItem(STORAGE)||"null");
   const r=await ask("init",{model,custom});
@@ -436,12 +525,21 @@ async function loadModel(refresh=false){
   corrections=custom?.samples?.length||0;$("tunedCount").textContent=corrections;
   $("details").textContent="Source: "+(model.training?.data||"unknown")+" | EMNIST held-out accuracy: "+(100*(model.training?.emnist_test_accuracy||0)).toFixed(1)+"%";
   $("charList").textContent="Supported: "+labels.join(" ");
-  loaded=true;status("LIVE · YOUR OWN MODEL");scheduleRead(90);
+  loaded=true;status("LIVE · YOUR OWN MODEL");
+  modelProgress(100,"Model ready — 100%","Live recognition is active","ready");
+  scheduleRead(90);
  }catch(err){
-  loaded=false;status("MODEL NOT READY — CHECK GITHUB ACTIONS",true);
-  $("output").innerHTML='<span class="hint">The GitHub training job must publish <b>models/ink-cnn-v1.json</b> before recognition can start.</span>';
-  $("reading").textContent="MODEL PENDING";
-  $("trainMessage").textContent=String(err.message||err)+" · See GitHub Actions for training status.";
+  loaded=false;
+  const notPublished=/HTTP 404|not published/i.test(String(err.message||err));
+  status(notPublished?"MODEL STILL TRAINING — NOT YET PUBLISHED":"MODEL DOWNLOAD FAILED",true);
+  modelProgress(0,notPublished?"Model not available yet":"Unable to load model",
+    notPublished?"The training job has not published its weights to GitHub. The HTML itself is working.":"Error: "+String(err.message||err),
+    "error");
+  $("output").innerHTML=notPublished
+   ?'<span class="hint">Your model is still being trained on GitHub. Recognition will work once <b>models/ink-cnn-v1.json</b> is published. Click “Reload GitHub model” after the training finishes.</span>'
+   :'<span class="hint">Could not download or initialize the model. Check the repository connection and reload.</span>';
+  $("reading").textContent="MODEL UNAVAILABLE";
+  $("trainMessage").textContent=String(err.message||err)+" · Check the GitHub training run and reload the model when it is published.";
  }
 }
 window.addEventListener("keydown",e=>{
