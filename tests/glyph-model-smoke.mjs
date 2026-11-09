@@ -76,7 +76,8 @@ for(let i=0;i<symbolTraces.length;i++){
  assert.ok(result,"Neural worker must return a response for "+record.char);
  const paths=result.alternatives?.flatMap(o=>o.paths)||[];
  const ups=result.alternatives?.reduce((n,o)=>n+o.penUps,0)||0;
- multi+=paths.length>1?1:0;
+ multi+=result.alternatives?.some(o=>o.penUps>0&&o.paths.length>=2)?1:0;
  console.log("MULTI-STROKE NEURAL",record.char,"pen ups",ups,"separate paths",paths.length);
 }
-console.log("Measured distinct multi-stroke neural completions:",multi,"of 5 tested symbol prefixes");
+console.log("Genuine neural multi-stroke suggestions with learned pen lifts:",multi,"of 5 tested symbol prefixes");
+assert.ok(multi>=1,"Generator fails to produce any true multi-stroke pen-up completion");
