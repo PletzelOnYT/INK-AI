@@ -38,6 +38,10 @@ const ctx={window:{__inkWordRegions:[
 ]},englishRanks:ranks,englishPrefixes:prefixes,Math,Map,Set,Array};
 vm.createContext(ctx);
 vm.runInContext(ui.slice(begin,end2),ctx);
+const guardStart=ui.indexOf("function isLiveCandidateRequired(");
+const guardEnd=ui.indexOf("async function generateGlyph(){",guardStart);
+assert.ok(guardStart>0&&guardEnd>guardStart);
+vm.runInContext(ui.slice(guardStart,guardEnd),ctx);
 const choices=[{char:"q",confidence:.42},{char:"p",confidence:.38}];
 const contextRanked=ctx.dictionaryRankOptions(choices,{l:280,r:320,t:100,b:200});
 assert.equal(contextRanked[0].char,"p","help should win only if written letters support it");
