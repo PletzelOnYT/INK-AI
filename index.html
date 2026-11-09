@@ -11636,7 +11636,7 @@ function caseAwareWordReading(regions,predictions,pixels,strokes,letters,diction
   if(!boundary)continue;
   const ids=Array.from({length:finish-start},(_,i)=>start+i);
   if(ids.length>=2&&ids.length<=24&&
-     ids.every(i=>/^[a-zA-Z0-9]$/.test(changed[i]||""))){
+     ids.every(i=>/^[a-zA-Z0-9×]$/.test(changed[i]||""))){
    const old=ids.map(i=>changed[i]).join("");
    const lowerWord=old.toLowerCase();
    const exists=Boolean(dictionary?.has(lowerWord));
@@ -11645,10 +11645,24 @@ function caseAwareWordReading(regions,predictions,pixels,strokes,letters,diction
    const tallest=heights.length?Math.max(...heights):0;
    for(const i of ids){
     const current=changed[i];
-    if(!eligibleAmbiguous.test(current))continue;
     const raw=predictions[i]?.top||[];
     const p=(ch)=>raw.find(o=>o.char===ch)?.confidence||0;
     const h=regions[i].box[3]-regions[i].box[1];
+    if(current==="×"&&anchors.length>=1&&
+       !ids.some(j=>/^[0-9]$/.test(changed[j]))){
+      const hasWrittenX=ids.some(j=>j!==i&&/^[xX]$/.test(changed[j]));
+      const asLetter=ids.map(j=>j===i?"x":changed[j]).join("").toLowerCase();
+      // A lowercase x and the multiplication glyph are effectively the same
+      // two crossed strokes. Use direct neighboring letter evidence, not
+      // an unconditional replacement of all multiplication signs.
+      if((hasWrittenX||dictionary?.has(asLetter))&&
+         p("x")>=Math.max(.025,p("×")*.065)&&
+         tallest>=h*1.22){
+        changed[i]="x";
+      }
+      continue;
+    }
+    if(!eligibleAmbiguous.test(current))continue;
     if((current==="Q"||current==="O"||current==="0")&&
        anchors.length>=2&&
        tallest>h*1.18&&
