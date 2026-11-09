@@ -307,12 +307,18 @@ async function loadGlyphModel(){
  assistButton.title="Loading trained neural handwriting completion…";
  try{
   let model=null,v2Error=null;
-  try{
-   const response=await fetch(GLYPH_V2_URL,{cache:"no-store"});
-   if(!response.ok)throw Error("V2 not published: HTTP "+response.status);
-   model=await response.json();
-   if(model.format!=="ink-glyph-completion-residual-v2")throw Error("Incorrect V2 data");
-  }catch(e){v2Error=e}
+  const sources=location.protocol==="file:"?[GLYPH_V2_URL]:
+     ["models/ink-glyph-completion-v2.json",GLYPH_V2_URL];
+  for(const source of sources){
+   try{
+    const response=await fetch(source,{cache:"no-store"});
+    if(!response.ok)throw Error("V2 not published: HTTP "+response.status);
+    model=await response.json();
+    if(model.format!=="ink-glyph-completion-residual-v2")
+      throw Error("Incorrect V2 data");
+    break;
+   }catch(e){v2Error=e;model=null}
+  }
   if(!model){
    if(glyphReady)return; // V1 is already running; never disrupt the board.
    const response=await fetch(GLYPH_V1_URL,{cache:"default"});
