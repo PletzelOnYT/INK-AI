@@ -2,11 +2,19 @@
 
 An intentionally minimal handwriting-recognition web app.
 
-**Interface:** a minimal black-and-white pen/eraser toolbar, one white drawing canvas, and one live text prediction. No training controls, settings, dashboards, or third-party inference APIs.
+**Interface:** a minimal black-and-white pen, eraser, and Experimental Assist toolbar; one white drawing canvas; and one live text prediction. No training controls, settings, dashboards, or third-party inference APIs.
 
 [Open or download the single HTML file](./index.html) and open it in your browser. Internet access is needed to download the independently trained neural-network weights from [models/ink-cnn-v1.json](./models/ink-cnn-v1.json) in **this repository only**.
 
-Choose the **pen** to draw black ink or the **eraser** to remove parts of strokes, using your mouse, finger, or stylus. Erasing is pixel-precise and undoable. The text prediction updates automatically after drawing **or erasing**. Press **Escape** to clear the board and **Ctrl+Z / Cmd+Z** to undo. The toolbar uses only two controls, styled after the pen/eraser concept in Apple's Pages drawing tools.
+Choose the **pen** to draw black ink or the **eraser** to remove parts of strokes, using your mouse, finger, or stylus. Erasing is pixel-precise and undoable. The text prediction updates automatically after drawing **or erasing**. Press **Escape** to clear the board and **Ctrl+Z / Cmd+Z** to undo. The toolbar keeps the pen and eraser icons styled after the drawing tools in Apple's Pages.
+
+## Experimental Assist (sparkle icon)
+
+The sparkle button toggles faint, translucent suggested strokes. As you draw, the page estimates where your next line might continue using local movement, curvature, and stroke-history geometry, with a small directional bias from the trained character-recognition CNN after recognition. Predictions update with `requestAnimationFrame` for low latency. Suggestions are rendered on a **separate, transparent canvas**: they never count as real handwriting or alter recognition unless you choose to accept one.
+
+To accept the visible ghost stroke, press **G**; it becomes ordinary undoable ink. Turn off the sparkle button to hide suggestions. Eraser mode also hides suggestions.
+
+**This is experimental stroke prediction, not a separately trained generative drawing model.** It can suggest continuations of lines or curves, but it does not understand arbitrary scenes or reliably complete complex pictures.
 
 ## Model
 
