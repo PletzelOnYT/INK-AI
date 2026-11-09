@@ -197,6 +197,16 @@ self.onmessage=e=>{
     });
     j++;
    }
+   // Provide a second learned sample for Tab cycling when classifier
+   // candidates are too ambiguous to yield two usable vector trajectories.
+   if(results.length===1){
+    const alt=completeGlyph(prefix,results[0].label,serial*997+31,true);
+    if(alt.moves>2&&alt.paths.length){
+     results.push({label:results[0].label,paths:alt.paths,
+       penUps:alt.penUps,confidence:results[0].confidence,
+       score:results[0].score-.15,variant:"stochastic"});
+    }
+   }
    results.sort((a,b)=>b.score-a.score);
    self.postMessage({type:"completion",serial,epoch,
        alternatives:results,neural:true,engine:"stroke-gru-mdn"});
