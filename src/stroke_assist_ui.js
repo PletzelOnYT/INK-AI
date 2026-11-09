@@ -28,6 +28,8 @@ window.__inkLastPreviewTime=0;
 window.__inkAssistInFlight=false;
 window.__inkFallbackReady=false;
 window.__inkFallbackUsed=0;
+window.__inkGhostTailDy=0;
+window.__inkGhostTailRange=0;
 let glyphFallbackLoading=false;
 async function loadValidatedBackup(){
  if(glyphFallbackLoading||!glyphWorker)return;
@@ -55,6 +57,7 @@ function clearGhost(){
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
  window.__inkGhostPoints=0;window.__inkGhostSegments=0;
  window.__inkAssistLabel="";window.__inkGhostSource="none";
+ window.__inkGhostTailDy=0;window.__inkGhostTailRange=0;
  window.__inkSuggestionChoices=[];
 }
 function beginAssistStroke(){
@@ -355,6 +358,13 @@ function renderGhost(){
  window.__inkGhostStrokeWidth=width;
  window.__inkAssistLabel=ghostCandidate.label;
  window.__inkGhostSource="neural-stroke-sequence";
+ const all=ghostCandidate.paths.flat();
+ if(all.length>1){
+  const initial=all[0],last=all[all.length-1],frame=ghostPending.frame;
+  window.__inkGhostTailDy=(last[1]-initial[1])/frame.size;
+  window.__inkGhostTailRange=(Math.max(...all.map(p=>p[1]))-
+    Math.min(...all.map(p=>p[1])))/frame.size;
+ }
 }
 function acceptGhost(){
  if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate)return;
