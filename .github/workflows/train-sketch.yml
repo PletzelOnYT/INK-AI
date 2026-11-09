@@ -1,0 +1,65 @@
+name: Train INK AI sketch completion generator
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_sketch.py"
+      - ".github/workflows/train-sketch.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-sketch-training
+  cancel-in-progress: false
+jobs:
+  train-sketch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install trainer dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Train generative GRU on real human Quick Draw pen strokes
+        run: python -u src/train_sketch.py --examples-per-category 2500 --epochs 3 --batch 128 --hidden 96
+      - name: Validate trained generative weights
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          model=json.loads(Path("models/ink-sketch-gru-v1.json").read_text())
+          assert model["format"] == "ink-generative-gru-v1"
+          assert model["training"]["trained_from_scratch"] is True
+          assert model["training"]["training_drawings"] > 9000
+          assert model["training"]["validation_drawings"] > 200
+          assert 0 < model["training"]["validation_nll"] < 20
+          assert all(k in model["weights"] for k in [
+            "weight_ih","weight_hh","bias_ih","bias_hh","head_w","head_b"])
+          print("Validated independent generative model:",model["training"])
+          PY
+      - name: Commit trained generator to latest main
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          git add models/ink-sketch-gru-v1.json models/sketch-metrics.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish INK AI trained neural sketch generator"
+            git push origin HEAD:main
+          fi
+      - name: Save trained model artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-neural-sketch-generator
+          path: |
+            models/ink-sketch-gru-v1.json
+            models/sketch-metrics.json
+          if-no-files-found: ignore
