@@ -1,0 +1,8 @@
+{
+  "held_out_masked_bce": 0.7323275044441223,
+  "human_emnist_characters": 45000,
+  "human_hasy_symbols": 24247,
+  "synthetic_punctuation": 9000,
+  "training_presentations": 234741,
+  "model": "models/ink-glyph-completion-v1.json"
+}
