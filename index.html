@@ -248,6 +248,7 @@ self.onmessage=e=>{
 "use strict";
 (() => {
 const MODEL_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
+const RECOGNITION_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v2.json";
 const canvas=document.getElementById("pad"), ctx=canvas.getContext("2d",{willReadFrequently:true}), guess=document.getElementById("guess");
 const ghostCanvas=document.getElementById("ghost"),ghostCtx=ghostCanvas.getContext("2d");
 const assistButton=document.getElementById("assist");
@@ -256,6 +257,8 @@ let assistEnabled=false,ghostCandidate=null;
 const requests=new Map();
 window.__inkReady=false;
 window.__inkEngine="cnn";
+window.__inkRecognitionVersion=0;
+window.__inkRecognitionAccuracy=0;
 window.__inkDetectedRegions=0;
 window.__inkLastGuess="";
 window.__inkAssistEnabled=false;
@@ -1084,18 +1087,35 @@ self.onmessage=e=>{
 async function load(){
  display("Loading AI…",true);
  try{
-  const response=await fetch(MODEL_URL,{cache:"no-store"});
-  if(!response.ok)throw Error("HTTP "+response.status);
-  const model=await response.json();
-  if(model.format!=="ink-cnn-int8-v1"||model.layers?.length!==5)throw Error("Bad model data");
+  let model=null,upgrade=false;
+  const sources=location.protocol==="file:"?[RECOGNITION_V2_URL]:
+      ["models/ink-cnn-v2.json",RECOGNITION_V2_URL];
+  for(const source of sources){
+   try{
+    const r=await fetch(source,{cache:"no-store"});
+    if(!r.ok)continue;
+    const candidate=await r.json();
+    if(candidate.format!=="ink-cnn-int8-v1"||candidate.layers?.length!==5)continue;
+    if(candidate.training?.finetuned_from!=="models/ink-cnn-v1.json")continue;
+    model=candidate;upgrade=true;break;
+   }catch(_){/* V2 is optional until safe fine-tuning passes */}
+  }
+  if(!model){
+   const response=await fetch(MODEL_URL,{cache:"no-store"});
+   if(!response.ok)throw Error("HTTP "+response.status);
+   model=await response.json();
+  }
+  if(model.format!=="ink-cnn-int8-v1"||model.layers?.length!==5)
+    throw Error("Bad model data");
   createWorker();
   await request("init",{model});
+  window.__inkRecognitionVersion=upgrade?2:1;
+  window.__inkRecognitionAccuracy=model.training?.emnist_test_accuracy||0;
   loaded=true;window.__inkReady=true;
   display("Draw something",true);
   if(strokes.length)schedule(80);
  }catch(error){
   display("AI unavailable — check connection",true);
-  // GitHub access or publication may be temporary. Keep the canvas usable.
   setTimeout(()=>{if(!loaded)load()},15000);
  }
 }
