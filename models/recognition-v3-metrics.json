@@ -1,0 +1,134 @@
+{
+  "model": "models/ink-cnn-v3.json",
+  "eligible": true,
+  "baseline_v2": {
+    "pen_independent": {
+      "overall": 0.527402,
+      "macro": 0.512097,
+      "lowercase_macro": 0.255769,
+      "tested": 1551
+    },
+    "pen_calibration": {
+      "overall": 0.569032,
+      "macro": 0.562903,
+      "lowercase_macro": 0.330769,
+      "tested": 1550
+    },
+    "emnist_browser_style": {
+      "overall": 0.845083,
+      "macro": 0.737127,
+      "lowercase_macro": 0.605415,
+      "tested": 12000
+    }
+  },
+  "best": {
+    "objective": 0.806349,
+    "epoch": 4,
+    "calibration": {
+      "overall": 0.792258,
+      "macro": 0.771774,
+      "lowercase_macro": 0.701923,
+      "tested": 1550
+    },
+    "emnist": {
+      "overall": 0.842583,
+      "macro": 0.715477,
+      "lowercase_macro": 0.544375,
+      "tested": 12000
+    },
+    "independent_test": {
+      "overall": 0.764668,
+      "macro": 0.73871,
+      "lowercase_macro": 0.705769,
+      "tested": 1551
+    }
+  },
+  "independent_pen_v3": {
+    "overall": 0.764668,
+    "macro": 0.73871,
+    "lowercase_macro": 0.705769,
+    "tested": 1551
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.94597,
+      "pen_calibration": {
+        "overall": 0.769032,
+        "macro": 0.751613,
+        "lowercase_macro": 0.630769,
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.840583,
+        "macro": 0.713789,
+        "lowercase_macro": 0.552664,
+        "tested": 12000
+      },
+      "eligible": true,
+      "objective": 0.789066,
+      "elapsed_s": 57.3
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.81355,
+      "pen_calibration": {
+        "overall": 0.782581,
+        "macro": 0.76371,
+        "lowercase_macro": 0.678846,
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.842667,
+        "macro": 0.717636,
+        "lowercase_macro": 0.550735,
+        "tested": 12000
+      },
+      "eligible": true,
+      "objective": 0.799405,
+      "elapsed_s": 58.4
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.7778,
+      "pen_calibration": {
+        "overall": 0.789032,
+        "macro": 0.769355,
+        "lowercase_macro": 0.684615,
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.841,
+        "macro": 0.71346,
+        "lowercase_macro": 0.542391,
+        "tested": 12000
+      },
+      "eligible": true,
+      "objective": 0.803583,
+      "elapsed_s": 57.8
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.76306,
+      "pen_calibration": {
+        "overall": 0.792258,
+        "macro": 0.771774,
+        "lowercase_macro": 0.701923,
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.842583,
+        "macro": 0.715477,
+        "lowercase_macro": 0.544375,
+        "tested": 12000
+      },
+      "eligible": true,
+      "objective": 0.806349,
+      "elapsed_s": 57.2
+    }
+  ],
+  "training_presentations": 256000,
+  "uji_real_training_glyphs": 6210,
+  "uji_independent_glyphs": 1551,
+  "domain": "real UJI pen strokes, browser-equivalent normalized rasterization; no external pretrained model"
+}
