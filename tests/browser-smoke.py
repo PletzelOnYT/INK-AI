@@ -1,34 +1,35 @@
-"""End-to-end smoke test: INK AI must work even while GitHub weights are 404."""
-import os,time
-from pathlib import Path
+"""Verify the simplified UI contains only the canvas and predicted text."""
+import http.server, threading
 from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 
+class Quiet(http.server.SimpleHTTPRequestHandler):
+    def log_message(self,*args):pass
+server=http.server.ThreadingHTTPServer(("127.0.0.1",0),Quiet)
+threading.Thread(target=server.serve_forever,daemon=True).start()
 opt=Options()
-opt.add_argument("--headless=new")
-opt.add_argument("--no-sandbox")
-opt.add_argument("--disable-dev-shm-usage")
-opt.add_argument("--window-size=1440,1100")
-# No external weights are necessary to pass fallback test.
+for x in ("--headless=new","--no-sandbox","--disable-dev-shm-usage","--window-size=1440,1100"):
+    opt.add_argument(x)
 driver=webdriver.Chrome(options=opt)
 try:
-    driver.get(Path("index.html").resolve().as_uri())
+    driver.get(f"http://127.0.0.1:{server.server_port}/index.html")
     wait=WebDriverWait(driver,45)
-    wait.until(lambda d:"BASIC RECOGNITION ACTIVE" in d.find_element(By.ID,"status").text or "LIVE · YOUR OWN MODEL" in d.find_element(By.ID,"status").text)
-    print("PASS: status",driver.find_element(By.ID,"status").text,flush=True)
+    assert len(driver.find_elements(By.TAG_NAME,"button"))==0
+    assert len(driver.find_elements(By.TAG_NAME,"canvas"))==1
+    assert len(driver.find_elements(By.ID,"guess"))==1
+    print("PASS: only a drawing board and guessed text are visible",flush=True)
+    wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
     canvas=driver.find_element(By.ID,"pad")
-    ActionChains(driver).move_to_element_with_offset(canvas,-130,-25).click_and_hold().move_by_offset(0,90).release().perform()
-    wait.until(lambda d: d.find_element(By.ID,"glyphCount").text != "0 characters")
-    print("PASS: recognition",repr(driver.find_element(By.ID,"output").text),flush=True)
-    correction=driver.find_element(By.ID,"correct")
-    correction.clear();correction.send_keys("I")
-    driver.find_element(By.ID,"fineTune").click()
-    wait.until(lambda d:d.find_element(By.ID,"tunedCount").text=="1")
-    print("PASS: correction saved; count=1",flush=True)
-    driver.find_element(By.ID,"clear").click()
-    wait.until(lambda d: d.find_element(By.ID,"glyphCount").text=="0 characters")
-    print("PASS: clear",flush=True)
-finally:driver.quit()
+    ActionChains(driver).move_to_element_with_offset(canvas,-120,-50).click_and_hold().move_by_offset(0,100).release().perform()
+    wait.until(lambda d:d.find_element(By.ID,"guess").get_attribute("data-muted")=="false")
+    text=driver.find_element(By.ID,"guess").text
+    assert text
+    print("PASS: recognition automatically updates",repr(text),flush=True)
+    ActionChains(driver).send_keys("\ue00c").perform()
+    wait.until(lambda d:d.find_element(By.ID,"guess").get_attribute("data-muted")=="true")
+    print("PASS: Escape clears the drawing",flush=True)
+finally:
+    driver.quit();server.shutdown()
