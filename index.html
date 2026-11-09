@@ -833,27 +833,12 @@ function segment(){
   const widths=initial.map(s=>s[1]-s[0]+1).sort((a,b)=>a-b);
   const typical=widths.length?widths[Math.floor(widths.length/2)]:30;
   const lineHeight=bottom-top+1;
-  const spans=[];
-  // When two handwritten letters touch, try a deep vertical valley, but
-  // only for blobs much wider than a normally proportioned single letter.
-  for(const [start,end] of initial){
-   const wide=end-start+1;
-   if(wide>Math.max(60,1.45*lineHeight) && (initial.length<=2||wide>1.8*typical)){
-    let candidates=[];
-    for(let x=start+15;x<=end-15;x++){
-     if(cols[x]<=Math.max(2,lineHeight*.11)&&cols[x]<=cols[x-1]&&cols[x]<=cols[x+1])candidates.push(x);
-    }
-    const cuts=[],minWidth=Math.max(16,Math.min(36,lineHeight*.34));
-    let previous=start;
-    for(const x of candidates){
-     if(x-previous>minWidth&&end-x>minWidth){cuts.push(x);previous=x}
-    }
-    if(cuts.length){
-     let a=start;for(const x of cuts){spans.push([a,x]);a=x+1}spans.push([a,end]);continue;
-    }
-   }
-   spans.push([start,end]);
-  }
+  // Never split a connected ink region merely because it is wide.
+  // The previous "vertical valley" heuristic cut a single roof/caret stroke
+  // into 10+ characters: narrow diagonal ink satisfied its valley test at
+  // almost every column. Actual gaps / later stroke-level grouping are the
+  // only defensible division boundaries.
+  const spans=initial;
   const gaps=spans.slice(1).map((s,i)=>s[0]-spans[i][1]-1).sort((a,b)=>a-b);
   const common=gaps.length?gaps[Math.floor(gaps.length*.35)]:8;
   const spaceGap=Math.max(22,Math.min(125,Math.max(typical*.78,common*2.1)));
