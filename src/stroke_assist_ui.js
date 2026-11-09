@@ -21,6 +21,9 @@ window.__inkGhostSegments=0;
 window.__inkGhostStrokeWidth=0;
 window.__inkAcceptedVectorCount=0;
 window.__inkSuggestionChoices=[];
+window.__inkCompletionReranks=0;
+window.__inkCompletionConfidence=0;
+window.__inkCompletionModel="";
 window.__inkLivePreviewUpdates=0;
 window.__inkAssistRequests=0;
 window.__inkLastPreviewLatencyMs=0;
@@ -142,9 +145,9 @@ function completionInput(){
    short.push([(p[0]-prev[0])/sz,(p[1]-prev[1])/sz,j?1:0]);
    prev=p;
   });
-  return {frame:f,prefix:short};
+  return {frame:f,prefix:short,box:b};
  }
- return {frame,prefix};
+ return {frame,prefix,box};
 }
 function createGlyphWorker(){
  if(glyphWorker)glyphWorker.terminate();
@@ -193,6 +196,22 @@ function createGlyphWorker(){
        window.__inkLastPreviewTime=glyphLastPreviewAt;
        window.__inkLastPreviewLatencyMs=Math.round(glyphLastPreviewAt-glyphRequestedAt);
        if(pointer!==null)window.__inkLivePreviewUpdates++;
+      }
+      // Streaming keeps drawing responsive. Once the pen stops, use an
+      // independent neural recognizer to score the FULL suggested glyph,
+      // rather than trusting the pen generator's next-motion likelihood.
+      if(m.type==="completion"&&pointer===null&&ghostPending?.box){
+       const serial=m.serial,epoch=m.epoch,pending=ghostPending;
+       scoreFinishedAlternatives(possibilities,pending).then(ordered=>{
+        if(!assistEnabled||tool!=="pen"||glyphSerial!==serial||
+           glyphEpoch!==epoch||ghostPending?.serial!==serial)return;
+        if(!ordered.length){clearGhost();return}
+        ghostOptions=ordered;
+        window.__inkSuggestionChoices=ordered.map(o=>o.label);
+        ghostChoice=0;setGhostChoice(0);
+       }).catch(err=>{
+        window.__inkLastGlyphError="Candidate scoring: "+String(err.message||err);
+       });
       }
      }
    }
@@ -312,18 +331,81 @@ async function generateGlyph(){
      ...options.filter(c=>c.char!==preferred)].slice(0,4);
   }
   if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
-  ghostPending={frame:f,serial};
+  ghostPending={frame:f,box:input.box,serial};
   const isLive=pointer!==null;
   const big=window.__inkGlyphParameters>=1000000;
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
      prefix:input.prefix,options: isLive? options.slice(0,big?1:2):options,
      live:isLive,maxSteps:isLive?(big?20:26):52,
-     preferred,seed:glyphStrokeSeed});
+     preferred,searchFallback:!isLive,seed:glyphStrokeSeed});
  }catch(err){
   glyphBusy=false;window.__inkAssistInFlight=false;
   window.__inkLastGlyphError=String(err.message||err);
   if(glyphDirty||pointer!==null){glyphDirty=false;queueGhost()}
  }
+}
+// Final-ink recognition critic. The generative stroke model proposes the
+// vectors; a separate CNN then checks how much each completed character
+// actually looks like its intended label. All inference remains in-browser.
+// This does NOT trace fonts or substitute reference/example images.
+async function scoreFinishedAlternatives(alternatives,pending){
+ if(!loaded||!pending?.box||alternatives.length<2)return alternatives;
+ const valid=alternatives.slice(0,9).map(candidate=>({
+   candidate,paths:toScreenPaths(candidate.paths,pending.frame)
+ })).filter(x=>x.paths.length>0);
+ if(valid.length<2)return alternatives;
+ const masks=[];
+ const temp=document.createElement("canvas");
+ temp.width=canvas.width;temp.height=canvas.height;
+ const t=temp.getContext("2d",{willReadFrequently:true});
+ const b=pending.box;
+ for(const item of valid){
+  t.fillStyle="#fff";t.fillRect(0,0,temp.width,temp.height);
+  t.drawImage(canvas,0,0);
+  t.strokeStyle="#111";t.lineCap="round";t.lineJoin="round";
+  t.lineWidth=Math.max(3,Math.min(8,pending.frame.size*.028));
+  for(const path of item.paths)smoothStroke(t,path);
+  let x0=b.l,x1=b.r,y0=b.t,y1=b.b;
+  for(const path of item.paths)for(const p of path){
+   x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);
+   y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);
+  }
+  x0=Math.max(0,Math.floor(x0-7));
+  x1=Math.min(temp.width-1,Math.ceil(x1+7));
+  y0=Math.max(0,Math.floor(y0-7));
+  y1=Math.min(temp.height-1,Math.ceil(y1+7));
+  if(x1<=x0||y1<=y0){masks.push(Array(1024).fill(0));continue}
+  const crop=t.getImageData(x0,y0,x1-x0+1,y1-y0+1);
+  masks.push(normalize([0,0,x1-x0,y1-y0],crop));
+ }
+ const predictions=await request("read",{images:masks});
+ if(predictions.predictions?.length!==valid.length)return alternatives;
+ for(let i=0;i<valid.length;i++){
+  const item=valid[i];
+  const top=predictions.predictions[i].top||[];
+  const p=top.find(x=>x.char===item.candidate.label)?.confidence||.0005;
+  item.candidate._finishedConfidence=p;
+  const geometric=Math.max(-2.5,Math.min(2.5,item.candidate.quality||0));
+  item.candidate._combinedScore=
+    2.6*Math.log(p+.003)+.23*geometric+
+    .08*Math.max(-5,Math.min(3,item.candidate.score||0));
+ }
+ valid.sort((a,b)=>b.candidate._combinedScore-a.candidate._combinedScore);
+ const sorted=valid.map(x=>x.candidate);
+ // A high-confidence wrong glyph should never win merely because the
+ // decoder sampled it with a good local stroke likelihood.
+ const preferred=window.__inkLastGuess;
+ if(window.__inkDetectedRegions===1&&typeof preferred==="string"&&
+    preferred.length===1){
+  const matching=sorted.filter(c=>c.label===preferred);
+  if(matching.length)sorted.splice(0,sorted.length,...matching,
+     ...sorted.filter(c=>c.label!==preferred));
+ }
+ window.__inkCompletionReranks++;
+ window.__inkCompletionConfidence=sorted[0]?._finishedConfidence||0;
+ window.__inkCompletionModel=sorted[0]?.source||
+   (window.__inkPrefixTrained?"prefix-trained":"neural");
+ return sorted;
 }
 function toScreenPaths(paths,frame){
  const result=[];
