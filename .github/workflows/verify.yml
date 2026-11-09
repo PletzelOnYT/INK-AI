@@ -11,6 +11,7 @@ on:
       - "models/ink-cnn-v2.json"
       - "models/ink-cnn-v3.json"
       - "models/ink-stroke-sequence-v1.json"
+      - "models/ink-stroke-sequence-v2.json"
       - ".github/workflows/verify.yml"
   workflow_dispatch:
 permissions:
@@ -40,6 +41,7 @@ jobs:
           node tests/recognition-v3-metrics.mjs
           node --check /tmp/ink-worker-check.js
           node tests/glyph-model-smoke.mjs
+          node tests/stroke-sequence-v2-acceptance.mjs
           node --check /tmp/ink-stroke-worker.js
           node --check src/stroke_worker.js
           node --check src/stroke_assist_ui.js
