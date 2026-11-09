@@ -1,0 +1,66 @@
+name: Validate combined handwriting recognizer
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/compare_recognition_ensemble.py"
+      - ".github/workflows/recognition-ensemble.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-recognition-ensemble
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Compare V1, V2, and calibrated blend on disjoint held-out handwriting
+        run: python -u src/compare_recognition_ensemble.py
+      - name: Validate published ensemble only if quality metrics pass
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("models/recognition-ensemble-evaluation.json").read_text())
+          e=r["evaluation"]
+          assert e["untouched_validation_samples"]>=50000
+          if e["accepted"]:
+            m=json.loads(Path("models/recognition-ensemble.json").read_text())
+            assert m["format"]=="ink-recognition-ensemble-v1"
+            assert e["ensemble"]["overall"]>=max(e["old"]["overall"],e["new"]["overall"])-.005
+            assert e["ensemble"]["macro"]>=e["old"]["macro"]+.015
+          print("Accepted",e["accepted"],"held out results",e,flush=True)
+          PY
+      - name: Publish only measured safe model blend
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/recognition-ensemble-evaluation.json
+          if test -s models/recognition-ensemble.json; then
+            git add models/recognition-ensemble.json
+          fi
+          git commit -m "Publish measured handwriting recognizer blend" || exit 0
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-recognition-ensemble-eval
+          path: models/recognition-ensemble*.json
+          if-no-files-found: ignore
