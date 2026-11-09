@@ -1,0 +1,21 @@
+{
+  "validation_loss": 2.337876997281052,
+  "train_drawings": 27253,
+  "valid_drawings": 1317,
+  "presentations": 81759,
+  "categories": {
+    "cat": 2500,
+    "dog": 2500,
+    "tree": 2500,
+    "flower": 2500,
+    "house": 2500,
+    "car": 2500,
+    "bird": 2500,
+    "fish": 2500,
+    "star": 2500,
+    "smiley face": 2500,
+    "bicycle": 2500,
+    "apple": 2500
+  },
+  "model": "models/ink-sketch-gru-v1.json"
+}
