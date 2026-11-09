@@ -4,7 +4,6 @@ on:
     branches: [main]
     paths:
       - "src/train.py"
-      - ".github/workflows/train.yml"
   workflow_dispatch:
 permissions:
   contents: write
@@ -37,6 +36,10 @@ jobs:
           git add models/ink-cnn-v1.json models/metrics.json
           if ! git diff --cached --quiet; then
             git commit -m "Publish INK AI model trained on real handwritten examples"
+            # The source branch can change during a long CPU training run.
+            # Integrate any new frontend commits instead of rejecting a non-fast-forward push.
+            git fetch origin main
+            git rebase origin/main
             git push origin HEAD:main
           fi
       - uses: actions/upload-artifact@v4
