@@ -1,0 +1,31 @@
+name: Validate INK AI frontend and trainer
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "src/**"
+      - ".github/workflows/verify.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Python training code compiles
+        run: python3 -m py_compile src/train.py
+      - name: Extract and syntax-check the embedded JavaScript and worker
+        run: |
+          python3 - <<'PY'
+          import pathlib,re
+          html=pathlib.Path("index.html").read_text()
+          match=re.search(r"<script>(.*?)</script>",html,re.S)
+          assert match, "Missing inline application script"
+          pathlib.Path("/tmp/ink-check.js").write_text(match.group(1))
+          assert "raw.githubusercontent.com/PletzelOnYT/INK-AI" in html
+          assert "api.openai.com" not in html
+          PY
+          node --check /tmp/ink-check.js
