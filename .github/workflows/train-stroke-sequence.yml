@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "src/train_stroke_sequence.py"
+      - "tests/stroke-training-unit.py"
       - ".github/workflows/train-stroke-sequence.yml"
   workflow_dispatch:
 permissions:
