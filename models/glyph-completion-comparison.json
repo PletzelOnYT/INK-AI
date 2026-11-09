@@ -1,0 +1,25 @@
+{
+  "v1": {
+    "heldout_characters": 4000,
+    "same_mask_weighted_loss": 0.869223,
+    "missing_ink_f1": 0.637437,
+    "hard_glyph_missing_ink_f1": 0.637111,
+    "missing_ink_precision": 0.600516,
+    "missing_ink_recall": 0.679196
+  },
+  "v2": {
+    "heldout_characters": 4000,
+    "same_mask_weighted_loss": 0.800988,
+    "missing_ink_f1": 0.668584,
+    "hard_glyph_missing_ink_f1": 0.671328,
+    "missing_ink_precision": 0.549763,
+    "missing_ink_recall": 0.852928
+  },
+  "v2_vs_v1": {
+    "missing_ink_f1_delta": 0.031147,
+    "hard_glyph_f1_delta": 0.034217,
+    "weighted_loss_delta": -0.068235
+  },
+  "notes": "Both models evaluated on exact same held-out EMNIST test images and masks. No user-drawn, cursive, or subjective quality guarantee.",
+  "provenance": "GitHub Actions head-to-head evaluation run 42550773783, passed computation; initial artifact publication failed due to concurrent commits."
+}
