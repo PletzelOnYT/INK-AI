@@ -44,7 +44,12 @@ jobs:
           assert Path("dist/ink-ai-standalone.html").stat().st_size>1400000
           print("PASS: thin index and full offline package both exist")
           PY
-          cp dist/ink-ai-standalone.html index.html
+      - name: Test real Chrome on slim source-mode index
+        run: |
+          python3 -m pip install --quiet selenium
+          python3 tests/neural-browser-smoke.py
+      - name: Use fully bundled HTML for legacy offline regression tests
+        run: cp dist/ink-ai-standalone.html index.html
       - name: Verify Python training code compiles
         run: python3 -m py_compile src/train.py src/train_stroke_sequence.py src/train_recognition_v3.py src/train_prefix_completion.py
       - name: Extract and syntax-check the embedded JavaScript and worker
