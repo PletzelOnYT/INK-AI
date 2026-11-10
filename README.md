@@ -37,23 +37,59 @@ It's a single HTML file that works offline. The character recognizer, stroke pre
 
 INK AI has two separate models:
 
-**Recognition:** A convolutional neural network (CNN) reads the drawing and predicts the most likely character. The current V3 model was adapted for browser-drawn handwriting rather than only scanned character images.
+**Recognition — a real CNN, not nearest-template matching.** The recognizer runs **three learned convolutional layers and two learned fully connected layers**, trained on real handwritten characters. It converts your ink into a 32 × 32 input, performs neural-network inference, and predicts probabilities for letters, digits, and symbols. The current released V3 CNN was adapted to real pen-drawn characters. It **does not** look through a gallery of stored letter images and choose the closest match. Decoding a neural network's predicted probabilities into a character is normal AI classification.
 
-**Completion:** A stroke-based GRU generates possible next pen movements from the sequence you've drawn so far. It works with pen coordinates and pen-up/pen-down information, so the output is a vector line instead of an image.
+**Completion — a real generative GRU, not a font or curve lookup.** A trained gated recurrent unit (GRU) predicts the next pen-coordinate changes and pen-up/pen-down states conditioned on the strokes you've drawn. It samples genuine neural vector trajectories, ranks them with geometric and recognition checks, and displays the chosen strokes in translucent gray. The original black ink is preserved. It is a separate model from the CNN; it is **not ChatGPT** and has not achieved human-level handwriting completion accuracy.
 
 Assist uses multiple candidate trajectories and filters out implausible shapes. It can use a built-in English word-frequency list to choose between genuinely plausible letters in a word, while leaving strongly recognized strokes alone. It does not force a tail onto a lowercase h that already reaches its baseline. It also takes the full-character recognition result into account, so a partial-stroke prediction doesn't override a more reliable whole-character guess. If the newer completion model can't produce a usable continuation, it can fall back to the previous trained stroke model.
 
 The models run in browser workers and are embedded in the HTML, so it works without network access. Drawings stay in the canvas unless you choose to accept a suggestion.
 
-## Models and training
+## Model performance & version history
 
-The recognition model was trained with EMNIST handwriting samples and adapted using pen-drawn characters from the UJI dataset. In the writer-separated UJI test, V3 reached **76.47%** accuracy, compared with **52.74%** for V2 on the same test. See [recognition results](./models/recognition-v3-metrics.json).
+The graphs below use **measured evaluation results**, rather than invented success rates. A higher version number does not automatically mean a more accurate model. Only evaluated improvements are highlighted; rejected experiments are labeled instead of portrayed as successful upgrades.
 
-The stroke generator uses [UJI Pen Characters v2](https://archive.ics.uci.edu/dataset/177/uji+pen+characters+version+2) for real handwritten pen trajectories. Additional punctuation and math characters use labeled synthetic stroke data. The training and evaluation sets separate handwriting from different writers.
+### Character recognition — CNN
 
-The prefix-trained completion model is fine-tuned on unfinished characters and its own predicted movements. It reduced measured 14-step free-running position error by **7.28%** on a separate writer-held-out evaluation, though that doesn't translate directly into a character-completion accuracy percentage. See [completion results](./models/stroke-prefix-metrics.json).
+![INK AI recognition neural-network benchmarks by version](./docs/recognition-progress.svg)
 
-A larger 1M-parameter experiment was also trained, but it did not pass the pen-lift evaluation and is **not used as the default**. Model size alone isn't a measure of quality.
+| Version | Benchmark | Measured result | Status |
+| --- | --- | --- | --- |
+| **CNN V1** | EMNIST ByClass, 116,323 test characters | **84.90%** overall; **48.00%** lowercase macro accuracy | Historical |
+| **CNN V2** | Same EMNIST test | **84.32%** overall; **58.66%** lowercase macro accuracy | Superseded |
+| **CNN V2** | UJI pen strokes, 1,551 unseen-writer characters | **52.74%** character accuracy | Superseded |
+| **CNN V3** | Same UJI unseen-writer test | **76.47%** character accuracy (**+23.73 percentage points**) | **Current release** |
+| **CNN V4 experiment** | Same UJI unseen-writer test | **74.40%** character accuracy | **Rejected; not shipped** |
+
+The lowercase V1 → V2 comparison uses the same EMNIST evaluation and shows the improvement in *mean per-class lowercase accuracy*, despite a small decrease in total accuracy. V2 → V3 uses the same *independent UJI writers*. These are different benchmarks, so the results must not be connected into a single accuracy trend. The V3 EMNIST evaluation uses a different 12,000-image subset and isn't plotted beside the 116,323-image test as though identical.
+
+**Evidence:** [V1 test and per-class scores](./models/recognition-v2-metrics.json) · [V2/V3 independent-writer evaluation](./models/recognition-v3-metrics.json) · [V4 experimental evaluation, rejected](https://github.com/PletzelOnYT/INK-AI/blob/feature/recognition-multidataset-v4/models/recognition-v4-metrics.json).
+
+### Neural stroke completion — GRU, plus earlier raster experiments
+
+![INK AI completion model benchmarks with neural pen-path errors and raster F1](./docs/completion-progress.svg)
+
+| Engine/version | Measured benchmark | Result | Status |
+| --- | --- | --- | --- |
+| Raster completion V1 | Missing-ink F1, same 4,000 held-out glyph masks | **63.74% F1** | Archived; **not** the live completer |
+| Raster completion V2 | Identical held-out glyph masks | **66.86% F1** (**+3.11 points**) | Archived; **not** the live completer |
+| Neural stroke GRU V1 | 14-step rollout position error on unseen writers | **0.2112** (lower is better) | Base model |
+| Neural stroke Prefix V1 | Same 14-step rollout evaluation | **0.1958** (**7.28% less error**) | Superseded |
+| Neural stroke Prefix-Domain V2 | 12-step prefix-framed rollout on unseen writers | **0.3336** vs **0.4238** baseline (**21.29% less error**) | **Current live generator** |
+| Larger stroke GRU V2 | Held-out trajectory likelihood and pen-lift tests | Did **not** beat release baseline | Rejected |
+| Pen-lift V3 experiment | Unseen-writer pen-lift detection | **3.23% F1**, with many false positives | Rejected |
+
+**Critical distinction:** A **trajectory-error reduction** tells us that generated coordinates got closer to recorded pen paths on a particular test. It is **not a percent of correct suggestions**. The two GRU error-reduction numbers also come from different evaluations (14-step and 12-step), so they are not directly additive. The deployed prefix-domain model's separate pen-lift detection test scored **0% F1**, highlighting a remaining weakness. High ordinary pen-down accuracy must not be advertised as successful pen-lift prediction.
+
+**Evidence:** [Raster head-to-head](./models/glyph-completion-comparison.json) · [GRU Prefix V1, 14-step test](./models/stroke-prefix-metrics.json) · [GRU Prefix-Domain V2, 12-step test](./models/stroke-prefix-domain-v2-metrics.json) · [Larger GRU V2 rejection](./models/stroke-sequence-v2-metrics.json) · [Pen-lift V3 rejection](./models/penlift-v3-metrics.json).
+
+### Training data and honest evaluation
+
+The recognition CNN is trained from scratch on EMNIST handwritten characters, then fine-tuned on additional handwriting from UJI. The model learns its convolutional filters and classification weights through backpropagation; it does not use static glyph templates. A separate experimental training pipeline also evaluates HASYv2 handwriting and UCI PenDigits, but a checkpoint that performs worse on independent writers is **not** released.
+
+The GRU stroke generator is trained on [UJI Pen Characters v2](https://archive.ics.uci.edu/dataset/177/uji+pen+characters+version+2), including real ordered pen movements. Additional symbols use explicitly labeled synthetic training examples, distinct from human-written samples. The user-facing gray suggestions remain learned neural pen trajectories, **not** perfect-font replacements.
+
+Training more examples can help, but no model here is flawless. The next important benchmark is a **whole-character suggestion acceptance/correctness rate**, measured on handwriting from writers excluded from training; that number does not yet exist, so the README intentionally does not invent one.
 
 ## Project files
 
@@ -63,9 +99,13 @@ A larger 1M-parameter experiment was also trained, but it did not pass the pen-l
 | [src/stroke_assist_ui.js](./src/stroke_assist_ui.js) | Live gray neural pen suggestions, English context and drawing controls |
 | [src/stroke_worker.js](./src/stroke_worker.js) | Neural stroke generation |
 | [src/train.py](./src/train.py) | Character recognition training |
+| [src/train_recognition_v3.py](./src/train_recognition_v3.py) | Current pen-adapted V3 CNN training |
+| [V4 training experiment](https://github.com/PletzelOnYT/INK-AI/blob/feature/recognition-multidataset-v4/src/train_recognition_v4.py) | Experimental four-dataset recognizer training |
 | [src/train_stroke_sequence.py](./src/train_stroke_sequence.py) | Stroke-model training |
 | [src/train_prefix_completion.py](./src/train_prefix_completion.py) | Partial-character fine-tuning |
 | [models/](./models) | Model weights and evaluation results |
+| [docs/recognition-progress.svg](./docs/recognition-progress.svg) | Recognition benchmark graph |
+| [docs/completion-progress.svg](./docs/completion-progress.svg) | Completion benchmark graph |
 | [tests/](./tests) | Browser and model regression tests |
 
 ## Testing
