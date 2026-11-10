@@ -28,6 +28,53 @@ from train_prefix_domain_v2 import validate_rollout,prefix_frame
 from train_prefix_completion import prefix_rollout_batch
 
 HIDDEN=384
+def transplant_existing_gru(teacher_student, published):
+    """Expand a trained two-layer MDN GRU without changing its predictions.
+
+    Original gates occupy the first H units in each new 3*H gate row.
+    Their recurrent and layer-2 input connections to expanded units are zero.
+    The enlarged, teacher-pretrained units can subsequently learn residual
+    corrections, but the initial prediction is exactly the published one.
+    """
+    old=published.hidden;new=teacher_student.hidden
+    if not old<new or published.layers!=teacher_student.layers:
+        raise ValueError("Require a wider GRU with same depth")
+    with torch.no_grad():
+        teacher_student.embedding.weight.copy_(published.embedding.weight)
+        for layer in range(published.layers):
+            for stem in ("weight_ih_l","weight_hh_l"):
+                a=getattr(published.rnn,stem+str(layer))
+                b=getattr(teacher_student.rnn,stem+str(layer))
+                for gate in range(3):
+                    rows=slice(gate*new,gate*new+old)
+                    prior=slice(gate*old,(gate+1)*old)
+                    b[rows].zero_()
+                    b[rows,:a.shape[1]].copy_(a[prior])
+            for stem in ("bias_ih_l","bias_hh_l"):
+                a=getattr(published.rnn,stem+str(layer))
+                b=getattr(teacher_student.rnn,stem+str(layer))
+                for gate in range(3):
+                    b[gate*new:gate*new+old].copy_(a[gate*old:(gate+1)*old])
+        teacher_student.head.weight.zero_()
+        teacher_student.head.weight[:,:old].copy_(published.head.weight)
+        teacher_student.head.bias.copy_(published.head.bias)
+    return teacher_student
+
+def check_preserved_predictions(expanded,reference):
+    """Reject an expanded initialization if it changes verified baseline behavior."""
+    expanded.eval();reference.eval()
+    with torch.no_grad():
+        x=torch.zeros((4,18,3))
+        x[:,:,0]=torch.linspace(-.05,.05,18)
+        x[:,:,1]=torch.linspace(.04,-.02,18)
+        x[:,1:,2]=1
+        labels=torch.tensor([0,1,20,44],dtype=torch.long)
+        a=reference(x,labels);b=expanded(x,labels)
+        largest=float((a-b).abs().max())
+    if largest>2e-5:
+        raise RuntimeError(f"Expanded model changed old predictions: {largest}")
+    return largest
+
 HARD_GROUP=set("Il1iLjJ0OoQ9gqPpBb6GSs5Zz2UuVvWwMnHhryYcCeAaTtFf")
 MATH_SYMBOLS=set("+-=^:#@!%?×÷±∞√≠≤≥")
 def load_published(path):
@@ -168,6 +215,9 @@ def main():
             teacher_seen+=len(seq)
         print("GOOGLE INKSIGHT UNLABELLED MOTION",epoch+1,"seen",teacher_seen,flush=True)
     model.embedding.weight.requires_grad_(True)
+    transplant_existing_gru(model,reference)
+    preserved_difference=check_preserved_predictions(model,reference)
+    print("WARM-START BASELINE OUTPUT PRESERVED",preserved_difference,flush=True)
     best=None;history=[];seen=0
     for stage,num_epochs,lr in [
        ("general-pretrain",args.epochs,.00085),
@@ -207,8 +257,8 @@ def main():
             # Save best genuine neural checkpoint irrespective of release
             # eligibility; final held-out acceptance is checked later.
             if best is None or loss<best["prefix_calibration"]["prefix_frame_position_error"]:
-                best={"calibration":measured,"stage":stage,"epoch":ep+1,
-                      "presentations":seen}
+                best={"calibration":measured,"prefix_calibration":position,
+                      "stage":stage,"epoch":ep+1,"presentations":seen}
                 export(model,args.out,{
                     "heldout_nll":loss,
                     "heldout_pen_state_accuracy":measured["pen_state_accuracy"],
@@ -246,6 +296,8 @@ def main():
     stats={
         "eligible":bool(valid),"latency_verified":False,
         "parameter_count":parameters,
+        "preserved_baseline_prediction_max_error":preserved_difference,
+        "warm_started_from":"models/ink-stroke-prefix-domain-v2.json",
         "external_teacher":"Google Research InkSight model-generated InkML vectors, not direct checkpoint weights",
         "teacher_provenance":origin,
         "teacher_presentations":teacher_seen,

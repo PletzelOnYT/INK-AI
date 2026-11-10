@@ -6,6 +6,7 @@ on:
       - "src/import_inksight_teacher.py"
       - "src/train_google_teacher_big.py"
       - "tests/big-stroke-runtime.mjs"
+      - "tests/google-teacher-warmstart.py"
       - ".github/workflows/train-google-teacher-big.yml"
   workflow_dispatch:
 permissions:
@@ -33,6 +34,7 @@ jobs:
         run: |
           python -m py_compile src/import_inksight_teacher.py src/train_google_teacher_big.py
           python tests/inksight-teacher-import.py
+          python tests/google-teacher-warmstart.py
           node --check tests/big-stroke-runtime.mjs
       - name: Fetch Google InkSight generated pen traces from public Apache-2.0 dataset
         run: |
