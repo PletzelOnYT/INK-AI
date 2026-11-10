@@ -10647,6 +10647,9 @@ let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
 let glyphClassMemory=new Map();
+let glyphLastReadAt=0,glyphCachedOptions=[],glyphReadCount=0;
+window.__inkAssistOCRReads=0;
+window.__inkAssistCacheHits=0;
 let ghostPending=null,ghostOptions=[],ghostChoice=0;
 window.__inkGlyphReady=false;
 window.__inkAssistModel="online-stroke-gru";
@@ -10717,6 +10720,7 @@ function clearGhost(){
 function beginAssistStroke(){
  glyphStrokeSeed=(glyphStrokeSeed+1)|0;
  glyphClassMemory.clear();
+ glyphCachedOptions=[];glyphLastReadAt=0;
 }
 function queueGhost(){
  if(!assistEnabled||tool!=="pen"){clearGhost();return}
@@ -10726,7 +10730,7 @@ function queueGhost(){
  // True trailing-edge coalescing: do not restart this timer on each
  // pointermove. Continuous drawing MUST eventually trigger inference.
  const since=performance.now()-glyphRequestedAt;
- const interval=pointer!==null?105:135;
+ const interval=pointer!==null?65:95;
  const delay=Math.max(0,interval-since);
  glyphTimer=setTimeout(()=>{glyphTimer=0;generateGlyph()},delay);
 }
@@ -11000,15 +11004,26 @@ async function generateGlyph(){
  try{
   // The CNN supplies only class probabilities, NEVER proposed geometry.
   const f=input.frame;
-  const bitmap=normalize([f.x,f.y,f.x+f.size,f.y+f.size],
-       ctx.getImageData(0,0,canvas.width,canvas.height));
-  const read=await request("read",{images:[bitmap]});
-  if(epoch!==glyphEpoch||serial!==glyphSerial||!assistEnabled){
-   glyphBusy=false;window.__inkAssistInFlight=false;return;
+  // Reuse a recent class prediction during continuous pointer movement.
+  // Every request still uses the LATEST pen coordinates for neural generation.
+  const live=pointer!==null,now=performance.now();
+  let options;
+  if(live&&glyphCachedOptions.length&&now-glyphLastReadAt<650){
+   options=glyphCachedOptions.map(o=>({...o}));
+   window.__inkAssistCacheHits++;
+  }else{
+   const bitmap=normalize([f.x,f.y,f.x+f.size,f.y+f.size],
+        ctx.getImageData(0,0,canvas.width,canvas.height));
+   const read=await request("read",{images:[bitmap]});
+   if(epoch!==glyphEpoch||serial!==glyphSerial||!assistEnabled){
+    glyphBusy=false;window.__inkAssistInFlight=false;return;
+   }
+   const fresh=read.predictions?.[0]?.top?.slice(0,4)||[];
+   options=dictionaryRankOptions(stableCharacterOptions(fresh),input.box);
+   glyphCachedOptions=options.map(o=>({...o}));
+   glyphLastReadAt=performance.now();
+   window.__inkAssistOCRReads=++glyphReadCount;
   }
-  const fresh=read.predictions?.[0]?.top?.slice(0,4)||[];
-  let options=stableCharacterOptions(fresh);
-  options=dictionaryRankOptions(options,input.box);
   // A full multi-stroke glyph is much more informative than a partial crop.
   // In the screenshot the board OCR says "h" but the cropped assistant OCR
   // said L/H/k. Put h FIRST and insist on a neural completion of h.
@@ -11025,13 +11040,17 @@ async function generateGlyph(){
    clearGhost();glyphBusy=false;window.__inkAssistInFlight=false;
    return;
   }
-  if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
+  if(!options.length){
+   glyphBusy=false;window.__inkAssistInFlight=false;
+   if(pointer!==null)queueGhost();
+   return;
+  }
   ghostPending={frame:f,box:input.box,serial};
   const isLive=pointer!==null;
   const big=window.__inkGlyphParameters>=1000000;
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
      prefix:input.prefix,options: isLive? options.slice(0,big?1:2):options,
-     live:isLive,maxSteps:isLive?(big?20:26):52,
+     live:isLive,maxSteps:isLive?(big?18:24):52,
      preferred,searchFallback:!isLive,seed:glyphStrokeSeed});
  }catch(err){
   glyphBusy=false;window.__inkAssistInFlight=false;
