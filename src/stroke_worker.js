@@ -179,6 +179,10 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
  if(fragmentCount>1&&!/^[ijt!+*=H#:%]$/.test(label))score-=7;
  if(curvedLetters.includes(label)&&length>.14&&
     straightestRun>.988&&!descendingLeg)score-=8;
+ // A rising rightward ray from the right leg of h/n/m/b is not a natural
+ // descending continuation. Penalize actual sampled neural geometry only.
+ if(/^[hbnm]$/.test(label)&&length>.17&&dx>.14&&
+    dy<-.10&&up>down*1.5)score-=14;
  if(horizontallyFlat&&curvedLetters.includes(label))score-=12;
  else if(horizontallyFlat&&!horizontalShapes.includes(label))score-=2;
  if(length>.85)score-=3*(length-.85);
