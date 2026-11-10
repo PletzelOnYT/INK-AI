@@ -321,6 +321,9 @@ function prepareNetwork(o){
 // coordinates at the current tip; never construct procedural letter strokes.
 // These small previews are not classified as full completed characters.
 function localNeuralPreview(prefix,rollout,label,confidence,variant){
+ // A lowercase h needs a substantial downward right leg. The verified
+ // backup neural model is safer than a fragmentary shoulder tick.
+ if(label==="h")return null;
  const first=rollout.paths?.[0];
  if(!first||first.length<3||prefix.length<3)return null;
  let x=0,y=0;
