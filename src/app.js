@@ -3,6 +3,7 @@
 const MODEL_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
 const RECOGNITION_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v2.json";
 const RECOGNITION_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v3.json";
+const RECOGNITION_V5_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v5.json";
 const canvas=document.getElementById("pad"), ctx=canvas.getContext("2d",{willReadFrequently:true}), guess=document.getElementById("guess");
 const ghostCanvas=document.getElementById("ghost"),ghostCtx=ghostCanvas.getContext("2d");
 const assistButton=document.getElementById("assist");
@@ -1487,6 +1488,8 @@ async function load(){
  try{
   let model=null,version=1;
   const candidates=[
+   {version:5,relative:"models/ink-cnn-v5.json",remote:RECOGNITION_V5_URL,
+       parent:"models/ink-cnn-v3.json"},
    {version:3,relative:"models/ink-cnn-v3.json",remote:RECOGNITION_V3_URL,
        parent:"models/ink-cnn-v2.json"},
    {version:2,relative:"models/ink-cnn-v2.json",remote:RECOGNITION_V2_URL,
@@ -1497,9 +1500,10 @@ async function load(){
    try{
     const candidate=JSON.parse(embedded.textContent);
     if(candidate.format==="ink-cnn-int8-v1"&&
-       candidate.training?.finetuned_from==="models/ink-cnn-v2.json"&&
+       ["models/ink-cnn-v2.json","models/ink-cnn-v3.json"].includes(candidate.training?.finetuned_from)&&
        candidate.labels?.length===102&&candidate.input?.join(",")==="1,32,32"){
-      model=candidate;version=3;
+      model=candidate;
+      version=candidate.training.finetuned_from==="models/ink-cnn-v3.json"?5:3;
     }
    }catch(_){/* Use the existing fallback on old or damaged files. */}
   }
