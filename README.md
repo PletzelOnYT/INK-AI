@@ -20,6 +20,7 @@ The source code is stored in GitHub: edit the [small HTML shell](./src/index.she
 - **Stroke continuations** — the assistant draws light-gray, semi-transparent extensions of your actual ink. It does not overlay printed letters.
 - **Multi-stroke characters** — handles separate strokes in characters like `+`, `=`, `:`, and `X`.
 - **Local drawing controls** — suggestions don't modify the actual drawing until you accept them.
+- **Personalized neural ranking** — the small on-device neural critic learns from suggestions you accept with G, compares real GRU candidates, and remembers only its learned numerical weights on your device. No handwritten ink is stored as training data.
 
 ### Controls
 
@@ -29,7 +30,8 @@ The source code is stored in GitHub: edit the [small HTML shell](./src/index.she
 | Eraser | Erase |
 | ✨ Assist | Toggle character suggestions |
 | Tab | Switch between available suggestions |
-| G / Enter | Accept the suggested strokes |
+| G / Enter | Accept the suggested strokes and teach the personal neural ranker |
+| Shift+Alt+R | Reset local learned suggestion preferences |
 | Cmd+Z / Ctrl+Z | Undo |
 | Escape | Clear the canvas |
 

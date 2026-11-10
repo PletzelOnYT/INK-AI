@@ -1,5 +1,13 @@
 "use strict";
 (() => {
+// Lightweight neural feedback model learns only when a writer accepts G.
+let preferenceAI=null;
+try{preferenceAI=window.InkPreferenceAI?.create(window.localStorage)}catch(_){}
+window.__inkPreferenceLearningExamples=preferenceAI?.examples||0;
+window.__inkResetPreferenceLearning=()=>{
+ preferenceAI?.reset();
+ window.__inkPreferenceLearningExamples=0;
+};
 const MODEL_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v1.json";
 const RECOGNITION_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v2.json";
 const RECOGNITION_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-cnn-v3.json";
@@ -410,8 +418,8 @@ function createGlyphWorker(){
        if(!ordered.length)return;
        ghostPending=pending;
        glyphNoCandidateRetries=0;
-       ghostOptions=ordered;
-       window.__inkSuggestionChoices=ordered.map(o=>o.label);
+       ghostOptions=preferenceAI?preferenceAI.rank(ordered,pending):ordered;
+       window.__inkSuggestionChoices=ghostOptions.map(o=>o.label);
        ghostChoice=0;setGhostChoice(0);
        if(ghostCandidate){
         glyphLastPreviewAt=performance.now();
@@ -779,6 +787,10 @@ function acceptGhost(){
   }
   return;
  }
+ // The user's explicit G choice is a training signal. Save only the
+ // resulting numeric neural weights, never the person's handwritten ink.
+ if(preferenceAI?.learn(ghostOptions[ghostChoice],ghostOptions,ghostPending))
+  window.__inkPreferenceLearningExamples=preferenceAI.examples;
  ++glyphEpoch;
  clearTimeout(glyphTimer);glyphTimer=0;glyphDirty=false;
  const paths=ghostCandidate.paths;
@@ -789,6 +801,10 @@ function acceptGhost(){
  clearGhost();paint();schedule(70);
 }
 window.addEventListener("keydown",e=>{
+ // Opt-in reset: Shift+Alt+R discards the locally learned preferences.
+ if(e.shiftKey&&e.altKey&&e.key.toLowerCase()==="r"){
+  e.preventDefault();window.__inkResetPreferenceLearning();return;
+ }
  if(e.key==="Tab"&&assistEnabled&&ghostOptions.length>1){
   e.preventDefault();setGhostChoice((ghostChoice+1)%ghostOptions.length);return;
  }
