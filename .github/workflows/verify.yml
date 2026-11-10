@@ -1,7 +1,7 @@
 name: Validate INK AI frontend and trainer
 on:
   push:
-    branches: [main, "feature/low-latency-continuous-suggestions"]
+    branches: [main, "feature/recognition-multidataset-v4"]
     paths:
       - "index.html"
       - "src/**"
@@ -10,6 +10,8 @@ on:
       - "models/ink-glyph-completion-v2.json"
       - "models/ink-cnn-v2.json"
       - "models/ink-cnn-v3.json"
+      - "models/ink-cnn-v4.json"
+      - "models/recognition-v4-metrics.json"
       - "models/ink-stroke-sequence-v1.json"
       - "models/ink-stroke-sequence-v2.json"
       - "models/ink-stroke-prefix-v1.json"
@@ -44,6 +46,7 @@ jobs:
           node tests/worker-smoke.mjs
           node tests/recognition-v2-metrics.mjs
           node tests/recognition-v3-metrics.mjs
+          node tests/recognition-v4-metrics.mjs
           node tests/word-case-loop-unit.mjs
           node --check src/word_case_refinement.js
           node tests/lowercase-refinement-unit.mjs
