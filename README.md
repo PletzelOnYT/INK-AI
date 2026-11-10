@@ -8,9 +8,9 @@ A small browser-based drawing app for writing letters, numbers, and symbols. Dra
 
 ## Try it
 
-To develop from the source checkout, run `python3 -m http.server 8000` and open `http://localhost:8000`.
+**[Download index.html](./index.html)** and open it directly in Chrome, including offline. It includes the interface, JavaScript, and trained model weights in one file. No installation, API key, or separate assets required.
 
-For an offline single-file download, use the **ink-ai-standalone** artifact from [GitHub Actions](./actions/workflows/package-offline.yml). This generated HTML includes both trained models and works without a network connection, account or API key.
+For development, edit the small [HTML shell](./src/index.shell.html), [CSS](./src/app.css), and [JavaScript](./src/app.js). Generate an updated standalone HTML with `python3 scripts/build_standalone.py`, then use the file in `dist/`. GitHub Actions also [packages the offline build](./actions/workflows/package-offline.yml).
 
 ## Features
 
@@ -72,7 +72,8 @@ The next training experiment focuses on confusion between `1`, `I`, `l`, `i`, `j
 
 | File | Purpose |
 | --- | --- |
-| [index.html](./index.html) | Small browser interface |
+| [index.html](./index.html) | Downloadable self-contained HTML — works offline |
+| [src/index.shell.html](./src/index.shell.html) | Small editable HTML template |
 | [src/app.js](./src/app.js) | In-browser recognizer and drawing controller |
 | [src/app.css](./src/app.css) | Interface styles |
 | [scripts/build_standalone.py](./scripts/build_standalone.py) | Generate the complete offline HTML |
