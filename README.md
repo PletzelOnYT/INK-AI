@@ -66,7 +66,7 @@ Training more examples can help, but no model here is flawless. The next importa
 
 ### Recognition improvement target
 
-The next training experiment focuses on confusion between `1`, `I`, `l`, `i`, `j`, and `t`. It checks held-out pen writers and does not deploy a model just because it completed training. **90% accuracy remains a target, not a measured result.**
+The experimental V5 training focused on confusion between `1`, `I`, `l`, `i`, `j`, and `t`. V3 remains the default recognizer until V5 also passes browser handwriting regressions. It checks held-out pen writers and does not deploy a model just because it completed training. **90% accuracy remains a target, not a measured result.**
 
 ## Project files
 
