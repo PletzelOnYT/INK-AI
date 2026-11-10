@@ -4,6 +4,7 @@ on:
     branches: [main, "docs/model-benchmarks-graphs"]
     paths:
       - "index.html"
+      - "src/index.shell.html"
       - "README.md"
       - "docs/**"
       - "src/**"
@@ -32,23 +33,26 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Check lean index and build offline regression fixture
+      - name: Check standalone HTML and build offline regression fixture
         run: |
           python3 scripts/build_standalone.py
           python3 - <<'PY'
           from pathlib import Path
-          thin=Path("index.html").read_text()
-          assert len(thin)<7000, "Index must be a lightweight document"
+          thin=Path("src/index.shell.html").read_text()
+          standalone=Path("index.html").read_text()
+          assert len(thin)<7000, "Editable source shell must be lightweight"
+          assert len(standalone)>1400000, "Main index.html must work as single file"
           assert "src/app.js" in thin and "src/app.css" in thin
           assert "ink-cnn-int8-v1" not in thin
           assert Path("dist/ink-ai-standalone.html").stat().st_size>1400000
-          print("PASS: thin index and full offline package both exist")
+          print("PASS: full standalone index and lean editable shell both exist")
           PY
-      - name: Test real Chrome on slim source-mode index
+      - name: Test downloaded index.html directly in Chrome, without source files
         run: |
           python3 -m pip install --quiet selenium
+          python3 tests/local-file-browser.py
           python3 tests/neural-browser-smoke.py
-      - name: Use fully bundled HTML for legacy offline regression tests
+      - name: Switch to new generated offline HTML for remaining regressions
         run: cp dist/ink-ai-standalone.html index.html
       - name: Verify Python training code compiles
         run: python3 -m py_compile src/train.py src/train_stroke_sequence.py src/train_recognition_v3.py src/train_prefix_completion.py
