@@ -32,7 +32,7 @@ The source code is stored in GitHub: edit the [small HTML shell](./src/index.she
 | Tab | Switch between available suggestions |
 | G / Enter | Accept the suggested strokes and teach the personal neural ranker |
 | Shift+Alt+R | Reset local learned suggestion preferences |
-| Cmd+Z / Ctrl+Z | Undo |
+| Cmd+Z / Ctrl+Z | Undo (a whole accepted completion at once; also reverses its learning reward) |
 | Escape | Clear the canvas |
 
 ## How it works

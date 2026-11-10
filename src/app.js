@@ -191,6 +191,7 @@ const STROKE_PREFIX_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/ma
 const STROKE_PREFIX_DOMAIN_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-prefix-domain-v2.json";
 const STROKE_PENLIFT_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-penlift-v3.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
+let nextCompletionGroup=0,lastAcceptedFeedback=null;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
 let glyphClassMemory=new Map();
@@ -817,15 +818,19 @@ function acceptGhost(){
   }
   return;
  }
- // The user's explicit G choice is a training signal. Save only the
- // resulting numeric neural weights, never the person's handwritten ink.
- if(preferenceAI?.learn(ghostOptions[ghostChoice],ghostOptions,ghostPending))
-  window.__inkPreferenceLearningExamples=preferenceAI.examples;
+ // A single G choice is a human reward. Snapshot just the tiny neural
+ // weights so Cmd/Ctrl+Z can revoke accidental acceptances.
+ const beforeLearning=preferenceAI?.snapshot();
+ const learned=Boolean(preferenceAI?.learn(
+  ghostOptions[ghostChoice],ghostOptions,ghostPending));
+ if(learned)window.__inkPreferenceLearningExamples=preferenceAI.examples;
+ const group=++nextCompletionGroup;
+ lastAcceptedFeedback={group,beforeLearning,learned};
  ++glyphEpoch;
  clearTimeout(glyphTimer);glyphTimer=0;glyphDirty=false;
  const paths=ghostCandidate.paths;
  for(const points of paths)
-  strokes.push({tool:"pen",type:"vector-completion",
+  strokes.push({tool:"pen",type:"vector-completion",completionGroup:group,
     width:window.__inkGhostStrokeWidth,points:points.map(p=>p.slice())});
  window.__inkAcceptedVectorCount+=paths.length;
  clearGhost();paint();schedule(70);
@@ -870,7 +875,8 @@ function pos(e){
          Math.max(0,Math.min(canvas.height,(e.clientY-box.top)*canvas.height/box.height))];
 }
 function reset(){
- ++glyphEpoch;strokes=[];current=null;pointer=null;clearGhost();paint();++readVersion;
+ ++glyphEpoch;strokes=[];current=null;pointer=null;lastAcceptedFeedback=null;
+ clearGhost();paint();++readVersion;
  clearTimeout(readTimer);display(loaded?"Draw something":"Loading AI…",true);
 }
 canvas.addEventListener("pointerdown",e=>{
@@ -902,7 +908,23 @@ canvas.addEventListener("pointercancel",finish);
 window.addEventListener("keydown",e=>{
  if(e.key==="Escape"){reset();return}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){
-  e.preventDefault();strokes.pop();paint();schedule(100);
+  e.preventDefault();
+  const last=strokes.at(-1);
+  if(last?.type==="vector-completion"&&last.completionGroup){
+   // Undo a neural completion as ONE drawing action, including pen lifts.
+   // An undone G is not human approval: reverse its personal learning.
+   const group=last.completionGroup;
+   while(strokes.at(-1)?.completionGroup===group)strokes.pop();
+   if(lastAcceptedFeedback?.group===group){
+    if(lastAcceptedFeedback.learned&&lastAcceptedFeedback.beforeLearning)
+     preferenceAI?.restore(lastAcceptedFeedback.beforeLearning);
+    window.__inkPreferenceLearningExamples=preferenceAI?.examples||0;
+    lastAcceptedFeedback=null;
+   }
+  }else{
+   strokes.pop();
+  }
+  ++glyphEpoch;clearGhost();paint();schedule(100);
  }
 });
 function groupRuns(series,gap=2,minSpan=1){

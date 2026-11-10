@@ -34,11 +34,19 @@ try:
     stroke([[290,140],[290,173],[290,208],[290,242],[290,278]],888)
     wait.until(lambda d:d.execute_script("return window.__inkGhostPoints>=3"))
     before=driver.execute_script("return document.getElementById('pad').toDataURL()")
+    learned_before=driver.execute_script("return window.__inkPreferenceLearningExamples")
     driver.execute_script("window.dispatchEvent(new KeyboardEvent('keydown',{key:'g',bubbles:true}))")
     wait.until(lambda d:d.execute_script("return window.__inkAcceptedVectorCount>0"))
+    wait.until(lambda d:d.execute_script(
+        "return window.__inkPreferenceLearningExamples>arguments[0]",learned_before))
     after=driver.execute_script("return document.getElementById('pad').toDataURL()")
     assert after!=before
-    print("PASS: manual Assist and G accepts visible neural ghost after release",flush=True)
+    print("PASS: G accepts real neural ghost and rewards on-device neural model",flush=True)
+    driver.execute_script("window.dispatchEvent(new KeyboardEvent('keydown',{key:'z',ctrlKey:true,bubbles:true}))")
+    wait.until(lambda d:d.execute_script(
+        "return document.getElementById('pad').toDataURL()===arguments[0]",before))
+    assert driver.execute_script("return window.__inkPreferenceLearningExamples")==learned_before
+    print("PASS: one undo removes whole neural completion and retracts mistaken feedback",flush=True)
     driver.find_element(By.ID,"assist").click()
     assert driver.execute_script("return window.__inkAssistEnabled") is False
 finally:
