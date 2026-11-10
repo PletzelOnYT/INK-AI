@@ -1,0 +1,2456 @@
+{
+  "candidate": "models/ink-cnn-v4.json",
+  "eligible": false,
+  "source_counts": {
+    "uji_pen_train": 6210,
+    "uji_calibration": 1550,
+    "uji_independent": 1551,
+    "emnist_training": 70000,
+    "emnist_validation": 12000,
+    "hasy_training": 23753,
+    "hasy_writer_heldout": 494,
+    "pendigits_training": 7494,
+    "pendigits_unseen_writers": 3498,
+    "synthetic_symbols": 6500
+  },
+  "baseline_v3": {
+    "pen_cal": {
+      "overall": 0.788387,
+      "macro": 0.784615,
+      "lowercase_macro": 0.701923,
+      "tested": 1550,
+      "target_letters": {
+        "c": {
+          "count": 20,
+          "accuracy": 0.65
+        },
+        "i": {
+          "count": 20,
+          "accuracy": 0.8
+        },
+        "o": {
+          "count": 20,
+          "accuracy": 0.45
+        },
+        "x": {
+          "count": 20,
+          "accuracy": 0.55
+        },
+        "y": {
+          "count": 20,
+          "accuracy": 0.75
+        },
+        "h": {
+          "count": 20,
+          "accuracy": 0.9
+        },
+        "I": {
+          "count": 20,
+          "accuracy": 0.6
+        },
+        "X": {
+          "count": 20,
+          "accuracy": 0.6
+        },
+        "Y": {
+          "count": 20,
+          "accuracy": 0.75
+        },
+        "O": {
+          "count": 20,
+          "accuracy": 0.45
+        }
+      },
+      "hard_confusions": [
+        {
+          "truth": "x",
+          "predicted": "X",
+          "count": 9
+        },
+        {
+          "truth": "O",
+          "predicted": "o",
+          "count": 7
+        },
+        {
+          "truth": "o",
+          "predicted": "O",
+          "count": 7
+        },
+        {
+          "truth": "c",
+          "predicted": "C",
+          "count": 6
+        },
+        {
+          "truth": "X",
+          "predicted": "x",
+          "count": 5
+        },
+        {
+          "truth": "Y",
+          "predicted": "y",
+          "count": 4
+        },
+        {
+          "truth": "y",
+          "predicted": "Y",
+          "count": 4
+        },
+        {
+          "truth": "O",
+          "predicted": "0",
+          "count": 4
+        },
+        {
+          "truth": "I",
+          "predicted": "'",
+          "count": 3
+        },
+        {
+          "truth": "o",
+          "predicted": "0",
+          "count": 3
+        },
+        {
+          "truth": "i",
+          "predicted": "L",
+          "count": 2
+        },
+        {
+          "truth": "I",
+          "predicted": "1",
+          "count": 2
+        }
+      ]
+    },
+    "pen_independent": {
+      "overall": 0.764668,
+      "macro": 0.760781,
+      "lowercase_macro": 0.705769,
+      "tested": 1551,
+      "target_letters": {
+        "c": {
+          "count": 20,
+          "accuracy": 0.45
+        },
+        "i": {
+          "count": 20,
+          "accuracy": 0.95
+        },
+        "o": {
+          "count": 20,
+          "accuracy": 0.45
+        },
+        "x": {
+          "count": 20,
+          "accuracy": 0.25
+        },
+        "y": {
+          "count": 20,
+          "accuracy": 0.8
+        },
+        "h": {
+          "count": 20,
+          "accuracy": 0.9
+        },
+        "I": {
+          "count": 20,
+          "accuracy": 0.35
+        },
+        "X": {
+          "count": 20,
+          "accuracy": 0.8
+        },
+        "Y": {
+          "count": 20,
+          "accuracy": 0.6
+        },
+        "O": {
+          "count": 20,
+          "accuracy": 0.45
+        }
+      },
+      "hard_confusions": [
+        {
+          "truth": "x",
+          "predicted": "X",
+          "count": 10
+        },
+        {
+          "truth": "c",
+          "predicted": "C",
+          "count": 8
+        },
+        {
+          "truth": "Y",
+          "predicted": "y",
+          "count": 6
+        },
+        {
+          "truth": "o",
+          "predicted": "O",
+          "count": 6
+        },
+        {
+          "truth": "O",
+          "predicted": "0",
+          "count": 6
+        },
+        {
+          "truth": "O",
+          "predicted": "o",
+          "count": 5
+        },
+        {
+          "truth": "o",
+          "predicted": "0",
+          "count": 3
+        },
+        {
+          "truth": "I",
+          "predicted": "'",
+          "count": 3
+        },
+        {
+          "truth": "I",
+          "predicted": "2",
+          "count": 2
+        },
+        {
+          "truth": "Y",
+          "predicted": "g",
+          "count": 2
+        },
+        {
+          "truth": "x",
+          "predicted": "y",
+          "count": 2
+        },
+        {
+          "truth": "y",
+          "predicted": "Y",
+          "count": 2
+        }
+      ]
+    },
+    "em_val": {
+      "overall": 0.844167,
+      "macro": 0.714696,
+      "lowercase_macro": 0.5399,
+      "tested": 12000,
+      "target_letters": {
+        "c": {
+          "count": 39,
+          "accuracy": 0.1282
+        },
+        "i": {
+          "count": 47,
+          "accuracy": 0.383
+        },
+        "o": {
+          "count": 52,
+          "accuracy": 0
+        },
+        "x": {
+          "count": 40,
+          "accuracy": 0.5
+        },
+        "y": {
+          "count": 43,
+          "accuracy": 0.2558
+        },
+        "h": {
+          "count": 150,
+          "accuracy": 0.9333
+        },
+        "I": {
+          "count": 187,
+          "accuracy": 0.3797
+        },
+        "X": {
+          "count": 38,
+          "accuracy": 0.7632
+        },
+        "Y": {
+          "count": 88,
+          "accuracy": 0.8409
+        },
+        "O": {
+          "count": 370,
+          "accuracy": 0.4703
+        }
+      },
+      "hard_confusions": [
+        {
+          "truth": "O",
+          "predicted": "0",
+          "count": 191
+        },
+        {
+          "truth": "I",
+          "predicted": "1",
+          "count": 106
+        },
+        {
+          "truth": "c",
+          "predicted": "C",
+          "count": 31
+        },
+        {
+          "truth": "o",
+          "predicted": "0",
+          "count": 28
+        },
+        {
+          "truth": "y",
+          "predicted": "Y",
+          "count": 25
+        },
+        {
+          "truth": "o",
+          "predicted": "O",
+          "count": 23
+        },
+        {
+          "truth": "x",
+          "predicted": "X",
+          "count": 16
+        },
+        {
+          "truth": "i",
+          "predicted": "1",
+          "count": 16
+        },
+        {
+          "truth": "X",
+          "predicted": "x",
+          "count": 8
+        },
+        {
+          "truth": "i",
+          "predicted": "I",
+          "count": 6
+        },
+        {
+          "truth": "Y",
+          "predicted": "4",
+          "count": 5
+        },
+        {
+          "truth": "I",
+          "predicted": "l",
+          "count": 4
+        }
+      ]
+    },
+    "hasy_val": {
+      "overall": 0.589069,
+      "macro": 0.600666,
+      "lowercase_macro": 0.513667,
+      "tested": 494,
+      "target_letters": {
+        "c": {
+          "count": 5,
+          "accuracy": 0.6
+        },
+        "i": {
+          "count": 3,
+          "accuracy": 0.3333
+        },
+        "o": {
+          "count": 5,
+          "accuracy": 0.8
+        },
+        "x": {
+          "count": 8,
+          "accuracy": 0.875
+        },
+        "y": {
+          "count": 2,
+          "accuracy": 0.5
+        },
+        "h": {
+          "count": 3,
+          "accuracy": 0.6667
+        },
+        "I": {
+          "count": 6,
+          "accuracy": 0.6667
+        },
+        "X": {
+          "count": 3,
+          "accuracy": 0
+        },
+        "Y": {
+          "count": 3,
+          "accuracy": 0
+        },
+        "O": {
+          "count": 6,
+          "accuracy": 0.3333
+        }
+      },
+      "hard_confusions": [
+        {
+          "truth": "O",
+          "predicted": "o",
+          "count": 4
+        },
+        {
+          "truth": "X",
+          "predicted": "x",
+          "count": 3
+        },
+        {
+          "truth": "Y",
+          "predicted": "y",
+          "count": 3
+        },
+        {
+          "truth": "c",
+          "predicted": "E",
+          "count": 1
+        },
+        {
+          "truth": "I",
+          "predicted": ".",
+          "count": 1
+        },
+        {
+          "truth": "I",
+          "predicted": "f",
+          "count": 1
+        },
+        {
+          "truth": "o",
+          "predicted": "O",
+          "count": 1
+        },
+        {
+          "truth": "x",
+          "predicted": "K",
+          "count": 1
+        },
+        {
+          "truth": "h",
+          "predicted": "B",
+          "count": 1
+        },
+        {
+          "truth": "i",
+          "predicted": "j",
+          "count": 1
+        },
+        {
+          "truth": "i",
+          "predicted": ";",
+          "count": 1
+        },
+        {
+          "truth": "y",
+          "predicted": "$",
+          "count": 1
+        }
+      ]
+    },
+    "digit_val": {
+      "overall": 0.084334,
+      "macro": 0.087621,
+      "lowercase_macro": 0,
+      "tested": 3498,
+      "target_letters": {
+        "c": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "i": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "o": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "x": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "y": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "h": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "I": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "X": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "Y": {
+          "count": 0,
+          "accuracy": 0
+        },
+        "O": {
+          "count": 0,
+          "accuracy": 0
+        }
+      },
+      "hard_confusions": []
+    }
+  },
+  "selected": null,
+  "independent_uji_v4": null,
+  "quality_gates": {
+    "calibration_checkpoint": false
+  },
+  "training_presentations": 450000,
+  "history": [
+    {
+      "epoch": 1,
+      "eligible_calibration": false,
+      "objective": 0.718503,
+      "train_loss": 1.13909,
+      "validation": {
+        "pen_cal": {
+          "overall": 0.736129,
+          "macro": 0.732051,
+          "lowercase_macro": 0.621154,
+          "tested": 1550,
+          "target_letters": {
+            "c": {
+              "count": 20,
+              "accuracy": 0.35
+            },
+            "i": {
+              "count": 20,
+              "accuracy": 0.8
+            },
+            "o": {
+              "count": 20,
+              "accuracy": 0
+            },
+            "x": {
+              "count": 20,
+              "accuracy": 0.3
+            },
+            "y": {
+              "count": 20,
+              "accuracy": 0.6
+            },
+            "h": {
+              "count": 20,
+              "accuracy": 0.9
+            },
+            "I": {
+              "count": 20,
+              "accuracy": 0.55
+            },
+            "X": {
+              "count": 20,
+              "accuracy": 0.45
+            },
+            "Y": {
+              "count": 20,
+              "accuracy": 0.85
+            },
+            "O": {
+              "count": 20,
+              "accuracy": 0
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 18
+            },
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 17
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 12
+            },
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 11
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 7
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 5
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 4
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 3
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 3
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 3
+            },
+            {
+              "truth": "i",
+              "predicted": "L",
+              "count": 2
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 2
+            }
+          ]
+        },
+        "em_val": {
+          "overall": 0.836083,
+          "macro": 0.701146,
+          "lowercase_macro": 0.533308,
+          "tested": 12000,
+          "target_letters": {
+            "c": {
+              "count": 39,
+              "accuracy": 0.0256
+            },
+            "i": {
+              "count": 47,
+              "accuracy": 0.383
+            },
+            "o": {
+              "count": 52,
+              "accuracy": 0.0192
+            },
+            "x": {
+              "count": 40,
+              "accuracy": 0.55
+            },
+            "y": {
+              "count": 43,
+              "accuracy": 0.0465
+            },
+            "h": {
+              "count": 150,
+              "accuracy": 0.9333
+            },
+            "I": {
+              "count": 187,
+              "accuracy": 0.4866
+            },
+            "X": {
+              "count": 38,
+              "accuracy": 0.6316
+            },
+            "Y": {
+              "count": 88,
+              "accuracy": 0.8636
+            },
+            "O": {
+              "count": 370,
+              "accuracy": 0.573
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 152
+            },
+            {
+              "truth": "I",
+              "predicted": "1",
+              "count": 87
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 35
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 32
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 31
+            },
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 19
+            },
+            {
+              "truth": "i",
+              "predicted": "1",
+              "count": 13
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 11
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 11
+            },
+            {
+              "truth": "i",
+              "predicted": "I",
+              "count": 10
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 6
+            },
+            {
+              "truth": "y",
+              "predicted": "4",
+              "count": 6
+            }
+          ]
+        },
+        "hasy_val": {
+          "overall": 0.657895,
+          "macro": 0.697738,
+          "lowercase_macro": 0.547667,
+          "tested": 494,
+          "target_letters": {
+            "c": {
+              "count": 5,
+              "accuracy": 0.6
+            },
+            "i": {
+              "count": 3,
+              "accuracy": 0.6667
+            },
+            "o": {
+              "count": 5,
+              "accuracy": 0.6
+            },
+            "x": {
+              "count": 8,
+              "accuracy": 0.375
+            },
+            "y": {
+              "count": 2,
+              "accuracy": 0.5
+            },
+            "h": {
+              "count": 3,
+              "accuracy": 1
+            },
+            "I": {
+              "count": 6,
+              "accuracy": 0.1667
+            },
+            "X": {
+              "count": 3,
+              "accuracy": 0.3333
+            },
+            "Y": {
+              "count": 3,
+              "accuracy": 0.3333
+            },
+            "O": {
+              "count": 6,
+              "accuracy": 0.5
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 4
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 2
+            },
+            {
+              "truth": "I",
+              "predicted": "±",
+              "count": 2
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 2
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 2
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 2
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 2
+            },
+            {
+              "truth": "c",
+              "predicted": "[",
+              "count": 1
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 1
+            },
+            {
+              "truth": "I",
+              "predicted": "]",
+              "count": 1
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 1
+            },
+            {
+              "truth": "i",
+              "predicted": "j",
+              "count": 1
+            }
+          ]
+        },
+        "digit_val": {
+          "overall": 0.626644,
+          "macro": 0.628443,
+          "lowercase_macro": 0,
+          "tested": 3498,
+          "target_letters": {
+            "c": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "i": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "o": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "x": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "h": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "I": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "X": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "Y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "O": {
+              "count": 0,
+              "accuracy": 0
+            }
+          },
+          "hard_confusions": []
+        }
+      },
+      "elapsed_s": 73.1
+    },
+    {
+      "epoch": 2,
+      "eligible_calibration": false,
+      "objective": 0.741227,
+      "train_loss": 0.83568,
+      "validation": {
+        "pen_cal": {
+          "overall": 0.754839,
+          "macro": 0.750641,
+          "lowercase_macro": 0.630769,
+          "tested": 1550,
+          "target_letters": {
+            "c": {
+              "count": 20,
+              "accuracy": 0.15
+            },
+            "i": {
+              "count": 20,
+              "accuracy": 0.8
+            },
+            "o": {
+              "count": 20,
+              "accuracy": 0
+            },
+            "x": {
+              "count": 20,
+              "accuracy": 0.45
+            },
+            "y": {
+              "count": 20,
+              "accuracy": 0.55
+            },
+            "h": {
+              "count": 20,
+              "accuracy": 0.95
+            },
+            "I": {
+              "count": 20,
+              "accuracy": 0.55
+            },
+            "X": {
+              "count": 20,
+              "accuracy": 0.4
+            },
+            "Y": {
+              "count": 20,
+              "accuracy": 0.85
+            },
+            "O": {
+              "count": 20,
+              "accuracy": 0.05
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 17
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 16
+            },
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 15
+            },
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 7
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 6
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 6
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 4
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 4
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 3
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 3
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 2
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 2
+            }
+          ]
+        },
+        "em_val": {
+          "overall": 0.837167,
+          "macro": 0.710779,
+          "lowercase_macro": 0.555887,
+          "tested": 12000,
+          "target_letters": {
+            "c": {
+              "count": 39,
+              "accuracy": 0.0256
+            },
+            "i": {
+              "count": 47,
+              "accuracy": 0.4043
+            },
+            "o": {
+              "count": 52,
+              "accuracy": 0.0192
+            },
+            "x": {
+              "count": 40,
+              "accuracy": 0.675
+            },
+            "y": {
+              "count": 43,
+              "accuracy": 0.3023
+            },
+            "h": {
+              "count": 150,
+              "accuracy": 0.9267
+            },
+            "I": {
+              "count": 187,
+              "accuracy": 0.4706
+            },
+            "X": {
+              "count": 38,
+              "accuracy": 0.5
+            },
+            "Y": {
+              "count": 88,
+              "accuracy": 0.8409
+            },
+            "O": {
+              "count": 370,
+              "accuracy": 0.5135
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 172
+            },
+            {
+              "truth": "I",
+              "predicted": "1",
+              "count": 87
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 35
+            },
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 25
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 24
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 23
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 17
+            },
+            {
+              "truth": "i",
+              "predicted": "1",
+              "count": 13
+            },
+            {
+              "truth": "i",
+              "predicted": "I",
+              "count": 10
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 7
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 5
+            },
+            {
+              "truth": "Y",
+              "predicted": "r",
+              "count": 4
+            }
+          ]
+        },
+        "hasy_val": {
+          "overall": 0.688259,
+          "macro": 0.708657,
+          "lowercase_macro": 0.561667,
+          "tested": 494,
+          "target_letters": {
+            "c": {
+              "count": 5,
+              "accuracy": 0.4
+            },
+            "i": {
+              "count": 3,
+              "accuracy": 0.6667
+            },
+            "o": {
+              "count": 5,
+              "accuracy": 0.6
+            },
+            "x": {
+              "count": 8,
+              "accuracy": 0.625
+            },
+            "y": {
+              "count": 2,
+              "accuracy": 1
+            },
+            "h": {
+              "count": 3,
+              "accuracy": 1
+            },
+            "I": {
+              "count": 6,
+              "accuracy": 0.3333
+            },
+            "X": {
+              "count": 3,
+              "accuracy": 0
+            },
+            "Y": {
+              "count": 3,
+              "accuracy": 0
+            },
+            "O": {
+              "count": 6,
+              "accuracy": 0.5
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 3
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 3
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 3
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 2
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 2
+            },
+            {
+              "truth": "c",
+              "predicted": "[",
+              "count": 1
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 1
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 1
+            },
+            {
+              "truth": "i",
+              "predicted": "j",
+              "count": 1
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 1
+            },
+            {
+              "truth": "c",
+              "predicted": "o",
+              "count": 1
+            },
+            {
+              "truth": "I",
+              "predicted": "±",
+              "count": 1
+            }
+          ]
+        },
+        "digit_val": {
+          "overall": 0.753288,
+          "macro": 0.754769,
+          "lowercase_macro": 0,
+          "tested": 3498,
+          "target_letters": {
+            "c": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "i": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "o": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "x": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "h": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "I": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "X": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "Y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "O": {
+              "count": 0,
+              "accuracy": 0
+            }
+          },
+          "hard_confusions": []
+        }
+      },
+      "elapsed_s": 74.5
+    },
+    {
+      "epoch": 3,
+      "eligible_calibration": false,
+      "objective": 0.756353,
+      "train_loss": 0.77538,
+      "validation": {
+        "pen_cal": {
+          "overall": 0.769032,
+          "macro": 0.764744,
+          "lowercase_macro": 0.671154,
+          "tested": 1550,
+          "target_letters": {
+            "c": {
+              "count": 20,
+              "accuracy": 0.75
+            },
+            "i": {
+              "count": 20,
+              "accuracy": 0.85
+            },
+            "o": {
+              "count": 20,
+              "accuracy": 0.15
+            },
+            "x": {
+              "count": 20,
+              "accuracy": 0.4
+            },
+            "y": {
+              "count": 20,
+              "accuracy": 0.5
+            },
+            "h": {
+              "count": 20,
+              "accuracy": 0.95
+            },
+            "I": {
+              "count": 20,
+              "accuracy": 0.55
+            },
+            "X": {
+              "count": 20,
+              "accuracy": 0.45
+            },
+            "Y": {
+              "count": 20,
+              "accuracy": 0.85
+            },
+            "O": {
+              "count": 20,
+              "accuracy": 0.15
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 14
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 14
+            },
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 9
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 6
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 6
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 5
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 4
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 3
+            },
+            {
+              "truth": "i",
+              "predicted": "L",
+              "count": 2
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 2
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 2
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 2
+            }
+          ]
+        },
+        "em_val": {
+          "overall": 0.833083,
+          "macro": 0.702884,
+          "lowercase_macro": 0.542971,
+          "tested": 12000,
+          "target_letters": {
+            "c": {
+              "count": 39,
+              "accuracy": 0.1795
+            },
+            "i": {
+              "count": 47,
+              "accuracy": 0.383
+            },
+            "o": {
+              "count": 52,
+              "accuracy": 0.0192
+            },
+            "x": {
+              "count": 40,
+              "accuracy": 0.525
+            },
+            "y": {
+              "count": 43,
+              "accuracy": 0.2326
+            },
+            "h": {
+              "count": 150,
+              "accuracy": 0.92
+            },
+            "I": {
+              "count": 187,
+              "accuracy": 0.4385
+            },
+            "X": {
+              "count": 38,
+              "accuracy": 0.5526
+            },
+            "Y": {
+              "count": 88,
+              "accuracy": 0.875
+            },
+            "O": {
+              "count": 370,
+              "accuracy": 0.5216
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 168
+            },
+            {
+              "truth": "I",
+              "predicted": "1",
+              "count": 90
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 29
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 27
+            },
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 25
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 24
+            },
+            {
+              "truth": "i",
+              "predicted": "1",
+              "count": 16
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 15
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 11
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 8
+            },
+            {
+              "truth": "i",
+              "predicted": "I",
+              "count": 7
+            },
+            {
+              "truth": "h",
+              "predicted": "b",
+              "count": 3
+            }
+          ]
+        },
+        "hasy_val": {
+          "overall": 0.694332,
+          "macro": 0.715377,
+          "lowercase_macro": 0.527333,
+          "tested": 494,
+          "target_letters": {
+            "c": {
+              "count": 5,
+              "accuracy": 0.6
+            },
+            "i": {
+              "count": 3,
+              "accuracy": 0.6667
+            },
+            "o": {
+              "count": 5,
+              "accuracy": 0.8
+            },
+            "x": {
+              "count": 8,
+              "accuracy": 0.5
+            },
+            "y": {
+              "count": 2,
+              "accuracy": 0
+            },
+            "h": {
+              "count": 3,
+              "accuracy": 1
+            },
+            "I": {
+              "count": 6,
+              "accuracy": 0.3333
+            },
+            "X": {
+              "count": 3,
+              "accuracy": 0
+            },
+            "Y": {
+              "count": 3,
+              "accuracy": 0.3333
+            },
+            "O": {
+              "count": 6,
+              "accuracy": 0.3333
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 4
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 3
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 3
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 2
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 2
+            },
+            {
+              "truth": "c",
+              "predicted": "[",
+              "count": 1
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 1
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 1
+            },
+            {
+              "truth": "i",
+              "predicted": "j",
+              "count": 1
+            },
+            {
+              "truth": "y",
+              "predicted": "9",
+              "count": 1
+            },
+            {
+              "truth": "c",
+              "predicted": "o",
+              "count": 1
+            },
+            {
+              "truth": "I",
+              "predicted": "±",
+              "count": 1
+            }
+          ]
+        },
+        "digit_val": {
+          "overall": 0.789594,
+          "macro": 0.791221,
+          "lowercase_macro": 0,
+          "tested": 3498,
+          "target_letters": {
+            "c": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "i": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "o": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "x": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "h": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "I": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "X": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "Y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "O": {
+              "count": 0,
+              "accuracy": 0
+            }
+          },
+          "hard_confusions": []
+        }
+      },
+      "elapsed_s": 74.5
+    },
+    {
+      "epoch": 4,
+      "eligible_calibration": false,
+      "objective": 0.75912,
+      "train_loss": 0.7479,
+      "validation": {
+        "pen_cal": {
+          "overall": 0.769032,
+          "macro": 0.764744,
+          "lowercase_macro": 0.669231,
+          "tested": 1550,
+          "target_letters": {
+            "c": {
+              "count": 20,
+              "accuracy": 0.5
+            },
+            "i": {
+              "count": 20,
+              "accuracy": 0.85
+            },
+            "o": {
+              "count": 20,
+              "accuracy": 0.05
+            },
+            "x": {
+              "count": 20,
+              "accuracy": 0.4
+            },
+            "y": {
+              "count": 20,
+              "accuracy": 0.6
+            },
+            "h": {
+              "count": 20,
+              "accuracy": 0.95
+            },
+            "I": {
+              "count": 20,
+              "accuracy": 0.55
+            },
+            "X": {
+              "count": 20,
+              "accuracy": 0.5
+            },
+            "Y": {
+              "count": 20,
+              "accuracy": 0.85
+            },
+            "O": {
+              "count": 20,
+              "accuracy": 0.2
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 13
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 13
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 10
+            },
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 7
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 6
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 5
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 5
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 5
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 4
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 3
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 2
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 2
+            }
+          ]
+        },
+        "em_val": {
+          "overall": 0.838167,
+          "macro": 0.709226,
+          "lowercase_macro": 0.540398,
+          "tested": 12000,
+          "target_letters": {
+            "c": {
+              "count": 39,
+              "accuracy": 0.1026
+            },
+            "i": {
+              "count": 47,
+              "accuracy": 0.4255
+            },
+            "o": {
+              "count": 52,
+              "accuracy": 0.0192
+            },
+            "x": {
+              "count": 40,
+              "accuracy": 0.5
+            },
+            "y": {
+              "count": 43,
+              "accuracy": 0.2326
+            },
+            "h": {
+              "count": 150,
+              "accuracy": 0.92
+            },
+            "I": {
+              "count": 187,
+              "accuracy": 0.4652
+            },
+            "X": {
+              "count": 38,
+              "accuracy": 0.6579
+            },
+            "Y": {
+              "count": 88,
+              "accuracy": 0.8636
+            },
+            "O": {
+              "count": 370,
+              "accuracy": 0.5541
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 158
+            },
+            {
+              "truth": "I",
+              "predicted": "1",
+              "count": 86
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 32
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 27
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 26
+            },
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 23
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 13
+            },
+            {
+              "truth": "i",
+              "predicted": "1",
+              "count": 13
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 11
+            },
+            {
+              "truth": "i",
+              "predicted": "I",
+              "count": 10
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 7
+            },
+            {
+              "truth": "h",
+              "predicted": "b",
+              "count": 3
+            }
+          ]
+        },
+        "hasy_val": {
+          "overall": 0.700405,
+          "macro": 0.717345,
+          "lowercase_macro": 0.523667,
+          "tested": 494,
+          "target_letters": {
+            "c": {
+              "count": 5,
+              "accuracy": 0.6
+            },
+            "i": {
+              "count": 3,
+              "accuracy": 0.6667
+            },
+            "o": {
+              "count": 5,
+              "accuracy": 0.8
+            },
+            "x": {
+              "count": 8,
+              "accuracy": 0.375
+            },
+            "y": {
+              "count": 2,
+              "accuracy": 0
+            },
+            "h": {
+              "count": 3,
+              "accuracy": 1
+            },
+            "I": {
+              "count": 6,
+              "accuracy": 0.3333
+            },
+            "X": {
+              "count": 3,
+              "accuracy": 0.3333
+            },
+            "Y": {
+              "count": 3,
+              "accuracy": 0.3333
+            },
+            "O": {
+              "count": 6,
+              "accuracy": 0.5
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 4
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 3
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 2
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 2
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 2
+            },
+            {
+              "truth": "c",
+              "predicted": "[",
+              "count": 1
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 1
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 1
+            },
+            {
+              "truth": "i",
+              "predicted": "j",
+              "count": 1
+            },
+            {
+              "truth": "y",
+              "predicted": "9",
+              "count": 1
+            },
+            {
+              "truth": "c",
+              "predicted": "o",
+              "count": 1
+            },
+            {
+              "truth": "I",
+              "predicted": "±",
+              "count": 1
+            }
+          ]
+        },
+        "digit_val": {
+          "overall": 0.812464,
+          "macro": 0.813507,
+          "lowercase_macro": 0,
+          "tested": 3498,
+          "target_letters": {
+            "c": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "i": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "o": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "x": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "h": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "I": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "X": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "Y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "O": {
+              "count": 0,
+              "accuracy": 0
+            }
+          },
+          "hard_confusions": []
+        }
+      },
+      "elapsed_s": 74.2
+    },
+    {
+      "epoch": 5,
+      "eligible_calibration": false,
+      "objective": 0.762923,
+      "train_loss": 0.73449,
+      "validation": {
+        "pen_cal": {
+          "overall": 0.772903,
+          "macro": 0.76859,
+          "lowercase_macro": 0.667308,
+          "tested": 1550,
+          "target_letters": {
+            "c": {
+              "count": 20,
+              "accuracy": 0.15
+            },
+            "i": {
+              "count": 20,
+              "accuracy": 0.85
+            },
+            "o": {
+              "count": 20,
+              "accuracy": 0.05
+            },
+            "x": {
+              "count": 20,
+              "accuracy": 0.45
+            },
+            "y": {
+              "count": 20,
+              "accuracy": 0.6
+            },
+            "h": {
+              "count": 20,
+              "accuracy": 0.95
+            },
+            "I": {
+              "count": 20,
+              "accuracy": 0.55
+            },
+            "X": {
+              "count": 20,
+              "accuracy": 0.5
+            },
+            "Y": {
+              "count": 20,
+              "accuracy": 0.8
+            },
+            "O": {
+              "count": 20,
+              "accuracy": 0.2
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 17
+            },
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 13
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 13
+            },
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 6
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 6
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 5
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 5
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 5
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 4
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 3
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 3
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 2
+            }
+          ]
+        },
+        "em_val": {
+          "overall": 0.838167,
+          "macro": 0.706902,
+          "lowercase_macro": 0.539132,
+          "tested": 12000,
+          "target_letters": {
+            "c": {
+              "count": 39,
+              "accuracy": 0.0256
+            },
+            "i": {
+              "count": 47,
+              "accuracy": 0.4255
+            },
+            "o": {
+              "count": 52,
+              "accuracy": 0.0192
+            },
+            "x": {
+              "count": 40,
+              "accuracy": 0.5
+            },
+            "y": {
+              "count": 43,
+              "accuracy": 0.2791
+            },
+            "h": {
+              "count": 150,
+              "accuracy": 0.92
+            },
+            "I": {
+              "count": 187,
+              "accuracy": 0.4171
+            },
+            "X": {
+              "count": 38,
+              "accuracy": 0.5789
+            },
+            "Y": {
+              "count": 88,
+              "accuracy": 0.8295
+            },
+            "O": {
+              "count": 370,
+              "accuracy": 0.5243
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 169
+            },
+            {
+              "truth": "I",
+              "predicted": "1",
+              "count": 96
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 35
+            },
+            {
+              "truth": "o",
+              "predicted": "0",
+              "count": 29
+            },
+            {
+              "truth": "y",
+              "predicted": "Y",
+              "count": 26
+            },
+            {
+              "truth": "o",
+              "predicted": "O",
+              "count": 21
+            },
+            {
+              "truth": "i",
+              "predicted": "1",
+              "count": 16
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 14
+            },
+            {
+              "truth": "x",
+              "predicted": "X",
+              "count": 12
+            },
+            {
+              "truth": "i",
+              "predicted": "I",
+              "count": 7
+            },
+            {
+              "truth": "I",
+              "predicted": "l",
+              "count": 7
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 5
+            }
+          ]
+        },
+        "hasy_val": {
+          "overall": 0.710526,
+          "macro": 0.716532,
+          "lowercase_macro": 0.532667,
+          "tested": 494,
+          "target_letters": {
+            "c": {
+              "count": 5,
+              "accuracy": 0.2
+            },
+            "i": {
+              "count": 3,
+              "accuracy": 0.6667
+            },
+            "o": {
+              "count": 5,
+              "accuracy": 0.8
+            },
+            "x": {
+              "count": 8,
+              "accuracy": 0.5
+            },
+            "y": {
+              "count": 2,
+              "accuracy": 0.5
+            },
+            "h": {
+              "count": 3,
+              "accuracy": 1
+            },
+            "I": {
+              "count": 6,
+              "accuracy": 0.3333
+            },
+            "X": {
+              "count": 3,
+              "accuracy": 0
+            },
+            "Y": {
+              "count": 3,
+              "accuracy": 0.3333
+            },
+            "O": {
+              "count": 6,
+              "accuracy": 0.3333
+            }
+          },
+          "hard_confusions": [
+            {
+              "truth": "x",
+              "predicted": "×",
+              "count": 4
+            },
+            {
+              "truth": "O",
+              "predicted": "0",
+              "count": 3
+            },
+            {
+              "truth": "I",
+              "predicted": "|",
+              "count": 3
+            },
+            {
+              "truth": "X",
+              "predicted": "×",
+              "count": 2
+            },
+            {
+              "truth": "Y",
+              "predicted": "y",
+              "count": 2
+            },
+            {
+              "truth": "c",
+              "predicted": "C",
+              "count": 2
+            },
+            {
+              "truth": "c",
+              "predicted": "[",
+              "count": 1
+            },
+            {
+              "truth": "X",
+              "predicted": "x",
+              "count": 1
+            },
+            {
+              "truth": "i",
+              "predicted": "j",
+              "count": 1
+            },
+            {
+              "truth": "O",
+              "predicted": "o",
+              "count": 1
+            },
+            {
+              "truth": "y",
+              "predicted": "9",
+              "count": 1
+            },
+            {
+              "truth": "c",
+              "predicted": "o",
+              "count": 1
+            }
+          ]
+        },
+        "digit_val": {
+          "overall": 0.824471,
+          "macro": 0.825771,
+          "lowercase_macro": 0,
+          "tested": 3498,
+          "target_letters": {
+            "c": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "i": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "o": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "x": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "h": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "I": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "X": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "Y": {
+              "count": 0,
+              "accuracy": 0
+            },
+            "O": {
+              "count": 0,
+              "accuracy": 0
+            }
+          },
+          "hard_confusions": []
+        }
+      },
+      "elapsed_s": 73.5
+    }
+  ],
+  "notes": "Only the UJI writer-independent split is untouched during model selection. HASY and PenDigits writer-disjoint splits are validation data, not final untouched tests; augmentations do not create new writers."
+}
