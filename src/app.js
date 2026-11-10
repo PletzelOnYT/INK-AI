@@ -198,10 +198,8 @@ window.__inkFallbackUsed=0;
 window.__inkGhostTailDy=0;
 window.__inkGhostTailRange=0;
 let glyphFallbackLoading=false;
-let assistUserChoice=false;
 let glyphNoCandidateRetries=0;
 let inFlightGhost=null;
-window.__inkAssistAutoEnabled=false;
 async function loadValidatedBackup(){
  if(glyphFallbackLoading||!glyphWorker)return;
  glyphFallbackLoading=true;
@@ -262,10 +260,8 @@ function queueGhost(){
  const delay=Math.max(0,interval-since);
  glyphTimer=setTimeout(()=>{glyphTimer=0;generateGlyph()},delay);
 }
-function updateAssist(manual=false){
- if(manual)assistUserChoice=true;
+function updateAssist(){
  assistEnabled=!assistEnabled;
- if(!manual&&assistEnabled)window.__inkAssistAutoEnabled=true;
  window.__inkAssistEnabled=assistEnabled;
  assistButton.setAttribute("aria-pressed",String(assistEnabled));
  assistButton.classList.toggle("assist-on",assistEnabled);
@@ -277,7 +273,7 @@ function updateAssist(manual=false){
   queueGhost();
  }
 }
-assistButton.addEventListener("click",()=>updateAssist(true));
+assistButton.addEventListener("click",updateAssist);
 function bounds(stroke){
  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
  for(const [x,y] of stroke.points){l=Math.min(l,x);r=Math.max(r,x);t=Math.min(t,y);b=Math.max(b,y)}
@@ -378,7 +374,7 @@ function createGlyphWorker(){
    if(assistEnabled&&tool==="pen"&&m.neural===true&&
       m.epoch===glyphEpoch&&m.serial===glyphSerial&&
       inFlightGhost?.serial===m.serial){
-     const possibilities=(m.alternatives||[]).filter(o=>o.paths?.some(p=>p.length>1));
+     const possibilities=(m.alternatives||[]).filter(o=>o.paths?.some(p=>p.length>1)&&o.quality>-.91);
      if(!possibilities.length&&m.type==="completion"&&
         pointer===null&&glyphNoCandidateRetries<2){
       // Retry a different genuine neural sample only twice per gesture.
@@ -731,7 +727,16 @@ function renderGhost(){
  }
 }
 function acceptGhost(){
- if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate)return;
+ if(!assistEnabled||tool!=="pen"||pointer!==null)return;
+ if(!ghostCandidate){
+  if(glyphReady){
+   window.__inkLastGlyphError="No valid neural suggestion to accept yet";
+   if(!glyphBusy)queueGhost();
+  }
+  return;
+ }
+ ++glyphEpoch;
+ clearTimeout(glyphTimer);glyphTimer=0;glyphDirty=false;
  const paths=ghostCandidate.paths;
  for(const points of paths)
   strokes.push({tool:"pen",type:"vector-completion",
@@ -782,10 +787,7 @@ canvas.addEventListener("pointerdown",e=>{
  e.preventDefault();
  if(pointer!==null)return;
  pointer=e.pointerId;current={tool,points:[pos(e)]};
- if(tool==="pen"){
-  if(!assistEnabled&&!assistUserChoice)updateAssist(false);
-  beginAssistStroke();
- }
+ if(tool==="pen")beginAssistStroke();
  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
 });
 
@@ -797,9 +799,8 @@ function finish(e){
  if(pointer!==e.pointerId)return;
  if(current){current.points.push(pos(e));strokes.push(current)}
  pointer=null;current=null;
- // Drop a speculative live preview on release; the next stationary
- // proposal must pass the independent recognition critic before G accepts it.
- if(assistEnabled&&tool==="pen")clearGhost();
+ // Keep the displayed candidate across pen lift so pressing G can accept
+ // what the writer actually saw. A newer result can still replace it.
  paint();schedule(180);
 }
 canvas.addEventListener("pointerup",finish);

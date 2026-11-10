@@ -44,9 +44,9 @@ try:
     # Experimental suggestion is opt-in, and its transparent canvas is separate
     # from the black ink that the recognizer reads.
     drawing_before = driver.execute_script("return document.getElementById('pad').toDataURL()")
-    assert driver.execute_script("return window.__inkAssistEnabled && window.__inkAssistAutoEnabled"), (
-        "First pen stroke must automatically enable neural predictions")
-    # First pen gesture now enables neural assist automatically.
+    assert driver.execute_script("return window.__inkAssistEnabled") is False, (
+        "Assist stays off unless explicitly enabled")
+    # The user turns Assist on manually.
     if driver.find_element(By.ID,"assist").get_attribute("aria-pressed")!="true":
         driver.find_element(By.ID,"assist").click()
     assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="true"

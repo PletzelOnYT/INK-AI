@@ -120,9 +120,12 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
  }
  const startX=x,startY=y;
  let length=0,down=0,up=0,flatSpan=0,changes=0,lastDir=0;
+ let longestJump=0,fragmentCount=0,sharpTurns=0,straightestRun=0;
  let minTailY=Infinity,maxTailY=-Infinity;
  let endX=x,endY=y;
  for(const path of paths){
+  if(path.length<3)fragmentCount++;
+  let runLength=0,previousVector=null;
   for(let j=0;j<path.length;j++){
    const [px,py]=path[j];
    if(!Number.isFinite(px)||!Number.isFinite(py))
@@ -131,6 +134,14 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
    if(j){
     const dx=px-path[j-1][0],dy=py-path[j-1][1];
     const step=Math.hypot(dx,dy);
+    longestJump=Math.max(longestJump,step);
+    runLength+=step;
+    if(previousVector&&step>.006){
+     const dot=previousVector[0]*dx+previousVector[1]*dy;
+     const cross=previousVector[0]*dy-previousVector[1]*dx;
+     if(Math.atan2(Math.abs(cross),dot)>2.35)sharpTurns++;
+    }
+    if(step>.006)previousVector=[dx,dy];
     if(step>.125)changes+=2;
     length+=step;
     if(dy>.012)down+=dy;
@@ -142,7 +153,9 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
     }
    }
   }
-  const last=path.at(-1);
+  const last=path.at(-1),first=path[0];
+  if(first&&runLength>.08)straightestRun=Math.max(straightestRun,
+    Math.hypot(last[0]-first[0],last[1]-first[1])/runLength);
   endX=last[0];endY=last[1];
  }
  if(length<.035)return {score:-1e6,reason:"empty"};
@@ -155,6 +168,17 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
  // horizontal symbols, serifs, and crossbars. Do not "fix h" by breaking =/-.
  const curvedLetters="abcdeghjmnopqrsuyBCDGJOPQRSU";
  const horizontalShapes="-_=+±≠≤≥EFHILTtTf#";
+ const ascender=/^[hbnm]$/.test(label);
+ const tall=maxY-minY>.36,arcStarted=x-minX>.10;
+ const descendingLeg=ascender&&tall&&arcStarted&&
+    endY>startY+.075&&Math.abs(endX-startX)<.22;
+ // Reject learned but visibly broken continuations, without drawing
+ // templates or manufacturing a different stroke.
+ if(longestJump>.108)score-=9;
+ if(sharpTurns>2)score-=3*(sharpTurns-2);
+ if(fragmentCount>1&&!/^[ijt!+*=H#:%]$/.test(label))score-=7;
+ if(curvedLetters.includes(label)&&length>.14&&
+    straightestRun>.988&&!descendingLeg)score-=8;
  if(horizontallyFlat&&curvedLetters.includes(label))score-=12;
  else if(horizontallyFlat&&!horizontalShapes.includes(label))score-=2;
  if(length>.85)score-=3*(length-.85);
@@ -163,9 +187,6 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
  if(penUps>3)score-=.6*(penUps-3);
  // Ascenders with rounded shoulders require a descending right leg.
  // These are shape-validity constraints, NOT hand-coded generated strokes.
- const ascender=/^[hbnm]$/.test(label);
- const tall=maxY-minY>.36;
- const arcStarted=x-minX>.10;
  if(ascender&&tall&&arcStarted){
   const expectedBottom=Math.max(startY+.07,maxY-.095);
   if(endY<expectedBottom)score-=11+18*(expectedBottom-endY);
