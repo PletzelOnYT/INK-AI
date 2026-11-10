@@ -1,7 +1,7 @@
 name: Validate INK AI frontend and trainer
 on:
   push:
-    branches: [main, "feature/neural-rollout-candidate-quality"]
+    branches: [main, "feature/low-latency-continuous-suggestions"]
     paths:
       - "index.html"
       - "src/**"
