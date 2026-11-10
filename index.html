@@ -10540,12 +10540,11 @@ self.onmessage=e=>{
 };
 </script>
 <script>
-
-
 "use strict";
 /* INK AI's on-device learned preference critic.
- * Small 14 -> 12 -> 1 tanh network trained by pairwise SGD from the user's
- * explicit G acceptances. It ranks REAL GRU proposals, never draws glyphs.
+ * Small 14 -> 12 -> 1 tanh network trained with rewarded feedback from G
+ * acceptances and pairwise SGD when alternatives exist. It ranks real GRU
+ * proposals, never draws glyphs.
  * Only numeric weights are saved locally; no ink coordinates are persisted.
  * The model starts neutral, so it cannot spoil a fresh installation.
  */
@@ -10624,6 +10623,20 @@ self.onmessage=e=>{
     version:VERSION,w1,w2,b1,seen
    }))}catch(_){}
   };
+  function snapshot(){
+   return {version:VERSION,seen,w1:w1.slice(),w2:w2.slice(),b1:b1.slice()};
+  }
+  function restore(x){
+   if(!x||x.version!==VERSION||
+      !Number.isSafeInteger(x.seen)||x.seen<0||x.seen>100000||
+      !Array.isArray(x.w1)||x.w1.length!==INPUT*HIDDEN||
+      !Array.isArray(x.w2)||x.w2.length!==HIDDEN||
+      !Array.isArray(x.b1)||x.b1.length!==HIDDEN||
+      ![...x.w1,...x.w2,...x.b1].every(v=>
+       Number.isFinite(v)&&Math.abs(v)<=3))return false;
+   w1=x.w1.slice();w2=x.w2.slice();b1=x.b1.slice();seen=x.seen;
+   persist();return true;
+  }
   function evaluate(x){
    const hidden=[];
    for(let j=0;j<HIDDEN;j++){
@@ -10650,10 +10663,23 @@ self.onmessage=e=>{
    });
   }
   function learn(accepted,alternatives,pending){
-   if(!accepted||!Array.isArray(alternatives)||alternatives.length<2)return false;
+   if(!accepted||!Array.isArray(alternatives)||!alternatives.includes(accepted))
+    return false;
    const negatives=alternatives.filter(c=>c!==accepted).slice(0,5);
-   if(!negatives.length)return false;
    const positive=features(accepted,pending),lr=.045;
+   if(!negatives.length){
+    // A single accepted suggestion is still human feedback. Teach a weak
+    // positive reward for its real GRU trajectory without inventing a
+    // rejected glyph or pretending this is a pairwise preference.
+    const a=evaluate(positive),g=.35/(1+Math.exp(bound(a.score,-12,12)));
+    const old=w2.slice();
+    for(let j=0;j<HIDDEN;j++){
+     w2[j]=bound(w2[j]+lr*g*a.hidden[j],-2,2);
+     const effect=lr*g*old[j]*(1-a.hidden[j]*a.hidden[j]);
+     for(let i=0;i<INPUT;i++)w1[j*INPUT+i]=bound(
+      w1[j*INPUT+i]+effect*positive[i],-1,1);
+    }
+   }
    for(const rejected of negatives){
     const negative=features(rejected,pending),a=evaluate(positive),b=evaluate(negative);
     const diff=bound(a.score-b.score,-12,12);
@@ -10680,7 +10706,8 @@ self.onmessage=e=>{
    try{storage?.removeItem(KEY)}catch(_){}
   }
   load();
-  return {features,predict,rank,learn,reset,get examples(){return seen}};
+  return {features,predict,rank,learn,reset,snapshot,restore,
+   get examples(){return seen}};
  }
  root.InkPreferenceAI={create,features,version:VERSION};
 })(typeof window!=="undefined"?window:self);
