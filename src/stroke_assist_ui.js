@@ -54,11 +54,28 @@ function dictionaryRankOptions(incoming,box){
  }).sort((a,b)=>b._languageScore-a._languageScore);
 }
 function completedLowercaseH(input){
- if(!input?.group||input.group.length<2)return false;
- const box=input.box,range=box.b-box.t;
- if(range<70)return false;
- const last=input.group.at(-1).points.at(-1);
- return last[1]>=box.b-Math.max(12,range*.105);
+ // Finished ink should not receive another stroke. Detect natural h forms
+ // with one or multiple pen strokes; do NOT generate procedural glyphs.
+ if(!input?.group?.length||!input.box)return false;
+ const box=input.box,h=box.b-box.t,w=box.r-box.l;
+ if(h<72||w<24||w>h*.85)return false;
+ const lastStroke=input.group.at(-1),last=lastStroke.points?.at(-1);
+ if(!last||last[0]<box.l+w*.57||last[1]<box.t+h*.62||
+    box.b-last[1]>Math.max(15,h*.305))return false;
+ let leftTop=false,leftBottom=false,rightCrown=Infinity;
+ for(const stroke of input.group)for(const p of stroke.points){
+  if(p[0]<=box.l+w*.25){
+   if(p[1]<=box.t+h*.21)leftTop=true;
+   if(p[1]>=box.b-h*.13)leftBottom=true;
+  }
+  if(p[0]>=box.l+w*.26)rightCrown=Math.min(rightCrown,p[1]);
+ }
+ if(!leftTop||!leftBottom||!Number.isFinite(rightCrown))return false;
+ if(last[1]-rightCrown<Math.max(18,h*.27))return false;
+ const tail=lastStroke.points.slice(-Math.min(5,lastStroke.points.length));
+ let descent=0;
+ for(let i=1;i<tail.length;i++)descent+=tail[i][1]-tail[i-1][1];
+ return descent>Math.max(5,h*.032);
 }
 
 const STROKE_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v1.json";
@@ -98,6 +115,7 @@ window.__inkFallbackReady=false;
 window.__inkFallbackUsed=0;
 window.__inkGhostTailDy=0;
 window.__inkGhostTailRange=0;
+window.__inkCompletedGlyphSuppressions=0;
 let glyphFallbackLoading=false;
 let glyphNoCandidateRetries=0;
 let inFlightGhost=null;
@@ -271,7 +289,9 @@ function createGlyphWorker(){
    if(assistEnabled&&tool==="pen"&&m.neural===true&&
       m.epoch===glyphEpoch&&m.serial===glyphSerial&&
       inFlightGhost?.serial===m.serial){
-     const possibilities=(m.alternatives||[]).filter(o=>o.paths?.some(p=>p.length>1)&&o.quality>-.91);
+     const possibilities=(m.alternatives||[]).filter(o=>
+      o.paths?.some(p=>p.length>1)&&o.quality>-.91&&
+      coherentRenderedContinuation(o,inFlightGhost));
      if(!possibilities.length&&m.type==="completion"&&
         pointer===null&&glyphNoCandidateRetries<2){
       // Retry a different genuine neural sample only twice per gesture.
@@ -425,13 +445,18 @@ function stableCharacterOptions(incoming){
 }
 function isLiveCandidateRequired(input,label,live){
  if(live)return true;
- if(label==="h"&&completedLowercaseH(input))return false;
+ if(completedLowercaseH(input))return false;
  return true;
 }
 async function generateGlyph(){
  if(!assistEnabled||tool!=="pen"||!glyphReady||glyphBusy||!loaded)return;
  const input=completionInput();
  if(!input){clearGhost();return}
+ if(pointer===null&&completedLowercaseH(input)){
+  ++glyphEpoch;clearGhost();glyphDirty=false;
+  window.__inkCompletedGlyphSuppressions++;
+  return;
+ }
  glyphBusy=true;window.__inkAssistInFlight=true;
  glyphRequestedAt=performance.now();window.__inkAssistRequests++;
  const serial=++glyphSerial,epoch=glyphEpoch;
@@ -487,7 +512,8 @@ async function generateGlyph(){
    if(pointer!==null)queueGhost();
    return;
   }
-  inFlightGhost={frame:f,box:input.box,serial};
+  inFlightGhost={frame:f,box:input.box,serial,expected:preferred,
+   lastInk:input.group?.at(-1)?.points?.at(-1)?.slice()};
   const isLive=pointer!==null;
   const big=window.__inkGlyphParameters>=1000000;
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
@@ -576,6 +602,24 @@ function toScreenPaths(paths,frame){
   if(length>=5&&length<400)result.push(points);
  }
  return result;
+}
+function coherentRenderedContinuation(option,pending){
+ if(!pending?.frame||!option?.paths?.length)return false;
+ const paths=toScreenPaths(option.paths,pending.frame);
+ if(!paths.length)return false;
+ const points=paths.flat(),first=points[0],last=points.at(-1);
+ const endInk=pending.lastInk;
+ if(endInk&&Math.hypot(first[0]-endInk[0],first[1]-endInk[1])>
+    Math.max(15,pending.frame.size*.09))return false;
+ if(pending.expected==="h"){
+  const dx=last[0]-first[0],dy=last[1]-first[1],size=pending.frame.size;
+  if(dx>size*.16&&dy<-size*.12)return false;
+  let length=0;
+  for(const path of paths)for(let i=1;i<path.length;i++)
+   length+=Math.hypot(path[i][0]-path[i-1][0],path[i][1]-path[i-1][1]);
+  if(length>size*.63)return false;
+ }
+ return true;
 }
 function setGhostChoice(index){
  if(!assistEnabled||!ghostPending||!ghostOptions.length)return;
