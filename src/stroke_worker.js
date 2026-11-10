@@ -214,7 +214,7 @@ function preparePrefix(prefix,label){
 }
 function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps,prepared=null){
  const history=prepared||preparePrefix(prefix,label);
- const characterEmbedding=history.characterEmbedding;
+ const charEmbedding=history.characterEmbedding;
  const states=history.states.map(s=>new Float32Array(s));
  let last=history.last,x=history.x,y=history.y,score=history.prefixScore;
  // Stable input-conditioned seed avoids flashing unrelated previews on

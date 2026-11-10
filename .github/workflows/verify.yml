@@ -47,6 +47,10 @@ jobs:
           assert Path("dist/ink-ai-standalone.html").stat().st_size>1400000
           print("PASS: full standalone index and lean editable shell both exist")
           PY
+      - name: Verify GRU rollout and prefix cache before browser tests
+        run: |
+          node --check src/stroke_worker.js
+          node tests/completer-prefix-cache.mjs
       - name: Test downloaded index.html directly in Chrome, without source files
         run: |
           python3 -m pip install --quiet selenium
