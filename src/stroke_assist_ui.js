@@ -69,6 +69,8 @@ const STROKE_PENLIFT_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-A
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
+let glyphCachedReading=null,glyphCachedAt=0,glyphCachedGesture=-1;
+let ghostVerified=false;
 let glyphClassMemory=new Map();
 let ghostPending=null,ghostOptions=[],ghostChoice=0;
 window.__inkGlyphReady=false;
@@ -91,6 +93,8 @@ window.__inkAssistRequests=0;
 window.__inkLastPreviewLatencyMs=0;
 window.__inkLastPreviewTime=0;
 window.__inkAssistInFlight=false;
+window.__inkGhostVerified=false;
+window.__inkClassifierCacheHits=0;
 window.__inkFallbackReady=false;
 window.__inkFallbackUsed=0;
 window.__inkGhostTailDy=0;
@@ -131,6 +135,7 @@ async function loadValidatedBackup(){
 
 function clearGhost(){
  ghostCandidate=null;ghostOptions=[];ghostChoice=0;ghostPending=null;
+ ghostVerified=false;window.__inkGhostVerified=false;
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
  window.__inkGhostPoints=0;window.__inkGhostSegments=0;
  window.__inkAssistLabel="";window.__inkGhostSource="none";
@@ -140,6 +145,9 @@ function clearGhost(){
 function beginAssistStroke(){
  glyphStrokeSeed=(glyphStrokeSeed+1)|0;
  glyphClassMemory.clear();
+ glyphCachedReading=null;glyphCachedGesture=-1;
+ // Do not let a previous character's alternative appear on a new stroke.
+ clearGhost();
 }
 function queueGhost(){
  if(!assistEnabled||tool!=="pen"){clearGhost();return}
@@ -149,7 +157,7 @@ function queueGhost(){
  // True trailing-edge coalescing: do not restart this timer on each
  // pointermove. Continuous drawing MUST eventually trigger inference.
  const since=performance.now()-glyphRequestedAt;
- const interval=pointer!==null?105:135;
+ const interval=pointer!==null?65:105;
  const delay=Math.max(0,interval-since);
  glyphTimer=setTimeout(()=>{glyphTimer=0;generateGlyph()},delay);
 }
@@ -264,7 +272,10 @@ function createGlyphWorker(){
       m.epoch===glyphEpoch&&m.serial===glyphSerial&&
       ghostPending?.serial===m.serial){
      const possibilities=(m.alternatives||[]).filter(o=>o.paths?.some(p=>p.length>1));
-     if(!possibilities.length&&m.type==="completion"){
+     if(!possibilities.length&&m.type==="completion"&&pointer===null&&
+        ghostPending?.live!==true){
+      // Keep an existing *live* proposal only while a new one is being
+      // calculated. Never allow a rejected speculative stroke to be accepted.
       clearGhost();
      }
      if(possibilities.length){
@@ -273,6 +284,8 @@ function createGlyphWorker(){
        if(!assistEnabled||tool!=="pen"||glyphSerial!==serial||
           glyphEpoch!==epoch||ghostPending?.serial!==serial)return;
        if(!ordered.length){clearGhost();return}
+       ghostVerified=pointer===null&&pending.live!==true;
+       window.__inkGhostVerified=ghostVerified;
        ghostOptions=ordered;
        window.__inkSuggestionChoices=ordered.map(o=>o.label);
        ghostChoice=0;setGhostChoice(0);
@@ -283,7 +296,7 @@ function createGlyphWorker(){
         if(pointer!==null)window.__inkLivePreviewUpdates++;
        }
       };
-      if(m.type==="completion"&&pointer===null&&pending?.box){
+      if(m.type==="completion"&&pointer===null&&pending?.box&&pending.live!==true){
        // The unverified raw rollout is often the ugly flash users see.
        // Wait for the independent handwritten-CNN critic BEFORE painting a
        // stationary ghost; still stream live neural strokes while drawing.
@@ -291,7 +304,7 @@ function createGlyphWorker(){
         if(pointer===null)publish(ordered);
        }).catch(err=>{
         window.__inkLastGlyphError="Candidate scoring: "+String(err.message||err);
-        if(glyphSerial===serial&&glyphEpoch===epoch&&pointer===null)clearGhost();
+        if(glyphSerial===serial&&glyphEpoch===epoch&&pointer===null&&pending.live!==true)clearGhost();
        });
       }else if(pointer!==null){
        publish(possibilities);
@@ -401,7 +414,7 @@ function stableCharacterOptions(incoming){
  // recognized text clearly contains one glyph (as in the user's h screenshot),
  // include that identity so the completion model doesn't substitute n/r/l.
  const whole=window.__inkLastGuess;
- if(window.__inkDetectedRegions===1&&typeof whole==="string"&&
+ if(pointer===null&&window.__inkDetectedRegions===1&&typeof whole==="string"&&
     whole.length===1&&!/\s/.test(whole)){
   glyphClassMemory.set(whole,(glyphClassMemory.get(whole)||0)+.84);
  }
@@ -423,9 +436,24 @@ async function generateGlyph(){
  try{
   // The CNN supplies only class probabilities, NEVER proposed geometry.
   const f=input.frame;
-  const bitmap=normalize([f.x,f.y,f.x+f.size,f.y+f.size],
-       ctx.getImageData(0,0,canvas.width,canvas.height));
-  const read=await request("read",{images:[bitmap]});
+  // Neural generation runs much more often than a character's identity
+  // changes. Reusing the last CNN result for a few live frames avoids a
+  // costly full-canvas read, normalization, and worker round trip per point.
+  let read;
+  const useCached=pointer!==null&&glyphCachedReading&&
+   glyphCachedGesture===glyphStrokeSeed&&
+   performance.now()-glyphCachedAt<320;
+  if(useCached){
+   read=glyphCachedReading;window.__inkClassifierCacheHits++;
+  }else{
+   const bitmap=normalize([f.x,f.y,f.x+f.size,f.y+f.size],
+        ctx.getImageData(0,0,canvas.width,canvas.height));
+   read=await request("read",{images:[bitmap]});
+   if(pointer!==null&&epoch===glyphEpoch&&serial===glyphSerial){
+    glyphCachedReading=read;glyphCachedAt=performance.now();
+    glyphCachedGesture=glyphStrokeSeed;
+   }
+  }
   if(epoch!==glyphEpoch||serial!==glyphSerial||!assistEnabled){
    glyphBusy=false;window.__inkAssistInFlight=false;return;
   }
@@ -436,7 +464,7 @@ async function generateGlyph(){
   // In the screenshot the board OCR says "h" but the cropped assistant OCR
   // said L/H/k. Put h FIRST and insist on a neural completion of h.
   const whole=window.__inkDetectedRegions===1?window.__inkLastGuess:null;
-  const preferred=typeof whole==="string"&&whole.length===1&&
+  const preferred=pointer===null&&typeof whole==="string"&&whole.length===1&&
     !/\s/.test(whole)?whole:null;
   if(preferred){
    options=[{char:preferred,confidence:1},
@@ -449,8 +477,8 @@ async function generateGlyph(){
    return;
   }
   if(!options.length){glyphBusy=false;window.__inkAssistInFlight=false;return}
-  ghostPending={frame:f,box:input.box,serial};
   const isLive=pointer!==null;
+  ghostPending={frame:f,box:input.box,serial,live:isLive};
   const big=window.__inkGlyphParameters>=1000000;
   glyphWorker.postMessage({cmd:"generate",serial,epoch,
      prefix:input.prefix,options: isLive? options.slice(0,big?1:2):options,
@@ -467,11 +495,11 @@ async function generateGlyph(){
 // actually looks like its intended label. All inference remains in-browser.
 // This does NOT trace fonts or substitute reference/example images.
 async function scoreFinishedAlternatives(alternatives,pending){
- if(!loaded||!pending?.box||alternatives.length<2)return alternatives;
+ if(!loaded||!pending?.box||!alternatives.length)return alternatives;
  const valid=alternatives.slice(0,9).map(candidate=>({
    candidate,paths:toScreenPaths(candidate.paths,pending.frame)
  })).filter(x=>x.paths.length>0);
- if(valid.length<2)return alternatives;
+ if(!valid.length)return [];
  const masks=[];
  const temp=document.createElement("canvas");
  temp.width=canvas.width;temp.height=canvas.height;
@@ -503,13 +531,17 @@ async function scoreFinishedAlternatives(alternatives,pending){
   const top=predictions.predictions[i].top||[];
   const p=top.find(x=>x.char===item.candidate.label)?.confidence||.0005;
   item.candidate._finishedConfidence=p;
+  // Short neural previews are a useful live aid, but G must not accept
+  // them unless the independent recognizer finds actual label evidence.
+  if(item.candidate.shortHorizon&&p<.025)item.candidate._rejected=true;
   const geometric=Math.max(-2.5,Math.min(2.5,item.candidate.quality||0));
   item.candidate._combinedScore=
     2.6*Math.log(p+.003)+.23*geometric+
     .08*Math.max(-5,Math.min(3,item.candidate.score||0));
  }
  valid.sort((a,b)=>b.candidate._combinedScore-a.candidate._combinedScore);
- const sorted=valid.map(x=>x.candidate);
+ const sorted=valid.map(x=>x.candidate).filter(x=>!x._rejected);
+ if(!sorted.length)return [];
  // A high-confidence wrong glyph should never win merely because the
  // decoder sampled it with a good local stroke likelihood.
  const preferred=window.__inkLastGuess;
@@ -586,7 +618,8 @@ function renderGhost(){
  }
 }
 function acceptGhost(){
- if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate)return;
+ if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate||
+    !ghostVerified)return;
  const paths=ghostCandidate.paths;
  for(const points of paths)
   strokes.push({tool:"pen",type:"vector-completion",
