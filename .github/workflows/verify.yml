@@ -1,7 +1,7 @@
 name: Validate INK AI frontend and trainer
 on:
   push:
-    branches: [main, "feature/neural-rollout-candidate-quality"]
+    branches: [main, "feature/low-latency-live-neural-assist"]
     paths:
       - "index.html"
       - "src/**"
@@ -68,6 +68,7 @@ jobs:
           command -v google-chrome || command -v chromium
           python3 tests/browser-smoke.py
           if test -s models/ink-stroke-sequence-v1.json; then python3 tests/live-during-pointer-browser.py; fi
+          python3 tests/live-assist-latency-browser.py
           if test -s models/ink-stroke-sequence-v1.json; then python3 tests/local-file-browser.py; fi
           python3 tests/recognition-regression-browser.py
           python3 tests/word-case-loop-browser.py
