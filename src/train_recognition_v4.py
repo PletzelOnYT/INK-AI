@@ -122,12 +122,12 @@ def main():
     random.seed(SEED+401);np.random.seed(SEED+401);torch.manual_seed(SEED+401)
     data=load_data(a)
     parts=data["train_parts"]
-    proportions=[.38,.27,.18,.11,.06] # total 94% real handwriting
+    proportions=[.48,.27,.14,.06,.05] # 95% actual handwriting; preserve UJI letters
     assert abs(sum(proportions)-1)<1e-8
     weights=[]
     for labels,portion in zip(data["source_classes"],proportions):
         frequency=Counter(labels)
-        raw=np.asarray([frequency[k]**(-.34) for k in labels],np.float64)
+        raw=np.asarray([frequency[k]**(-.50) for k in labels],np.float64)
         weights.extend((raw/raw.sum()*portion).tolist())
     assert len(weights)==len(ConcatDataset(parts))
     sampler=WeightedRandomSampler(weights,num_samples=a.samples_per_epoch,
@@ -137,6 +137,12 @@ def main():
     loaders={k:DataLoader(data[k],batch_size=256,num_workers=2)
              for k in ("pen_cal","pen_independent","em_val","hasy_val","digit_val")}
     model=restore("models/ink-cnn-v3.json")
+    # Freeze the proven V3 teacher. Distillation anchors class boundaries
+    # for Latin letters while newly labeled data can still improve the CNN.
+    # Digits and symbols are exempt so a poor old PenDigits score cannot
+    # prevent learning genuine stylus-written numerals.
+    teacher=restore("models/ink-cnn-v3.json").eval()
+    for p in teacher.parameters():p.requires_grad_(False)
     baseline={k:evaluations(model,loaders[k]) for k in loaders}
     for key,item in baseline.items():
         print("V3 BASELINE",key,item["overall"],item["lowercase_macro"],flush=True)
@@ -146,11 +152,26 @@ def main():
         model.train()
         t0=time.monotonic()
         optimizer=torch.optim.AdamW(model.parameters(),
-             lr=.000075 if epoch<=3 else .000028,weight_decay=.00013)
+             lr=.000048 if epoch<=3 else .000018,weight_decay=.00013)
         loss_sum=0.
         for step,(images,labels) in enumerate(loader,1):
             prediction=model(images)
-            loss=nn.functional.cross_entropy(prediction,labels,label_smoothing=.012)
+            loss_each=nn.functional.cross_entropy(
+                prediction,labels,label_smoothing=.012,reduction="none")
+            # Class-balanced hard examples: c/o/x/y should not be eclipsed
+            # by similarly shaped uppercase letters, zeros and math signs.
+            confusing=torch.zeros_like(labels,dtype=torch.bool)
+            for symbol in "cioxy":
+                confusing|=labels==LOOKUP[symbol]
+            loss=(loss_each*(1.+.40*confusing.float())).mean()
+            letters=(labels>=10)&(labels<62)
+            if letters.any():
+                with torch.no_grad():
+                    old_probs=torch.softmax(teacher(images)/1.5,dim=1)
+                log_probs=torch.log_softmax(prediction/1.5,dim=1)
+                per_item=nn.functional.kl_div(
+                    log_probs,old_probs,reduction="none").sum(1)*2.25
+                loss=loss+.32*per_item[letters].mean()
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(),1.3)
@@ -224,7 +245,7 @@ def main():
        "selected":best,"independent_uji_v4":independent,
        "quality_gates":checks,"training_presentations":seen,
        "history":history,
-       "notes":"Only the UJI writer-independent split is untouched during model selection. HASY and PenDigits writer-disjoint splits are validation data, not final untouched tests; augmentations do not create new writers."}
+       "notes":"Only the UJI writer-independent split is untouched during model selection. HASY and PenDigits writer-disjoint splits are validation data, not final untouched tests; augmentations do not create new writers. V4 uses V3 teacher consistency on alphabet images and priority CE for c/i/o/x/y."}
     Path("models").mkdir(exist_ok=True)
     Path("models/recognition-v4-metrics.json").write_text(json.dumps(metrics,indent=2))
     print("V4 RELEASE DECISION",json.dumps({"eligible":eligible,"checks":checks,
