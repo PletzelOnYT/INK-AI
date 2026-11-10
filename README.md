@@ -55,7 +55,6 @@ The models run in browser workers and are embedded in the HTML, so it works with
 
 ![Completer results](./docs/completion-progress.svg)
 
-*Results are measured. Recognizer tests use different datasets; completer bars show different metrics, not one success rate.*
 
 ### Training data and honest evaluation
 
