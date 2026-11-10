@@ -72,6 +72,14 @@ A larger 1M-parameter experiment was also trained, but it did not pass the pen-l
 
 [GitHub Actions](./actions/workflows/verify.yml) runs JavaScript checks, model tests, and real Chrome tests for the drawing board. The test suite covers live suggestions while drawing, multi-stroke recognition, model loading from a downloaded HTML file, and completion of characters such as lowercase `h`.
 
+## Additional handwriting training
+
+The V4 recognizer experiment adds two more genuine handwriting sources to the existing UJI and EMNIST training: HASYv2 (hand-drawn letters and mathematical symbols) and UCI PenDigits (stylus-written digits from separate training/test writers). Training-only data is downloaded into the GitHub Actions runner; the released HTML does not contain any raw examples.
+
+New model weights are only eligible for release if independent UJI writers improve without unacceptable lowercase, EMNIST, or PenDigits regression. A rejected experiment leaves the existing V3 recognizer intact. The V4 results are recorded in `models/recognition-v4-metrics.json` when the experiment completes.
+
+**Data attribution:** [HASYv2](https://doi.org/10.5281/zenodo.259444), Martin Thoma, 2017 (Open Database License, ODbL); [Pen-Based Recognition of Handwritten Digits](https://doi.org/10.24432/C5MG6K), E. Alpaydin and F. Alimoglu, 1996 (CC BY 4.0). UJI Pen Characters v2 and EMNIST remain the original sources.
+
 ## Known limitations
 
 Handwriting can be ambiguous, especially similar characters such as `I`, `l`, and `1`. Assist can also guess the wrong completion for unusual writing styles or incomplete strokes. Multi-character cursive writing is still a work in progress.
