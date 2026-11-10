@@ -1,0 +1,91 @@
+name: Train larger student with Google InkSight-generated pen motion
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/import_inksight_teacher.py"
+      - "src/train_google_teacher_big.py"
+      - "tests/big-stroke-runtime.mjs"
+      - ".github/workflows/train-google-teacher-big.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-ai-google-teacher-big
+  cancel-in-progress: false
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 155
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: |
+          python -m pip install -r requirements.txt
+          python -m pip install "huggingface_hub>=0.25,<1.0"
+      - name: Check ink-trace parser and training script
+        run: |
+          python -m py_compile src/import_inksight_teacher.py src/train_google_teacher_big.py
+          python tests/inksight-teacher-import.py
+          node --check tests/big-stroke-runtime.mjs
+      - name: Fetch Google InkSight generated pen traces from public Apache-2.0 dataset
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download(repo_id="Derendering/InkSight-Derenderings",repo_type="dataset",
+            local_dir=".data/inksight",max_workers=4,allow_patterns=[
+              "large-i_IAM_inkml/vanilla/*.inkml",
+              "large-i_IAM_inkml/r+d/*.inkml",
+              "small-p_IAM_inkml/vanilla/*.inkml",
+              "large-i_IMGUR5K_inkml/vanilla/*.inkml"])
+          PY
+          python src/import_inksight_teacher.py .data/inksight
+      - name: Train 384-hidden-unit GRU and evaluate real independent human writers
+        run: |
+          python -u src/train_google_teacher_big.py --epochs 4 --fine-epochs 2 \
+            --samples-per-epoch 15000 --batch 128 --teacher-epochs 2
+      - name: Enforce real JavaScript worker latency gate
+        run: |
+          node tests/big-stroke-runtime.mjs
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("models/big-stroke-google-teacher-metrics.json").read_text())
+          assert r["teacher_provenance"]["unlabelled_teacher_strokes"]>=100
+          assert r["writer_disjoint_test_samples"]>1000
+          if r["eligible"]:
+            assert r["latency_verified"]
+            assert Path("models/ink-stroke-google-teacher-big-v1.json").is_file()
+            print("Candidate eligible for future opt-in testing; deployed model unchanged")
+          else:
+            assert not Path("models/ink-stroke-google-teacher-big-v1.json").exists()
+            print("Candidate rejected; current offline engine remains unchanged")
+          PY
+      - name: Commit experiment evidence and only accepted experimental weights
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/big-stroke-google-teacher-metrics.json
+          if test -s models/ink-stroke-google-teacher-big-v1.json; then git add models/ink-stroke-google-teacher-big-v1.json; fi
+          git commit -m "Evaluate Google InkSight motion teacher with bigger offline handwriting GRU"
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-ai-google-teacher-big-evidence
+          path: |
+            models/big-stroke-google-teacher-metrics.json
+            models/ink-stroke-google-teacher-big-v1.json
+          if-no-files-found: ignore
