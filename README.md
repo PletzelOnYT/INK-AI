@@ -101,6 +101,8 @@ The experimental V5 training focused on confusion between `1`, `I`, `l`, `i`, `j
 
 A separate training experiment uses **Google Research InkSight's released vector outputs** as an *unlabelled pen-motion teacher*, then learns letters from real UJI pen recordings using a larger 384-unit GRU. It does **not** copy Google's pretrained weights or use a remote API in the app. Only a candidate that improves unseen-writer continuation accuracy, pen lifts and JavaScript inference speed can be published; the downloaded `index.html` still runs the proven smaller model. [Training evidence](./actions/workflows/train-google-teacher-big.yml) · [Google InkSight source](https://github.com/google-research/inksight).
 
+**Model experiments:** New GRU checkpoints are trained on writer-disjoint pen data and compared with the released model. A V4 curriculum emphasizes difficult partial letters and early stroke motion; only independently improved, offline-browser-tested weights can replace the downloadable model. Training a candidate does not mean it has been deployed.
+
 ## Known limitations
 
 Handwriting can be ambiguous, especially similar characters such as `I`, `l`, and `1`. Assist can also guess the wrong completion for unusual writing styles or incomplete strokes. Multi-character cursive writing is still a work in progress.

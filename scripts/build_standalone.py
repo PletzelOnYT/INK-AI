@@ -14,13 +14,15 @@ assert '<script src="./src/app.js" defer></script>' in html
 css=(ROOT/"src/app.css").read_text(encoding="utf-8")
 app=(ROOT/"src/app.js").read_text(encoding="utf-8")
 preference=(ROOT/"src/neural_preference_model.js").read_text(encoding="utf-8")
-candidate=ROOT/"models/ink-stroke-prefix-domain-v3.json"
-report=ROOT/"models/stroke-prefix-domain-v3-metrics.json"
-approved=False
-if candidate.exists() and report.exists():
+def accepted_model(version):
+    candidate=ROOT/f"models/ink-stroke-prefix-domain-{version}.json"
+    report=ROOT/f"models/stroke-prefix-domain-{version}-metrics.json"
+    if not (candidate.is_file() and report.is_file()):return False
     metrics=json.loads(report.read_text(encoding="utf-8"))
-    approved=metrics.get("eligible") is True and metrics.get("deployable") is True
-stroke_path="models/ink-stroke-prefix-domain-v3.json" if approved else "models/ink-stroke-prefix-domain-v2.json"
+    return metrics.get("eligible") is True and metrics.get("deployable") is True
+stroke_path=next((f"models/ink-stroke-prefix-domain-{v}.json"
+                  for v in ("v4","v3") if accepted_model(v)),
+                 "models/ink-stroke-prefix-domain-v2.json")
 print("Bundled GRU:",stroke_path)
 models=[
  ("inkRecognitionModel","application/json",
