@@ -64,6 +64,10 @@ The GRU stroke generator is trained on [UJI Pen Characters v2](https://archive.i
 
 Training more examples can help, but no model here is flawless. The next important benchmark is a **whole-character suggestion acceptance/correctness rate**, measured on handwriting from writers excluded from training; that number does not yet exist, so the README intentionally does not invent one.
 
+### Recognition improvement target
+
+The next training experiment focuses on confusion between `1`, `I`, `l`, `i`, `j`, and `t`. It checks held-out pen writers and does not deploy a model just because it completed training. **90% accuracy remains a target, not a measured result.**
+
 ## Project files
 
 | File | Purpose |
@@ -76,7 +80,8 @@ Training more examples can help, but no model here is flawless. The next importa
 | [src/stroke_assist_ui.js](./src/stroke_assist_ui.js) | Live gray neural pen suggestions, English context and drawing controls |
 | [src/stroke_worker.js](./src/stroke_worker.js) | Neural stroke generation |
 | [src/train.py](./src/train.py) | Character recognition training |
-| [src/train_recognition_v3.py](./src/train_recognition_v3.py) | Current pen-adapted V3 CNN training |
+| [src/train_recognition_v3.py](./src/train_recognition_v3.py) | Released pen-adapted V3 CNN training |
+| [src/train_recognition_hardcases.py](./src/train_recognition_hardcases.py) | New confusing-character V5 training |
 | [V4 training experiment](https://github.com/PletzelOnYT/INK-AI/blob/feature/recognition-multidataset-v4/src/train_recognition_v4.py) | Experimental four-dataset recognizer training |
 | [src/train_stroke_sequence.py](./src/train_stroke_sequence.py) | Stroke-model training |
 | [src/train_prefix_completion.py](./src/train_prefix_completion.py) | Partial-character fine-tuning |
