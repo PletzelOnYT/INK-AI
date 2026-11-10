@@ -1,0 +1,240 @@
+{
+  "eligible": false,
+  "source": "models/ink-stroke-prefix-domain-v2.json",
+  "parameters": 373563,
+  "candidate_version": 3,
+  "deployable": false,
+  "focus_chars": "abefghkmnopqru",
+  "focus": {
+    "baseline": {
+      "prefix_frame_position_error": 0.347124,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 10080,
+      "cut_errors": {
+        "8": 0.416012,
+        "13": 0.364802,
+        "21": 0.260557
+      }
+    },
+    "candidate": {
+      "prefix_frame_position_error": 0.350297,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 10080,
+      "cut_errors": {
+        "8": 0.434538,
+        "13": 0.324121,
+        "21": 0.292232
+      }
+    },
+    "gain": -0.009141
+  },
+  "calibration_gain": 0.022757,
+  "real_training_glyphs": 6210,
+  "real_independent_glyphs": 1550,
+  "synthetic_symbols": 5760,
+  "seen": 127911,
+  "baseline": {
+    "calibration": {
+      "prefix_frame_position_error": 0.324775,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 22356,
+      "cut_errors": {
+        "8": 0.379879,
+        "13": 0.331565,
+        "21": 0.259109
+      }
+    },
+    "independent": {
+      "prefix_frame_position_error": 0.333551,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 22188,
+      "cut_errors": {
+        "8": 0.395021,
+        "13": 0.328074,
+        "21": 0.273823
+      }
+    }
+  },
+  "candidate": {
+    "calibration": {
+      "prefix_frame_position_error": 0.317384,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 22356,
+      "cut_errors": {
+        "8": 0.378198,
+        "13": 0.311485,
+        "21": 0.259022
+      }
+    },
+    "independent": {
+      "prefix_frame_position_error": 0.324088,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 22188,
+      "cut_errors": {
+        "8": 0.395843,
+        "13": 0.301137,
+        "21": 0.271876
+      }
+    }
+  },
+  "gain": 0.02837,
+  "best": {
+    "epoch": 6,
+    "loss": -3.78143,
+    "calibration": {
+      "prefix_frame_position_error": 0.310824,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 16740,
+      "cut_errors": {
+        "8": 0.356861,
+        "13": 0.308945,
+        "21": 0.263684
+      }
+    },
+    "samples_seen": 109650,
+    "seconds": 28.4
+  },
+  "epochs": [
+    {
+      "epoch": 1,
+      "loss": -3.50514,
+      "calibration": {
+        "prefix_frame_position_error": 0.358983,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 16740,
+        "cut_errors": {
+          "8": 0.398551,
+          "13": 0.365192,
+          "21": 0.310169
+        }
+      },
+      "samples_seen": 18246,
+      "seconds": 29.2
+    },
+    {
+      "epoch": 2,
+      "loss": -3.58824,
+      "calibration": {
+        "prefix_frame_position_error": 0.344253,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 16740,
+        "cut_errors": {
+          "8": 0.391567,
+          "13": 0.345914,
+          "21": 0.291993
+        }
+      },
+      "samples_seen": 37127,
+      "seconds": 29.0
+    },
+    {
+      "epoch": 3,
+      "loss": -3.68337,
+      "calibration": {
+        "prefix_frame_position_error": 0.328009,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 16740,
+        "cut_errors": {
+          "8": 0.372466,
+          "13": 0.32789,
+          "21": 0.280689
+        }
+      },
+      "samples_seen": 54967,
+      "seconds": 28.9
+    },
+    {
+      "epoch": 4,
+      "loss": -3.7927,
+      "calibration": {
+        "prefix_frame_position_error": 0.312051,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 16740,
+        "cut_errors": {
+          "8": 0.366542,
+          "13": 0.311545,
+          "21": 0.25443
+        }
+      },
+      "samples_seen": 72844,
+      "seconds": 28.7
+    },
+    {
+      "epoch": 5,
+      "loss": -3.81704,
+      "calibration": {
+        "prefix_frame_position_error": 0.317742,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 16740,
+        "cut_errors": {
+          "8": 0.363509,
+          "13": 0.314706,
+          "21": 0.272118
+        }
+      },
+      "samples_seen": 91528,
+      "seconds": 29.6
+    },
+    {
+      "epoch": 6,
+      "loss": -3.78143,
+      "calibration": {
+        "prefix_frame_position_error": 0.310824,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 16740,
+        "cut_errors": {
+          "8": 0.356861,
+          "13": 0.308945,
+          "21": 0.263684
+        }
+      },
+      "samples_seen": 109650,
+      "seconds": 28.4
+    },
+    {
+      "epoch": 7,
+      "loss": -3.83192,
+      "calibration": {
+        "prefix_frame_position_error": 0.322093,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 16740,
+        "cut_errors": {
+          "8": 0.352854,
+          "13": 0.320825,
+          "21": 0.290607
+        }
+      },
+      "samples_seen": 127911,
+      "seconds": 29.2
+    }
+  ],
+  "metric_description": "Free-running 12-step displacement after prefix-only bounding, independently evaluated on unseen writers; NOT whole-character accuracy."
+}
