@@ -13,7 +13,9 @@ assert '<script src="./src/app.js" defer></script>' in html
 css=(ROOT/"src/app.css").read_text(encoding="utf-8")
 app=(ROOT/"src/app.js").read_text(encoding="utf-8")
 models=[
- ("inkRecognitionModel","application/json","models/ink-cnn-v3.json"),
+ ("inkRecognitionModel","application/json",
+  "models/ink-cnn-v5.json" if (ROOT/"models/ink-cnn-v5.json").exists()
+  else "models/ink-cnn-v3.json"),
  ("inkStrokeModel","application/json","models/ink-stroke-prefix-domain-v2.json"),
  ("inkStrokeBackup","application/json","models/ink-stroke-sequence-v1.json"),
  ("inkEnglishWords","text/plain","data/english-words.txt"),
