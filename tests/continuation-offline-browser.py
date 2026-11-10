@@ -18,7 +18,7 @@ try:
     driver.get(Path("index.html").resolve().as_uri())
     wait=WebDriverWait(driver,70)
     wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
-    assert driver.execute_script("return window.__inkRecognitionVersion in (3,5)")
+    assert driver.execute_script("return [3,5].includes(window.__inkRecognitionVersion)")
     assert driver.execute_script("return window.__inkDictionaryWords===10000")
     assert driver.execute_script("return window.__inkAssistModel==='online-stroke-gru'")
     assert len(driver.find_elements(By.TAG_NAME,"button"))==3
