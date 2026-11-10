@@ -60,6 +60,12 @@ jobs:
             done
             exit 1
           fi
+      - name: Build distributable offline HTML
+        run: python scripts/build_standalone.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ink-ai-standalone-after-recognition-training
+          path: dist/ink-ai-standalone.html
       - uses: actions/upload-artifact@v4
         if: always()
         with:
