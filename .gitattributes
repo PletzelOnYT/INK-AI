@@ -1,0 +1,5 @@
+# index.html is the generated self-contained offline distribution.
+# Its editable source is src/index.shell.html, src/app.css, src/app.js,
+# and the training/model assets. Keep it in Git for direct downloads,
+# but exclude the generated bundle from source-language statistics.
+index.html linguist-generated
