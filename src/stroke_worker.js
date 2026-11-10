@@ -316,6 +316,52 @@ function prepareNetwork(o){
   return captureNetwork();
  }finally{useNetwork(previous)}
 }
+// When the GRU cannot complete an entire character convincingly, it can
+// still predict the next few pen motions. Select only ACTUAL predicted
+// coordinates at the current tip; never construct procedural letter strokes.
+// These small previews are not classified as full completed characters.
+function localNeuralPreview(prefix,rollout,label,confidence,variant){
+ const first=rollout.paths?.[0];
+ if(!first||first.length<3||prefix.length<3)return null;
+ let x=0,y=0;
+ for(const t of prefix){x+=t[0];y+=t[1]}
+ if(Math.hypot(first[0][0]-x,first[0][1]-y)>.025)return null;
+ const kept=[first[0]];
+ let distance=0,sharp=0,lastDir=null;
+ for(let i=1;i<first.length&&kept.length<10;i++){
+  const p=first[i],q=kept.at(-1);
+  const dx=p[0]-q[0],dy=p[1]-q[1],length=Math.hypot(dx,dy);
+  if(!Number.isFinite(length)||length>.125)break;
+  if(length<.002)continue;
+  if(distance+length>.26)break;
+  if(lastDir){
+   const dot=(dx*lastDir[0]+dy*lastDir[1])/(length*Math.hypot(...lastDir));
+   if(dot<-.4)sharp++;
+  }
+  if(sharp>1)break;
+  kept.push(p.slice());lastDir=[dx,dy];distance+=length;
+ }
+ if(kept.length<3||distance<.038)return null;
+ // A forward proposal must not contradict the user's immediate pen
+ // direction (except at a nearly stationary turning point).
+ const prev=prefix.at(-1),previousLength=Math.hypot(prev[0],prev[1]);
+ const next=[kept[1][0]-kept[0][0],kept[1][1]-kept[0][1]];
+ const nextLength=Math.hypot(...next);
+ if(previousLength>.018&&nextLength>.008){
+  const cosine=(prev[0]*next[0]+prev[1]*next[1])/
+    (previousLength*nextLength);
+  if(cosine<-.6)return null;
+ }
+ // No jumping out of the normalized crop or extending indefinitely.
+ if(kept.some(p=>p[0]<-.075||p[0]>1.075||p[1]<-.075||p[1]>1.075))
+  return null;
+ const learned=Math.max(-6,Math.min(9,rollout.rolloutLogLikelihood||0));
+ return {label,paths:[kept],penUps:0,confidence,score:-.12+.12*learned,
+  reason:"learned-short-horizon",quality:-.12,variant,
+  rolloutLogLikelihood:rollout.rolloutLogLikelihood,
+  shortHorizon:true,truncated:true};
+}
+
 function generateCandidates(m,isFallback=false){
    const prefix=m.prefix,serial=m.serial,epoch=m.epoch;
    const live=m.live===true;
@@ -333,14 +379,19 @@ function generateCandidates(m,isFallback=false){
    const perLabel=live?(hiddenSize>=300?2:4):(hiddenSize>=300?6:12);
    for(let j=0;j<options.length;j++){
     const choice=options[j];
-    const candidates=[];
+    const candidates=[],shortForecasts=[];
     for(let attempt=0;attempt<perLabel;attempt++){
      const result=completeGlyph(prefix,choice.char,
        gestureSeed+j*571+attempt*997,attempt>0,steps);
      if(result.moves<2||!result.paths.length)continue;
      // Geometry acceptance and neural probability are independent gates.
      // A high likelihood must not rescue a physically invalid continuation.
-     if(result.quality.score<-.9)continue;
+     if(result.quality.score<-.9){
+      const partial=localNeuralPreview(prefix,result,choice.char,
+        choice.confidence||0,attempt);
+      if(partial)shortForecasts.push(partial);
+      continue;
+     }
      const consistency=Math.max(-6,Math.min(9,result.rolloutLogLikelihood));
      const value=result.quality.score+
        .18*consistency+
@@ -355,6 +406,13 @@ function generateCandidates(m,isFallback=false){
        rolloutLogLikelihood:result.rolloutLogLikelihood,
        truncated:result.truncated
      });
+    }
+    // A short, genuine autoregressive prediction is preferable to showing
+    // nothing when all attempted FULL completions are physically implausible.
+    // Never let a partial preview replace a valid complete neural candidate.
+    if(!candidates.length&&shortForecasts.length){
+     shortForecasts.sort((a,b)=>b.score-a.score);
+     candidates.push(...shortForecasts.slice(0,live?1:2));
     }
     candidates.sort((a,b)=>b.score-a.score);
     let accepted=0;
