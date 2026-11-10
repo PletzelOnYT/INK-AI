@@ -1,0 +1,664 @@
+{
+  "model": "models/ink-cnn-v5.json",
+  "eligible": true,
+  "baseline_v2": {
+    "pen_independent": {
+      "overall": 0.764668,
+      "macro": 0.73871,
+      "lowercase_macro": 0.705769,
+      "hard_macro": 0.691667,
+      "hard_per_class": {
+        "1": 0.55,
+        "I": 0.35,
+        "l": 0.95,
+        "i": 0.95,
+        "j": 0.75,
+        "t": 0.6
+      },
+      "hard_counts": {
+        "1": 20,
+        "I": 20,
+        "l": 20,
+        "i": 20,
+        "j": 20,
+        "t": 20
+      },
+      "tested": 1551
+    },
+    "pen_calibration": {
+      "overall": 0.788387,
+      "macro": 0.766935,
+      "lowercase_macro": 0.701923,
+      "hard_macro": 0.75,
+      "hard_per_class": {
+        "1": 0.85,
+        "I": 0.6,
+        "l": 0.6,
+        "i": 0.8,
+        "j": 0.8,
+        "t": 0.85
+      },
+      "hard_counts": {
+        "1": 20,
+        "I": 20,
+        "l": 20,
+        "i": 20,
+        "j": 20,
+        "t": 20
+      },
+      "tested": 1550
+    },
+    "emnist_browser_style": {
+      "overall": 0.838,
+      "macro": 0.712576,
+      "lowercase_macro": 0.547736,
+      "hard_macro": 0.545133,
+      "hard_per_class": {
+        "1": 0.96579,
+        "I": 0.31325,
+        "l": 0.03268,
+        "i": 0.40909,
+        "j": 0.60526,
+        "t": 0.94472
+      },
+      "hard_counts": {
+        "1": 760,
+        "I": 249,
+        "l": 306,
+        "i": 44,
+        "j": 38,
+        "t": 398
+      },
+      "tested": 14000
+    }
+  },
+  "best": {
+    "objective": 0.8268120600000001,
+    "epoch": 8,
+    "calibration": {
+      "overall": 0.803871,
+      "macro": 0.789516,
+      "lowercase_macro": 0.728846,
+      "hard_macro": 0.866667,
+      "hard_per_class": {
+        "1": 0.9,
+        "I": 0.9,
+        "l": 0.75,
+        "i": 0.85,
+        "j": 0.8,
+        "t": 1.0
+      },
+      "hard_counts": {
+        "1": 20,
+        "I": 20,
+        "l": 20,
+        "i": 20,
+        "j": 20,
+        "t": 20
+      },
+      "tested": 1550
+    },
+    "emnist": {
+      "overall": 0.838357,
+      "macro": 0.718312,
+      "lowercase_macro": 0.548541,
+      "hard_macro": 0.599132,
+      "hard_per_class": {
+        "1": 0.87237,
+        "I": 0.42169,
+        "l": 0.19608,
+        "i": 0.43182,
+        "j": 0.71053,
+        "t": 0.96231
+      },
+      "hard_counts": {
+        "1": 760,
+        "I": 249,
+        "l": 306,
+        "i": 44,
+        "j": 38,
+        "t": 398
+      },
+      "tested": 14000
+    },
+    "independent_test": {
+      "overall": 0.778852,
+      "macro": 0.758871,
+      "lowercase_macro": 0.711538,
+      "hard_macro": 0.758333,
+      "hard_per_class": {
+        "1": 0.6,
+        "I": 0.5,
+        "l": 0.95,
+        "i": 0.95,
+        "j": 0.9,
+        "t": 0.65
+      },
+      "hard_counts": {
+        "1": 20,
+        "I": 20,
+        "l": 20,
+        "i": 20,
+        "j": 20,
+        "t": 20
+      },
+      "tested": 1551
+    }
+  },
+  "independent_pen_v3": {
+    "overall": 0.778852,
+    "macro": 0.758871,
+    "lowercase_macro": 0.711538,
+    "hard_macro": 0.758333,
+    "hard_per_class": {
+      "1": 0.6,
+      "I": 0.5,
+      "l": 0.95,
+      "i": 0.95,
+      "j": 0.9,
+      "t": 0.65
+    },
+    "hard_counts": {
+      "1": 20,
+      "I": 20,
+      "l": 20,
+      "i": 20,
+      "j": 20,
+      "t": 20
+    },
+    "tested": 1551
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.75495,
+      "pen_calibration": {
+        "overall": 0.8,
+        "macro": 0.78629,
+        "lowercase_macro": 0.744231,
+        "hard_macro": 0.858333,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.8,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.85,
+          "t": 1.0
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.834286,
+        "macro": 0.717237,
+        "lowercase_macro": 0.565605,
+        "hard_macro": 0.575654,
+        "hard_per_class": {
+          "1": 0.95526,
+          "I": 0.3253,
+          "l": 0.07516,
+          "i": 0.40909,
+          "j": 0.73684,
+          "t": 0.95226
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.821783,
+      "elapsed_s": 62.5
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.73544,
+      "pen_calibration": {
+        "overall": 0.797419,
+        "macro": 0.784677,
+        "lowercase_macro": 0.703846,
+        "hard_macro": 0.841667,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.8,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.8,
+          "t": 0.95
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.838214,
+        "macro": 0.716846,
+        "lowercase_macro": 0.566526,
+        "hard_macro": 0.581918,
+        "hard_per_class": {
+          "1": 0.91711,
+          "I": 0.37751,
+          "l": 0.14379,
+          "i": 0.40909,
+          "j": 0.68421,
+          "t": 0.9598
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.817048,
+      "elapsed_s": 63.1
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.71033,
+      "pen_calibration": {
+        "overall": 0.800645,
+        "macro": 0.789516,
+        "lowercase_macro": 0.748077,
+        "hard_macro": 0.858333,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.85,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.8,
+          "t": 1.0
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.836786,
+        "macro": 0.716552,
+        "lowercase_macro": 0.567732,
+        "hard_macro": 0.587895,
+        "hard_per_class": {
+          "1": 0.89605,
+          "I": 0.37751,
+          "l": 0.18301,
+          "i": 0.43182,
+          "j": 0.68421,
+          "t": 0.95477
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.822657,
+      "elapsed_s": 62.8
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.71095,
+      "pen_calibration": {
+        "overall": 0.801935,
+        "macro": 0.787903,
+        "lowercase_macro": 0.730769,
+        "hard_macro": 0.858333,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.85,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.8,
+          "t": 1.0
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.837357,
+        "macro": 0.719568,
+        "lowercase_macro": 0.572424,
+        "hard_macro": 0.589215,
+        "hard_per_class": {
+          "1": 0.90395,
+          "I": 0.40562,
+          "l": 0.14379,
+          "i": 0.40909,
+          "j": 0.71053,
+          "t": 0.96231
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.823473,
+      "elapsed_s": 64.3
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.70448,
+      "pen_calibration": {
+        "overall": 0.804516,
+        "macro": 0.790323,
+        "lowercase_macro": 0.734615,
+        "hard_macro": 0.85,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.8,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.8,
+          "t": 1.0
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.839143,
+        "macro": 0.722437,
+        "lowercase_macro": 0.564829,
+        "hard_macro": 0.58767,
+        "hard_per_class": {
+          "1": 0.89868,
+          "I": 0.39759,
+          "l": 0.15033,
+          "i": 0.40909,
+          "j": 0.71053,
+          "t": 0.9598
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.823159,
+      "elapsed_s": 63.0
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.69835,
+      "pen_calibration": {
+        "overall": 0.801935,
+        "macro": 0.787903,
+        "lowercase_macro": 0.732692,
+        "hard_macro": 0.85,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.8,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.8,
+          "t": 1.0
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.8375,
+        "macro": 0.717683,
+        "lowercase_macro": 0.558182,
+        "hard_macro": 0.583834,
+        "hard_per_class": {
+          "1": 0.90526,
+          "I": 0.35341,
+          "l": 0.16993,
+          "i": 0.40909,
+          "j": 0.71053,
+          "t": 0.95477
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.82142,
+      "elapsed_s": 63.6
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.69043,
+      "pen_calibration": {
+        "overall": 0.803226,
+        "macro": 0.787903,
+        "lowercase_macro": 0.732692,
+        "hard_macro": 0.858333,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.85,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.8,
+          "t": 1.0
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.838071,
+        "macro": 0.720074,
+        "lowercase_macro": 0.558757,
+        "hard_macro": 0.589359,
+        "hard_per_class": {
+          "1": 0.90658,
+          "I": 0.40964,
+          "l": 0.14052,
+          "i": 0.40909,
+          "j": 0.71053,
+          "t": 0.9598
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.82432,
+      "elapsed_s": 63.2
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.69431,
+      "pen_calibration": {
+        "overall": 0.803871,
+        "macro": 0.789516,
+        "lowercase_macro": 0.728846,
+        "hard_macro": 0.866667,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.9,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.8,
+          "t": 1.0
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.838357,
+        "macro": 0.718312,
+        "lowercase_macro": 0.548541,
+        "hard_macro": 0.599132,
+        "hard_per_class": {
+          "1": 0.87237,
+          "I": 0.42169,
+          "l": 0.19608,
+          "i": 0.43182,
+          "j": 0.71053,
+          "t": 0.96231
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.826812,
+      "elapsed_s": 62.8
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.69544,
+      "pen_calibration": {
+        "overall": 0.80129,
+        "macro": 0.784677,
+        "lowercase_macro": 0.730769,
+        "hard_macro": 0.866667,
+        "hard_per_class": {
+          "1": 0.9,
+          "I": 0.9,
+          "l": 0.75,
+          "i": 0.85,
+          "j": 0.8,
+          "t": 1.0
+        },
+        "hard_counts": {
+          "1": 20,
+          "I": 20,
+          "l": 20,
+          "i": 20,
+          "j": 20,
+          "t": 20
+        },
+        "tested": 1550
+      },
+      "emnist_style": {
+        "overall": 0.838643,
+        "macro": 0.721732,
+        "lowercase_macro": 0.566155,
+        "hard_macro": 0.601694,
+        "hard_per_class": {
+          "1": 0.86316,
+          "I": 0.45783,
+          "l": 0.18954,
+          "i": 0.43182,
+          "j": 0.71053,
+          "t": 0.95729
+        },
+        "hard_counts": {
+          "1": 760,
+          "I": 249,
+          "l": 306,
+          "i": 44,
+          "j": 38,
+          "t": 398
+        },
+        "tested": 14000
+      },
+      "eligible": true,
+      "objective": 0.825478,
+      "elapsed_s": 62.6
+    }
+  ],
+  "training_presentations": 864000,
+  "uji_real_training_glyphs": 6210,
+  "uji_independent_glyphs": 1551,
+  "domain": "real UJI pen strokes, browser-equivalent normalized rasterization; no external pretrained model",
+  "target_accuracy": 0.9,
+  "target_reached": false,
+  "hard_characters": [
+    "1",
+    "I",
+    "l",
+    "i",
+    "j",
+    "t"
+  ]
+}
