@@ -10440,13 +10440,8 @@ function generateCandidates(m,isFallback=false){
        truncated:result.truncated
      };
      candidates.push(candidate);
-     // Stream a real quality-approved neural rollout immediately rather
-     // than waiting for all slower alternative candidates to finish.
-     if(!previewSent&&j===0&&(!m.preferred||choice.char===m.preferred)){
-      self.postMessage({type:"preview",serial,epoch,
-       alternatives:[candidate],neural:true,engine:"stroke-gru-mdn"});
-      previewSent=true;
-     }
+     // Do not flash the FIRST sampled line. Wait for this label's neural
+     // candidates to be scored and display its highest-ranked rollout.
     }
     candidates.sort((a,b)=>b.score-a.score);
     let accepted=0;
@@ -10468,6 +10463,8 @@ function generateCandidates(m,isFallback=false){
     }
     if(!previewSent&&accepted&&results.length===accepted&&
        (!m.preferred||choice.char===m.preferred)){
+      // The preview is now selected AFTER comparing all genuine GRU samples
+      // for this character, rather than whichever random sample ran first.
       self.postMessage({type:"preview",serial,epoch,
        alternatives:[results[0]],neural:true,engine:"stroke-gru-mdn"});
       previewSent=true;

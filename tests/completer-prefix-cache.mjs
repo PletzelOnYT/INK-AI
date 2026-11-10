@@ -33,3 +33,20 @@ const result=messages.find(m=>m.type==="completion");
 assert.ok(result&&result.neural===true);
 for(const alt of result.alternatives)assert.ok(alt.quality>-.91);
 console.log("PASS: 58-token handwriting prefix evaluated only once per label; stochastic neural trajectories preserved exactly");
+
+// When a completed neural batch contains more than one sampled trajectory,
+// its first streamed preview must already be the top-ranked candidate.
+// Showing the first random rollout was the cause of visibly bad flashes.
+for(let seed=1;seed<=10;seed++){
+ messages.length=0;
+ c.self.onmessage({data:{cmd:"generate",serial:300+seed,epoch:8,
+   seed,live:false,maxSteps:26,prefix,preferred:label,
+   options:[{char:label,confidence:1}]}});
+ const preview=messages.find(m=>m.type==="preview");
+ const completion=messages.find(m=>m.type==="completion");
+ if(!completion)throw Error("Worker did not finish "+seed);
+ if(!preview || !completion.alternatives.length)continue;
+ assert.equal(preview.alternatives[0].score,completion.alternatives[0].score,
+  "The rendered preview must be the highest-ranked neural rollout");
+}
+console.log("PASS: no unranked first-sample flashes in neural previews");
