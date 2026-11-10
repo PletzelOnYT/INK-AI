@@ -7,6 +7,9 @@ on:
       - "README.md"
       - "docs/**"
       - "src/**"
+      - "data/**"
+      - "scripts/**"
+      - ".github/workflows/package-offline.yml"
       - "tests/**"
       - "models/ink-glyph-completion-v1.json"
       - "models/ink-glyph-completion-v2.json"
@@ -29,6 +32,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Check lean index and build offline regression fixture
+        run: |
+          python3 scripts/build_standalone.py
+          python3 - <<'PY'
+          from pathlib import Path
+          thin=Path("index.html").read_text()
+          assert len(thin)<7000, "Index must be a lightweight document"
+          assert "src/app.js" in thin and "src/app.css" in thin
+          assert "ink-cnn-int8-v1" not in thin
+          assert Path("dist/ink-ai-standalone.html").stat().st_size>1400000
+          print("PASS: thin index and full offline package both exist")
+          PY
+          cp dist/ink-ai-standalone.html index.html
       - name: Verify Python training code compiles
         run: python3 -m py_compile src/train.py src/train_stroke_sequence.py src/train_recognition_v3.py src/train_prefix_completion.py
       - name: Extract and syntax-check the embedded JavaScript and worker

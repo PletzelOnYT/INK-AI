@@ -1,0 +1,28 @@
+name: Package self-contained offline INK AI
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "src/app.js"
+      - "src/app.css"
+      - "src/stroke_worker.js"
+      - "scripts/build_standalone.py"
+      - "models/ink-cnn-v3.json"
+      - "models/ink-stroke-prefix-domain-v2.json"
+      - "models/ink-stroke-sequence-v1.json"
+      - "data/english-words.txt"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/build_standalone.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ink-ai-standalone
+          path: dist/ink-ai-standalone.html
+          if-no-files-found: error

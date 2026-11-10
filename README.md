@@ -8,9 +8,9 @@ A small browser-based drawing app for writing letters, numbers, and symbols. Dra
 
 ## Try it
 
-**[Download index.html](./index.html)** and open it in Chrome or another modern browser.
+To develop from the source checkout, run `python3 -m http.server 8000` and open `http://localhost:8000`.
 
-It's a single HTML file that works offline. The character recognizer, stroke prediction models and English word list are built in. No account, API key or server required.
+For an offline single-file download, use the **ink-ai-standalone** artifact from [GitHub Actions](./actions/workflows/package-offline.yml). This generated HTML includes both trained models and works without a network connection, account or API key.
 
 ## Features
 
@@ -43,7 +43,7 @@ INK AI has two separate models:
 
 Assist uses multiple candidate trajectories and filters out implausible shapes. It can use a built-in English word-frequency list to choose between genuinely plausible letters in a word, while leaving strongly recognized strokes alone. It does not force a tail onto a lowercase h that already reaches its baseline. It also takes the full-character recognition result into account, so a partial-stroke prediction doesn't override a more reliable whole-character guess. If the newer completion model can't produce a usable continuation, it can fall back to the previous trained stroke model.
 
-The models run in browser workers and are embedded in the HTML, so it works without network access. Drawings stay in the canvas unless you choose to accept a suggestion.
+The source app loads local model files and runs inference entirely in browser workers. The packaged offline build embeds the same model data. Drawings stay in the canvas unless you accept a suggestion.
 
 ## Model graphs
 
@@ -68,7 +68,11 @@ Training more examples can help, but no model here is flawless. The next importa
 
 | File | Purpose |
 | --- | --- |
-| [index.html](./index.html) | Standalone drawing app |
+| [index.html](./index.html) | Small browser interface |
+| [src/app.js](./src/app.js) | In-browser recognizer and drawing controller |
+| [src/app.css](./src/app.css) | Interface styles |
+| [scripts/build_standalone.py](./scripts/build_standalone.py) | Generate the complete offline HTML |
+| [data/english-words.txt](./data/english-words.txt) | Optional word context |
 | [src/stroke_assist_ui.js](./src/stroke_assist_ui.js) | Live gray neural pen suggestions, English context and drawing controls |
 | [src/stroke_worker.js](./src/stroke_worker.js) | Neural stroke generation |
 | [src/train.py](./src/train.py) | Character recognition training |

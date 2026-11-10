@@ -1,0 +1,25 @@
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;background:#080808}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;overflow-x:hidden}
+main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:20px 0}
+.tools{display:flex;align-items:center;justify-content:center;gap:3px;align-self:center;padding:5px;background:#1b1b1b;border:1px solid #404040;border-radius:16px;box-shadow:0 6px 20px #0006}
+.tool{width:48px;height:46px;display:grid;place-items:center;background:transparent;color:#ccc;border:0;border-radius:12px;cursor:pointer;transition:background .1s,color .1s}
+.tool:hover{background:#343434;color:#fff}
+.tool[aria-pressed="true"]{background:#fff;color:#0c0c0c}
+.tool svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tool:focus-visible{outline:2px solid white;outline-offset:2px}
+#pad[data-tool="eraser"]{cursor:cell}
+
+/* The prediction layer is never part of the saved/recognized ink. */
+.board{position:relative;width:100%;aspect-ratio:1200/550;background:#fff;border-radius:14px;overflow:hidden}
+.board canvas{position:absolute;inset:0;display:block;width:100%;height:100%}
+#ghost{pointer-events:none;z-index:2}
+#pad{z-index:1}
+.tool.assist-on{background:#ececec;color:#0b0b0b}
+@media(max-width:650px){.board{aspect-ratio:1.14/1;border-radius:9px}}
+
+
+#pad{background:#fff;touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
+#guess{min-height:95px;padding:18px 20px;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;color:#fff;font-size:clamp(24px,3vw,43px);font-weight:570;line-height:1.25;letter-spacing:-.02em}
+#guess[data-muted="true"]{color:#8e8e8e;font-size:clamp(15px,2vw,23px);font-weight:400;letter-spacing:0}
+@media(max-width:650px){main{padding:10px 0;gap:8px;justify-content:start}#pad{border-radius:0}#guess{min-height:80px}}
