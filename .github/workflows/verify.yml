@@ -47,6 +47,7 @@ jobs:
           node tests/recognition-v2-metrics.mjs
           node tests/recognition-v3-metrics.mjs
           node tests/recognition-v4-metrics.mjs
+          python3 tests/recognition-v4-package-unit.py
           node tests/word-case-loop-unit.mjs
           node --check src/word_case_refinement.js
           node tests/lowercase-refinement-unit.mjs
