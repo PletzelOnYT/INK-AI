@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Build the genuinely offline, self-contained distribution from source files.
 
-The checked-in index.html stays small. Only the generated artifact contains
+The editable src/index.shell.html stays small. The distributable index.html contains
 embedded neural weights, word data, JavaScript and CSS.
 """
 from pathlib import Path
 import sys
 
 ROOT=Path(__file__).resolve().parents[1]
-html=(ROOT/"index.html").read_text(encoding="utf-8")
+html=(ROOT/"src/index.shell.html").read_text(encoding="utf-8")
 assert '<script src="./src/app.js" defer></script>' in html
 css=(ROOT/"src/app.css").read_text(encoding="utf-8")
 app=(ROOT/"src/app.js").read_text(encoding="utf-8")
