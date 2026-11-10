@@ -31,6 +31,15 @@ assert.ok(![...records.values()][0].includes("paths"),"No handwritten path data 
 const restored=root.InkPreferenceAI.create(storage);
 assert.equal(restored.examples,50);
 assert.ok(Math.abs(restored.predict(good,pending)-model.predict(good,pending))<1e-9);
+const checkpoint=model.snapshot();
+assert.ok(model.learn(good,[good],pending),
+ "Accepting the sole good neural suggestion must still teach the ranker");
+assert.equal(model.examples,51);
+assert.ok(model.restore(checkpoint),"Restoring the previous trained state works");
+assert.equal(model.examples,50);
+assert.ok(Math.abs(model.predict(good,pending)-restored.predict(good,pending))<1e-9);
+assert.equal(model.restore({version:1,seen:2,w1:[999]}),false,
+ "Corrupt snapshot must not poison learning");
 restored.reset();assert.equal(restored.examples,0);
 assert.equal(records.size,0);
 storage.setItem("ink-ai-preferences-v1",'{"version":1,"seen":12,"w1":[999]}');
