@@ -16,7 +16,7 @@ The source code is stored in GitHub: edit the [small HTML shell](./src/index.she
 
 - **Live recognition** — identifies handwritten letters, numbers, punctuation, and common math symbols.
 - **Pen and eraser** — a simple canvas without extra menus.
-- **Assist** — optional translucent line suggestions that update while you're drawing.
+- **Assist** — switches on automatically as you start drawing (unless you turn it off); streams real neural handwriting suggestions while the pen moves.
 - **Stroke continuations** — the assistant draws light-gray, semi-transparent extensions of your actual ink. It does not overlay printed letters.
 - **Multi-stroke characters** — handles separate strokes in characters like `+`, `=`, `:`, and `X`.
 - **Local drawing controls** — suggestions don't modify the actual drawing until you accept them.

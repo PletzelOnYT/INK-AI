@@ -69,6 +69,7 @@ jobs:
           PY
           node --check /tmp/ink-check.js
           node tests/worker-smoke.mjs
+          node tests/completer-prefix-cache.mjs
           node tests/recognition-v2-metrics.mjs
           node tests/recognition-v3-metrics.mjs
           node tests/readme-benchmark-evidence.mjs

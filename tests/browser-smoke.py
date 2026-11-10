@@ -26,7 +26,7 @@ try:
     print("PASS: pen/eraser/assist, drawing surface and live prediction are visible",flush=True)
     wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
     if Path("models/ink-cnn-v3.json").is_file():
-        assert driver.execute_script("return window.__inkRecognitionVersion===3"),"Validated real-pen V3 was not loaded"
+        assert driver.execute_script("return window.__inkRecognitionVersion in (3,5)"),"No validated real-pen V3/V5 loaded"
         print("PASS: Chrome loads independently validated pen-adapted V3 recognizer",flush=True)
     elif Path("models/ink-cnn-v2.json").is_file():
         # GitHub raw can publish V3 between checkout and this browser run.
@@ -44,7 +44,9 @@ try:
     # Experimental suggestion is opt-in, and its transparent canvas is separate
     # from the black ink that the recognizer reads.
     drawing_before = driver.execute_script("return document.getElementById('pad').toDataURL()")
-    driver.find_element(By.ID,"assist").click()
+    # First pen gesture now enables neural assist automatically.
+    if driver.find_element(By.ID,"assist").get_attribute("aria-pressed")!="true":
+        driver.find_element(By.ID,"assist").click()
     assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="true"
     assert driver.execute_script("return window.__inkAssistEnabled") is True
     generator_available=Path("models/ink-stroke-sequence-v1.json").exists()

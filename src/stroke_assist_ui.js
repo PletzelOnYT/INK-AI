@@ -99,6 +99,10 @@ window.__inkFallbackUsed=0;
 window.__inkGhostTailDy=0;
 window.__inkGhostTailRange=0;
 let glyphFallbackLoading=false;
+let assistUserChoice=false;
+let glyphNoCandidateRetries=0;
+let inFlightGhost=null;
+window.__inkAssistAutoEnabled=false;
 async function loadValidatedBackup(){
  if(glyphFallbackLoading||!glyphWorker)return;
  glyphFallbackLoading=true;
@@ -134,6 +138,7 @@ async function loadValidatedBackup(){
 
 function clearGhost(){
  ghostCandidate=null;ghostOptions=[];ghostChoice=0;ghostPending=null;
+ inFlightGhost=null;
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
  window.__inkGhostPoints=0;window.__inkGhostSegments=0;
  window.__inkAssistLabel="";window.__inkGhostSource="none";
@@ -141,6 +146,7 @@ function clearGhost(){
  window.__inkSuggestionChoices=[];
 }
 function beginAssistStroke(){
+ ++glyphEpoch;glyphNoCandidateRetries=0;clearGhost();
  glyphStrokeSeed=(glyphStrokeSeed+1)|0;
  glyphClassMemory.clear();
  glyphCachedOptions=[];glyphLastReadAt=0;
@@ -157,8 +163,10 @@ function queueGhost(){
  const delay=Math.max(0,interval-since);
  glyphTimer=setTimeout(()=>{glyphTimer=0;generateGlyph()},delay);
 }
-function updateAssist(){
+function updateAssist(manual=false){
+ if(manual)assistUserChoice=true;
  assistEnabled=!assistEnabled;
+ if(!manual&&assistEnabled)window.__inkAssistAutoEnabled=true;
  window.__inkAssistEnabled=assistEnabled;
  assistButton.setAttribute("aria-pressed",String(assistEnabled));
  assistButton.classList.toggle("assist-on",assistEnabled);
@@ -170,7 +178,7 @@ function updateAssist(){
   queueGhost();
  }
 }
-assistButton.addEventListener("click",updateAssist);
+assistButton.addEventListener("click",()=>updateAssist(true));
 function bounds(stroke){
  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
  for(const [x,y] of stroke.points){l=Math.min(l,x);r=Math.max(r,x);t=Math.min(t,y);b=Math.max(b,y)}
@@ -266,17 +274,23 @@ function createGlyphWorker(){
    // Queue a fresher model call immediately afterwards.
    if(assistEnabled&&tool==="pen"&&m.neural===true&&
       m.epoch===glyphEpoch&&m.serial===glyphSerial&&
-      ghostPending?.serial===m.serial){
+      inFlightGhost?.serial===m.serial){
      const possibilities=(m.alternatives||[]).filter(o=>o.paths?.some(p=>p.length>1));
-     if(!possibilities.length&&m.type==="completion"){
-      clearGhost();
+     if(!possibilities.length&&m.type==="completion"&&
+        pointer===null&&glyphNoCandidateRetries<2){
+      // Retry a different genuine neural sample only twice per gesture.
+      glyphNoCandidateRetries++;
+      glyphStrokeSeed=(glyphStrokeSeed+1973)|0;
+      glyphDirty=true;
      }
      if(possibilities.length){
-      const serial=m.serial,epoch=m.epoch,pending=ghostPending;
+      const serial=m.serial,epoch=m.epoch,pending=inFlightGhost;
       const publish=ordered=>{
        if(!assistEnabled||tool!=="pen"||glyphSerial!==serial||
-          glyphEpoch!==epoch||ghostPending?.serial!==serial)return;
-       if(!ordered.length){clearGhost();return}
+          glyphEpoch!==epoch||inFlightGhost?.serial!==serial)return;
+       if(!ordered.length)return;
+       ghostPending=pending;
+       glyphNoCandidateRetries=0;
        ghostOptions=ordered;
        window.__inkSuggestionChoices=ordered.map(o=>o.label);
        ghostChoice=0;setGhostChoice(0);
@@ -295,7 +309,8 @@ function createGlyphWorker(){
         if(pointer===null)publish(ordered);
        }).catch(err=>{
         window.__inkLastGlyphError="Candidate scoring: "+String(err.message||err);
-        if(glyphSerial===serial&&glyphEpoch===epoch&&pointer===null)clearGhost();
+        if(glyphSerial===serial&&glyphEpoch===epoch&&pointer===null)
+         publish(possibilities);
        });
       }else if(pointer!==null){
        publish(possibilities);
@@ -450,7 +465,15 @@ async function generateGlyph(){
   // A full multi-stroke glyph is much more informative than a partial crop.
   // In the screenshot the board OCR says "h" but the cropped assistant OCR
   // said L/H/k. Put h FIRST and insist on a neural completion of h.
-  const whole=window.__inkDetectedRegions===1?window.__inkLastGuess:null;
+  const region=window.__inkWordRegions?.[0]?.box;
+  const box=input.box;
+  const sameGlyph=region&&
+    Math.max(0,Math.min(region[2],box.r)-Math.max(region[0],box.l))>
+      Math.min(region[2]-region[0],box.r-box.l)*.24&&
+    Math.max(0,Math.min(region[3],box.b)-Math.max(region[1],box.t))>
+      Math.min(region[3]-region[1],box.b-box.t)*.24;
+  const whole=sameGlyph&&window.__inkDetectedRegions===1?
+    window.__inkLastGuess:null;
   const preferred=typeof whole==="string"&&whole.length===1&&
     !/\s/.test(whole)?whole:null;
   if(preferred){
@@ -468,7 +491,7 @@ async function generateGlyph(){
    if(pointer!==null)queueGhost();
    return;
   }
-  ghostPending={frame:f,box:input.box,serial};
+  inFlightGhost={frame:f,box:input.box,serial};
   const isLive=pointer!==null;
   const big=window.__inkGlyphParameters>=1000000;
   glyphWorker.postMessage({cmd:"generate",serial,epoch,

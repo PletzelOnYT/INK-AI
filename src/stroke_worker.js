@@ -193,10 +193,13 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
  return {score,reason:horizontallyFlat?"flat-tail":"ok",
     end:[endX,endY],length,down,flat:horizontallyFlat};
 }
-function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
+// A handwritten prefix is the same for every sampled trajectory of a label.
+ // Run the expensive GRU prefix only ONCE per label, then copy the learned
+ // hidden states to independently sample each continuation. No templates.
+function preparePrefix(prefix,label){
  const index=characters.indexOf(label);
  if(index<0)throw Error("Unknown handwritten glyph: "+label);
- const charEmbedding=embedding.subarray(index*embedSize,(index+1)*embedSize);
+ const characterEmbedding=embedding.subarray(index*embedSize,(index+1)*embedSize);
  const states=layers.map(()=>new Float32Array(hiddenSize));
  let last=null,x=0,y=0,score=0;
  for(let j=0;j<prefix.length;j++){
@@ -204,9 +207,16 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps){
   if(token.length!==3||!token.every(Number.isFinite))throw Error("Invalid pen prefix");
   if(j>0)score+=likelihood(last,token);
   x+=token[0];y+=token[1];
-  last=step(token,states,charEmbedding);
+  last=step(token,states,characterEmbedding);
  }
- score/=Math.max(1,prefix.length-1);
+ return {characterEmbedding,states,last,x,y,
+  prefixScore:score/Math.max(1,prefix.length-1)};
+}
+function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps,prepared=null){
+ const history=prepared||preparePrefix(prefix,label);
+ const characterEmbedding=history.characterEmbedding;
+ const states=history.states.map(s=>new Float32Array(s));
+ let last=history.last,x=history.x,y=history.y,score=history.prefixScore;
  // Stable input-conditioned seed avoids flashing unrelated previews on
  // repeated repainting of identical user strokes.
  // The generation seed belongs to the current pen gesture, not to
@@ -330,13 +340,15 @@ function generateCandidates(m,isFallback=false){
    // Multiple independent genuine GRU rollouts. Select trajectories using
    // a class-conditioned structural critic, not the first random sample.
    // More samples when stationary; cap live work to maintain responsiveness.
-   const perLabel=live?(hiddenSize>=300?2:4):(hiddenSize>=300?6:12);
+   const perLabel=live?(hiddenSize>=300?2:3):(hiddenSize>=300?6:12);
+   let previewSent=false;
    for(let j=0;j<options.length;j++){
     const choice=options[j];
+    const prepared=preparePrefix(prefix,choice.char);
     const candidates=[];
     for(let attempt=0;attempt<perLabel;attempt++){
      const result=completeGlyph(prefix,choice.char,
-       gestureSeed+j*571+attempt*997,attempt>0,steps);
+       gestureSeed+j*571+attempt*997,attempt>0,steps,prepared);
      if(result.moves<2||!result.paths.length)continue;
      // Geometry acceptance and neural probability are independent gates.
      // A high likelihood must not rescue a physically invalid continuation.
@@ -347,14 +359,22 @@ function generateCandidates(m,isFallback=false){
        Math.min(1.8,result.prefixScore*.04)+
        .17*Math.log((choice.confidence||0)+.03);
      if(value<-.9)continue;
-     candidates.push({
+     const candidate={
        label:choice.char,paths:result.paths,
        penUps:result.penUps,confidence:choice.confidence||0,
        score:value,reason:result.quality.reason,
        quality:result.quality.score,variant:attempt,
        rolloutLogLikelihood:result.rolloutLogLikelihood,
        truncated:result.truncated
-     });
+     };
+     candidates.push(candidate);
+     // Stream a real quality-approved neural rollout immediately rather
+     // than waiting for all slower alternative candidates to finish.
+     if(!previewSent&&j===0&&(!m.preferred||choice.char===m.preferred)){
+      self.postMessage({type:"preview",serial,epoch,
+       alternatives:[candidate],neural:true,engine:"stroke-gru-mdn"});
+      previewSent=true;
+     }
     }
     candidates.sort((a,b)=>b.score-a.score);
     let accepted=0;
@@ -374,10 +394,11 @@ function generateCandidates(m,isFallback=false){
       if(duplicate)continue;
       results.push(candidate);accepted++;
     }
-    if(accepted&&results.length===accepted&&
+    if(!previewSent&&accepted&&results.length===accepted&&
        (!m.preferred||choice.char===m.preferred)){
       self.postMessage({type:"preview",serial,epoch,
        alternatives:[results[0]],neural:true,engine:"stroke-gru-mdn"});
+      previewSent=true;
     }
    }
    // Full results include several independent genuine neural rollouts, so
