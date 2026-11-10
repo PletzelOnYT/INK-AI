@@ -20,7 +20,7 @@ assert.equal(model.examples,0);
 assert.deepEqual(model.rank([bad,good],pending),[bad,good],
  "Untrained network must not rearrange suggestions");
 const initial=model.predict(good,pending)-model.predict(bad,pending);
-for(let i=0;i<50;i++)assert.ok(model.learn(good,[bad],pending));
+for(let i=0;i<50;i++)assert.ok(model.learn(good,[good,bad],pending));
 const trained=model.predict(good,pending)-model.predict(bad,pending);
 assert.ok(trained>initial+.15,"Positive G feedback should teach a neural preference");
 assert.equal(model.examples,50);
