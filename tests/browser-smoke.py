@@ -44,6 +44,8 @@ try:
     # Experimental suggestion is opt-in, and its transparent canvas is separate
     # from the black ink that the recognizer reads.
     drawing_before = driver.execute_script("return document.getElementById('pad').toDataURL()")
+    assert driver.execute_script("return window.__inkAssistEnabled && window.__inkAssistAutoEnabled"), (
+        "First pen stroke must automatically enable neural predictions")
     # First pen gesture now enables neural assist automatically.
     if driver.find_element(By.ID,"assist").get_attribute("aria-pressed")!="true":
         driver.find_element(By.ID,"assist").click()
@@ -96,6 +98,7 @@ try:
     driver.find_element(By.ID,"assist").click()
     assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="false"
     assert driver.execute_script("return window.__inkGhostPoints")==0
+    assert driver.execute_script("return window.__inkAssistEnabled") is False
     print("PASS: experimental assist turns off and clears ghost overlay",flush=True)
     # Use a fresh single-stroke canvas for the existing erase-to-empty test.
     ActionChains(driver).send_keys("\ue00c").perform()
