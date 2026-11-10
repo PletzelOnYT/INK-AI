@@ -1,0 +1,23 @@
+import fs from "node:fs";
+import vm from "node:vm";
+import assert from "node:assert/strict";
+// Exercise the real app's CNN baseline-vs-candidate release decision.
+const ui=fs.readFileSync("src/app.js","utf8");
+const start=ui.indexOf("function completionEvidence(");
+const end=ui.indexOf("async function scoreFinishedAlternatives(",start);
+assert.ok(start>0&&end>start,"Expected actual CNN-gate helper");
+const ctx={Math};
+vm.createContext(ctx);vm.runInContext(ui.slice(start,end),ctx);
+const f=ctx.completionEvidence;
+assert.equal(f(.94,.90,"h"),false,"Do not extend a finished high-confidence h");
+assert.equal(f(.90,.905,"h"),false,"Tiny improvement does not justify an added line");
+assert.equal(f(.25,.02,"h"),false,"Reject hallucinated line that destroys CNN evidence");
+assert.equal(f(.15,.62,"h"),true,"Accept valid neural improvement of an unfinished h");
+assert.equal(f(.11,.42,"g"),true,"Use current recognizer evidence for another letter");
+assert.equal(f(.8,.04,"a"),false,"Reject a worse final letter");
+assert.equal(f(.002,.7,"1"),true,"Works with handwritten digits");
+assert.equal(f(.9,.001,"+"),true,"Uncalibrated maths stay controlled by geometric gate");
+assert.ok(ui.includes("const baseline=predictions.predictions[0].top"));
+assert.ok(ui.includes("if(!completionEvidence(before,p,item.candidate.label))continue"));
+assert.ok(!ui.includes("if(!loaded||!pending?.box||alternatives.length<2)"));
+console.log("PASS: actual CNN gates even a single neural rollout against the original ink");

@@ -52,6 +52,7 @@ jobs:
           node --check src/stroke_worker.js
           node tests/completer-prefix-cache.mjs
           node tests/neural-preference-learning.mjs
+          node tests/completion-cnn-evidence.mjs
           python3 -m pip install --quiet "numpy>=1.26,<3"
           python3 tests/inksight-teacher-import.py
           python3 -m py_compile src/train_google_teacher_big.py
