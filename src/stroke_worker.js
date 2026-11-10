@@ -376,6 +376,47 @@ function localNeuralPreview(prefix,rollout,label,confidence,variant){
   shortHorizon:true,truncated:true};
 }
 
+// Fast first-frame forecast: use the trained GRU's most likely Gaussian
+// means to draw a *short* pen continuation, not a template or full glyph.
+// We can stream this before slower stochastic sampling and CNN verification.
+function neuralLookahead(prefix,label,confidence){
+ const index=characters.indexOf(label);
+ if(index<0||prefix.length<3)return null;
+ const emb=embedding.subarray(index*embedSize,(index+1)*embedSize);
+ const states=layers.map(()=>new Float32Array(hiddenSize));
+ let out=null,x=0,y=0;
+ for(const token of prefix){
+  x+=token[0];y+=token[1];out=step(token,states,emb);
+ }
+ const points=[[x,y]];
+ let evidence=0,count=0,travel=0;
+ for(let j=0;j<12;j++){
+  if(!out)break;
+  let best=0;
+  for(let k=1;k<kCount;k++)if(out[k]>out[best])best=k;
+  const dx=out[kCount+best],dy=out[2*kCount+best];
+  const dist=Math.hypot(dx,dy);
+  if(!Number.isFinite(dist)||dist<.0015||dist>.13||travel+dist>.22)break;
+  if(sig(out[5*kCount])<.22)break;
+  const nextX=x+dx,nextY=y+dy;
+  if(nextX<-.075||nextX>1.075||nextY<-.075||nextY>1.075)break;
+  evidence+=Math.max(-18,Math.min(12,likelihood(out,[dx,dy,1])));
+  count++;travel+=dist;x=nextX;y=nextY;
+  points.push([x,y]);
+  out=step([dx,dy,1],states,emb);
+  if(points.length>=5&&sig(out[5*kCount+1])>.65)break;
+ }
+ if(points.length<3)return null;
+ const candidate=localNeuralPreview(prefix,{
+  paths:[points],rolloutLogLikelihood:count?evidence/count:0
+ },label,confidence,-1);
+ if(candidate){
+  candidate.source="neural-lookahead";
+  candidate.score+=.12;
+ }
+ return candidate;
+}
+
 function generateCandidates(m,isFallback=false){
    const prefix=m.prefix,serial=m.serial,epoch=m.epoch;
    const live=m.live===true;
@@ -387,10 +428,17 @@ function generateCandidates(m,isFallback=false){
      .sort((a,b)=>Number(b.char===m.preferred)-Number(a.char===m.preferred))
      .slice(0,live?2:4);
    const results=[];
+   let streamedFast=null;
+   if(live&&options.length){
+    streamedFast=neuralLookahead(prefix,options[0].char,
+      options[0].confidence||0);
+    if(streamedFast)self.postMessage({type:"preview",serial,epoch,
+       alternatives:[streamedFast],neural:true,engine:"stroke-gru-mdn"});
+   }
    // Multiple independent genuine GRU rollouts. Select trajectories using
    // a class-conditioned structural critic, not the first random sample.
    // More samples when stationary; cap live work to maintain responsiveness.
-   const perLabel=live?(hiddenSize>=300?2:4):(hiddenSize>=300?6:12);
+   const perLabel=live?(hiddenSize>=300?2:3):(hiddenSize>=300?6:12);
    for(let j=0;j<options.length;j++){
     const choice=options[j];
     const candidates=[],shortForecasts=[];
@@ -452,6 +500,9 @@ function generateCandidates(m,isFallback=false){
        alternatives:[results[0]],neural:true,engine:"stroke-gru-mdn"});
     }
    }
+   // If no full proposal survived, retain the short learned look-ahead
+   // instead of leaving the pen without a suggestion.
+   if(!results.length&&streamedFast)results.push(streamedFast);
    // Full results include several independent genuine neural rollouts, so
    // the browser can score the finished glyph with the separate OCR network.
    results.sort((a,b)=>b.score-a.score);
