@@ -44,6 +44,12 @@ jobs:
           print("Independent-writer accuracy:",m["independent_pen_v3"])
           print("90 percent goal met:",m["target_reached"])
           PY
+      - name: Confirm browser recognizer still works with candidate checkpoint
+        run: |
+          python3 -m pip install --quiet selenium
+          python3 tests/neural-browser-smoke.py
+          python3 tests/lowercase-recognition-browser.py
+          python3 tests/recognition-regression-browser.py
       - name: Commit only evaluated metrics and accepted weights
         run: |
           git config user.name "ink-ai-training[bot]"
