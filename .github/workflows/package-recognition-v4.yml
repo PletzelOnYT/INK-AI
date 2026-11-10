@@ -1,0 +1,53 @@
+name: Package independently approved V4 recognizer
+
+on:
+  push:
+    branches: [feature/recognition-multidataset-v4]
+    paths:
+      - "models/ink-cnn-v4.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ink-recognition-v4-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Embed only release-approved real handwritten CNN weights
+        run: python3 src/package_recognition_v4.py
+      - name: Verify the original app script still parses
+        run: |
+          python3 - <<'PY'
+          import pathlib,re,json
+          html=pathlib.Path("index.html").read_text()
+          script=re.search(r"<script>(.*?)</script>",html,re.S)
+          assert script
+          pathlib.Path("/tmp/ink-ai-v4.js").write_text(script.group(1))
+          assert 'rgba(55,55,55,0.30)' in html
+          assert 'type:"vector-completion"' in html
+          assert "drawCorrectionGlyph" not in html
+          model=json.loads(pathlib.Path("models/ink-cnn-v4.json").read_text())
+          assert model["training"]["finetuned_from"]=="models/ink-cnn-v3.json"
+          PY
+          node --check /tmp/ink-ai-v4.js
+      - name: Commit self-contained HTML to experiment branch
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html models/ink-cnn-v4.json tests/browser-smoke.py tests/continuation-offline-browser.py
+          git commit -m "Bundle approved four-source handwriting V4 into offline INK AI"
+          for i in 1 2 3 4 5; do
+            git fetch origin feature/recognition-multidataset-v4
+            git rebase origin/feature/recognition-multidataset-v4
+            if git push origin HEAD:feature/recognition-multidataset-v4; then exit 0; fi
+            sleep 3
+          done
+          exit 1
