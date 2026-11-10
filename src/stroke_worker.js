@@ -439,6 +439,7 @@ self.onmessage=e=>{
      parameters:network.parameter_count,classes:characters.length,
      prefixTuned:Boolean(network.training?.prefix_tuned),
      prefixDomain:Boolean(network.training?.prefix_domain_v2),
+     prefixDomainV3:Boolean(network.training?.prefix_domain_v3),
      penLift:Boolean(network.training?.penlift_calibrated_v3),
      realSamples:network.training.real_training_glyphs});
   }else if(m.cmd==="fallback"){

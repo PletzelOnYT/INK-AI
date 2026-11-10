@@ -189,6 +189,7 @@ const STROKE_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/mode
 const STROKE_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-sequence-v2.json";
 const STROKE_PREFIX_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-prefix-v1.json";
 const STROKE_PREFIX_DOMAIN_V2_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-prefix-domain-v2.json";
+const STROKE_PREFIX_DOMAIN_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-prefix-domain-v3.json";
 const STROKE_PENLIFT_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-penlift-v3.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let nextCompletionGroup=0,lastAcceptedFeedback=null;
@@ -371,7 +372,7 @@ function createGlyphWorker(){
   if(m.type==="ready"){
    glyphReady=true;glyphBusy=false;
    window.__inkGlyphReady=true;
-   window.__inkGlyphVersion=m.penLift?7:(m.prefixDomain?6:(m.prefixTuned?5:(m.parameters>=1000000?4:3)));
+   window.__inkGlyphVersion=m.prefixDomainV3?8:(m.penLift?7:(m.prefixDomain?6:(m.prefixTuned?5:(m.parameters>=1000000?4:3))));
    window.__inkPenLiftCalibrated=Boolean(m.penLift);
    window.__inkPrefixDomain=Boolean(m.prefixDomain);
    window.__inkGlyphParameters=m.parameters;
@@ -474,9 +475,10 @@ async function loadGlyphModel(){
   // *free-running* tail error. Prefer it over a bigger model selected only
   // by teacher-forced likelihood, when that checkpoint has been published.
   const sources=location.protocol==="file:"?
-    [STROKE_PENLIFT_V3_URL,STROKE_PREFIX_DOMAIN_V2_URL,
+    [STROKE_PREFIX_DOMAIN_V3_URL,STROKE_PENLIFT_V3_URL,STROKE_PREFIX_DOMAIN_V2_URL,
      STROKE_PREFIX_URL,STROKE_V2_URL,STROKE_URL]:
-    ["models/ink-stroke-penlift-v3.json",STROKE_PENLIFT_V3_URL,
+    ["models/ink-stroke-prefix-domain-v3.json",STROKE_PREFIX_DOMAIN_V3_URL,
+     "models/ink-stroke-penlift-v3.json",STROKE_PENLIFT_V3_URL,
      "models/ink-stroke-prefix-domain-v2.json",STROKE_PREFIX_DOMAIN_V2_URL,
      "models/ink-stroke-prefix-v1.json",STROKE_PREFIX_URL,
      "models/ink-stroke-sequence-v2.json",STROKE_V2_URL,
@@ -487,8 +489,10 @@ async function loadGlyphModel(){
    try{
     const saved=JSON.parse(embedded.textContent);
     if(saved.format==="ink-online-stroke-mdn-v1"&&
-       saved.training?.prefix_domain_v2&&
-       saved.training?.fine_tuned_own_model==="models/ink-stroke-prefix-v1.json")
+       (saved.training?.prefix_domain_v3&&
+        saved.training?.fine_tuned_own_model==="models/ink-stroke-prefix-domain-v2.json" ||
+        saved.training?.prefix_domain_v2&&
+        saved.training?.fine_tuned_own_model==="models/ink-stroke-prefix-v1.json"))
        model=saved;
    }catch(_){/* Fall back to repository files when unavailable. */}
   }
@@ -506,6 +510,10 @@ async function loadGlyphModel(){
       if(!(candidate.training?.penlift_calibrated_v3 &&
          candidate.training?.fine_tuned_own_model==="models/ink-stroke-prefix-domain-v2.json"))
        throw Error("Unvalidated multi-stroke model");
+    }else if(source.includes("prefix-domain-v3")){
+      if(!(candidate.training?.prefix_domain_v3&&
+        candidate.training?.fine_tuned_own_model==="models/ink-stroke-prefix-domain-v2.json"))
+       throw Error("Unvalidated V3 real-pen completion model");
     }else if(source.includes("prefix-domain-v2")){
       if(!(candidate.training?.prefix_domain_v2 &&
          candidate.training?.fine_tuned_own_model==="models/ink-stroke-prefix-v1.json"))

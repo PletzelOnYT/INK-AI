@@ -12,6 +12,8 @@ on:
       - "models/ink-cnn-v3.json"
       - "models/ink-cnn-v5.json"
       - "models/ink-stroke-prefix-domain-v2.json"
+      - "models/ink-stroke-prefix-domain-v3.json"
+      - "models/stroke-prefix-domain-v3-metrics.json"
       - "models/ink-stroke-sequence-v1.json"
       - "data/english-words.txt"
   workflow_dispatch:

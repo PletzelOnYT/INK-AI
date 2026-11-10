@@ -6,6 +6,7 @@ embedded neural weights, word data, JavaScript and CSS.
 """
 from pathlib import Path
 import sys
+import json
 
 ROOT=Path(__file__).resolve().parents[1]
 html=(ROOT/"src/index.shell.html").read_text(encoding="utf-8")
@@ -13,10 +14,18 @@ assert '<script src="./src/app.js" defer></script>' in html
 css=(ROOT/"src/app.css").read_text(encoding="utf-8")
 app=(ROOT/"src/app.js").read_text(encoding="utf-8")
 preference=(ROOT/"src/neural_preference_model.js").read_text(encoding="utf-8")
+candidate=ROOT/"models/ink-stroke-prefix-domain-v3.json"
+report=ROOT/"models/stroke-prefix-domain-v3-metrics.json"
+approved=False
+if candidate.exists() and report.exists():
+    metrics=json.loads(report.read_text(encoding="utf-8"))
+    approved=metrics.get("eligible") is True and metrics.get("deployable") is True
+stroke_path="models/ink-stroke-prefix-domain-v3.json" if approved else "models/ink-stroke-prefix-domain-v2.json"
+print("Bundled GRU:",stroke_path)
 models=[
  ("inkRecognitionModel","application/json",
   "models/ink-cnn-v3.json"),
- ("inkStrokeModel","application/json","models/ink-stroke-prefix-domain-v2.json"),
+ ("inkStrokeModel","application/json",stroke_path),
  ("inkStrokeBackup","application/json","models/ink-stroke-sequence-v1.json"),
  ("inkEnglishWords","text/plain","data/english-words.txt"),
  ("strokeWorkerSource","text/plain","src/stroke_worker.js"),
