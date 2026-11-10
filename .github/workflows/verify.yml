@@ -112,5 +112,6 @@ jobs:
           python3 tests/lowercase-recognition-browser.py
           python3 tests/continuation-offline-browser.py
           if test -s models/ink-stroke-sequence-v1.json; then python3 tests/h-completion-browser.py; fi
+          python3 tests/completed-h-no-runaway-browser.py
           if test -s models/ink-stroke-sequence-v1.json; then python3 tests/glyph-completion-browser.py; fi
           if test -s models/ink-cnn-v1.json; then python3 tests/neural-browser-smoke.py; fi
