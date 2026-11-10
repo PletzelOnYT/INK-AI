@@ -45,43 +45,17 @@ Assist uses multiple candidate trajectories and filters out implausible shapes. 
 
 The models run in browser workers and are embedded in the HTML, so it works without network access. Drawings stay in the canvas unless you choose to accept a suggestion.
 
-## Model performance & version history
+## Model graphs
 
-The graphs below use **measured evaluation results**, rather than invented success rates. A higher version number does not automatically mean a more accurate model. Only evaluated improvements are highlighted; rejected experiments are labeled instead of portrayed as successful upgrades.
+### Recognizer
 
-### Character recognition — CNN
+![Recognizer accuracy](./docs/recognition-progress.svg)
 
-![INK AI recognition neural-network benchmarks by version](./docs/recognition-progress.svg)
+### Completer
 
-| Version | Benchmark | Measured result | Status |
-| --- | --- | --- | --- |
-| **CNN V1** | EMNIST ByClass, 116,323 test characters | **84.90%** overall; **48.00%** lowercase macro accuracy | Historical |
-| **CNN V2** | Same EMNIST test | **84.32%** overall; **58.66%** lowercase macro accuracy | Superseded |
-| **CNN V2** | UJI pen strokes, 1,551 unseen-writer characters | **52.74%** character accuracy | Superseded |
-| **CNN V3** | Same UJI unseen-writer test | **76.47%** character accuracy (**+23.73 percentage points**) | **Current release** |
-| **CNN V4 experiment** | Same UJI unseen-writer test | **74.40%** character accuracy | **Rejected; not shipped** |
+![Completer results](./docs/completion-progress.svg)
 
-The lowercase V1 → V2 comparison uses the same EMNIST evaluation and shows the improvement in *mean per-class lowercase accuracy*, despite a small decrease in total accuracy. V2 → V3 uses the same *independent UJI writers*. These are different benchmarks, so the results must not be connected into a single accuracy trend. The V3 EMNIST evaluation uses a different 12,000-image subset and isn't plotted beside the 116,323-image test as though identical.
-
-**Evidence:** [V1 test and per-class scores](./models/recognition-v2-metrics.json) · [V2/V3 independent-writer evaluation](./models/recognition-v3-metrics.json) · [V4 experimental evaluation, rejected](https://github.com/PletzelOnYT/INK-AI/blob/feature/recognition-multidataset-v4/models/recognition-v4-metrics.json).
-
-### Neural stroke completion — GRU, plus earlier raster experiments
-
-![INK AI completion model benchmarks with neural pen-path errors and raster F1](./docs/completion-progress.svg)
-
-| Engine/version | Measured benchmark | Result | Status |
-| --- | --- | --- | --- |
-| Raster completion V1 | Missing-ink F1, same 4,000 held-out glyph masks | **63.74% F1** | Archived; **not** the live completer |
-| Raster completion V2 | Identical held-out glyph masks | **66.86% F1** (**+3.11 points**) | Archived; **not** the live completer |
-| Neural stroke GRU V1 | 14-step rollout position error on unseen writers | **0.2112** (lower is better) | Base model |
-| Neural stroke Prefix V1 | Same 14-step rollout evaluation | **0.1958** (**7.28% less error**) | Superseded |
-| Neural stroke Prefix-Domain V2 | 12-step prefix-framed rollout on unseen writers | **0.3336** vs **0.4238** baseline (**21.29% less error**) | **Current live generator** |
-| Larger stroke GRU V2 | Held-out trajectory likelihood and pen-lift tests | Did **not** beat release baseline | Rejected |
-| Pen-lift V3 experiment | Unseen-writer pen-lift detection | **3.23% F1**, with many false positives | Rejected |
-
-**Critical distinction:** A **trajectory-error reduction** tells us that generated coordinates got closer to recorded pen paths on a particular test. It is **not a percent of correct suggestions**. The two GRU error-reduction numbers also come from different evaluations (14-step and 12-step), so they are not directly additive. The deployed prefix-domain model's separate pen-lift detection test scored **0% F1**, highlighting a remaining weakness. High ordinary pen-down accuracy must not be advertised as successful pen-lift prediction.
-
-**Evidence:** [Raster head-to-head](./models/glyph-completion-comparison.json) · [GRU Prefix V1, 14-step test](./models/stroke-prefix-metrics.json) · [GRU Prefix-Domain V2, 12-step test](./models/stroke-prefix-domain-v2-metrics.json) · [Larger GRU V2 rejection](./models/stroke-sequence-v2-metrics.json) · [Pen-lift V3 rejection](./models/penlift-v3-metrics.json).
+*Results are measured. Recognizer tests use different datasets; completer bars show different metrics, not one success rate.*
 
 ### Training data and honest evaluation
 
