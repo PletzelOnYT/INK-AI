@@ -53,6 +53,7 @@ jobs:
           node tests/h-continuation-regression.mjs
           node tests/rollout-candidate-diagnostics.mjs
           node tests/neural-rollout-quality.mjs
+          node tests/neural-lookahead-diagnostics.mjs
           node tests/continuation-context-quality.mjs
           node tests/stroke-sequence-v2-acceptance.mjs
           node tests/prefix-quality-acceptance.mjs
