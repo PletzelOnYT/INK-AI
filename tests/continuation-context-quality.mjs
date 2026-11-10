@@ -49,7 +49,7 @@ const confident=ctx.dictionaryRankOptions([{char:"q",confidence:.94},{char:"p",c
 assert.equal(confident[0].char,"q","No dictionary override for strong visual evidence");
 ctx.window.__inkWordRegions=[];
 assert.equal(ctx.dictionaryRankOptions(choices,{l:280,r:320,t:100,b:200})[0].char,"q");
-const incomplete={box:{t:100,b:310},group:[
+const incomplete={box:{l:200,r:260,t:100,b:310},group:[
  {points:[[200,100],[200,310]]},
  {points:[[200,220],[245,225],[260,250]]}
 ]};
