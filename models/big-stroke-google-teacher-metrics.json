@@ -1,0 +1,296 @@
+{
+  "eligible": false,
+  "latency_verified": false,
+  "parameter_count": 1405755,
+  "preserved_baseline_prediction_max_error": 0.0,
+  "warm_started_from": "models/ink-stroke-prefix-domain-v2.json",
+  "external_teacher": "Google Research InkSight model-generated InkML vectors, not direct checkpoint weights",
+  "teacher_provenance": {
+    "inkml_files_scanned": 400,
+    "verified_files": 394,
+    "unlabelled_teacher_strokes": 1888,
+    "source": "Derendering/InkSight-Derenderings",
+    "teacher": "Google Research InkSight model-produced vector strokes",
+    "training_label_claim": "none; unconditional pen-motion pretraining",
+    "dataset_license": "Apache-2.0"
+  },
+  "teacher_presentations": 3776,
+  "baseline_position": {
+    "calibration": {
+      "prefix_frame_position_error": 0.330473,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 15420,
+      "cut_errors": {
+        "8": 0.384864,
+        "13": 0.335456,
+        "21": 0.26788
+      }
+    },
+    "independent": {
+      "prefix_frame_position_error": 0.342225,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 15384,
+      "cut_errors": {
+        "8": 0.41528,
+        "13": 0.339372,
+        "21": 0.268092
+      }
+    }
+  },
+  "candidate_position": {
+    "calibration": {
+      "prefix_frame_position_error": 0.442638,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 15420,
+      "cut_errors": {
+        "8": 0.560413,
+        "13": 0.428441,
+        "21": 0.333113
+      }
+    },
+    "independent": {
+      "prefix_frame_position_error": 0.454554,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 15384,
+      "cut_errors": {
+        "8": 0.582406,
+        "13": 0.443549,
+        "21": 0.33112
+      }
+    }
+  },
+  "position_gain": -0.328231,
+  "calibration_gain": -0.339407,
+  "baseline_v1": {
+    "calibration": {
+      "nll": -3.577232,
+      "pen_state_accuracy": 0.989074,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1548,
+      "true_pen_lifts": 705,
+      "predicted_pen_lifts": 0
+    },
+    "independent": {
+      "nll": -3.56119,
+      "pen_state_accuracy": 0.989952,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1553,
+      "true_pen_lifts": 647,
+      "predicted_pen_lifts": 0
+    }
+  },
+  "v2": {
+    "calibration": {
+      "nll": -4.811513,
+      "pen_state_accuracy": 0.989074,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1548,
+      "true_pen_lifts": 705,
+      "predicted_pen_lifts": 0
+    },
+    "independent": {
+      "nll": -4.281552,
+      "pen_state_accuracy": 0.989952,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1553,
+      "true_pen_lifts": 647,
+      "predicted_pen_lifts": 0
+    }
+  },
+  "best": {
+    "calibration": {
+      "nll": -4.811513,
+      "pen_state_accuracy": 0.989074,
+      "pen_lift_f1": 0.0,
+      "heldout_glyphs": 1548,
+      "true_pen_lifts": 705,
+      "predicted_pen_lifts": 0
+    },
+    "prefix_calibration": {
+      "prefix_frame_position_error": 0.386451,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 12264,
+      "cut_errors": {
+        "8": 0.496897,
+        "13": 0.375179,
+        "21": 0.282015
+      }
+    },
+    "stage": "ambiguous-and-symbol-fine-tune",
+    "epoch": 2,
+    "presentations": 90000
+  },
+  "history": [
+    {
+      "stage": "general-pretrain",
+      "epoch": 1,
+      "train_loss": -2.41458,
+      "calibration": {
+        "nll": -3.099676,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "prefix_calibration": {
+        "prefix_frame_position_error": 0.534243,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 12264,
+        "cut_errors": {
+          "8": 0.672775,
+          "13": 0.526734,
+          "21": 0.396377
+        }
+      },
+      "seconds": 127.8
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 2,
+      "train_loss": -3.81827,
+      "calibration": {
+        "nll": -1.978917,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "prefix_calibration": {
+        "prefix_frame_position_error": 0.57994,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 12264,
+        "cut_errors": {
+          "8": 0.629617,
+          "13": 0.560874,
+          "21": 0.547469
+        }
+      },
+      "seconds": 128.8
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 3,
+      "train_loss": -3.69554,
+      "calibration": {
+        "nll": -3.130335,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "prefix_calibration": {
+        "prefix_frame_position_error": 0.471858,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 12264,
+        "cut_errors": {
+          "8": 0.59311,
+          "13": 0.461244,
+          "21": 0.355377
+        }
+      },
+      "seconds": 128.4
+    },
+    {
+      "stage": "general-pretrain",
+      "epoch": 4,
+      "train_loss": -3.80518,
+      "calibration": {
+        "nll": -1.498078,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "prefix_calibration": {
+        "prefix_frame_position_error": 0.550194,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 12264,
+        "cut_errors": {
+          "8": 0.499068,
+          "13": 0.554535,
+          "21": 0.599446
+        }
+      },
+      "seconds": 128.8
+    },
+    {
+      "stage": "ambiguous-and-symbol-fine-tune",
+      "epoch": 1,
+      "train_loss": -4.95635,
+      "calibration": {
+        "nll": -4.777322,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "prefix_calibration": {
+        "prefix_frame_position_error": 0.392739,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 12264,
+        "cut_errors": {
+          "8": 0.498513,
+          "13": 0.386981,
+          "21": 0.287499
+        }
+      },
+      "seconds": 128.9
+    },
+    {
+      "stage": "ambiguous-and-symbol-fine-tune",
+      "epoch": 2,
+      "train_loss": -5.24995,
+      "calibration": {
+        "nll": -4.811513,
+        "pen_state_accuracy": 0.989074,
+        "pen_lift_f1": 0.0,
+        "heldout_glyphs": 1548,
+        "true_pen_lifts": 705,
+        "predicted_pen_lifts": 0
+      },
+      "prefix_calibration": {
+        "prefix_frame_position_error": 0.386451,
+        "pen_lift_f1": 0.0,
+        "pen_lift_precision": 0.0,
+        "pen_lift_recall": 0.0,
+        "eval_steps": 12264,
+        "cut_errors": {
+          "8": 0.496897,
+          "13": 0.375179,
+          "21": 0.282015
+        }
+      },
+      "seconds": 129.7
+    }
+  ],
+  "total_presentations": 90000,
+  "real_human_trajectory_samples": 6210,
+  "writer_disjoint_test_samples": 1553,
+  "synthetic_symbol_examples": 13200,
+  "selection_rule": "V2 needs improved NLL on both writer-separated splits and non-regressed pen-lift F1"
+}
