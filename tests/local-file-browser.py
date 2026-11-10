@@ -24,7 +24,28 @@ try:
     print("PASS: local file:// HTML downloads actual trained sequence generator",flush=True)
     canvas=driver.find_element(By.ID,"pad")
     ActionChains(driver).move_to_element_with_offset(canvas,-180,-65).click_and_hold().move_by_offset(20,14).move_by_offset(20,17).move_by_offset(20,19).release().perform()
-    wait.until(lambda d:d.execute_script("return window.__inkGhostPoints>2"))
+    try:
+        WebDriverWait(driver,12).until(
+            lambda d:d.execute_script("return window.__inkGhostPoints>2"))
+    except Exception:
+        state=driver.execute_script("""
+          return {
+           assist:window.__inkAssistEnabled, auto:window.__inkAssistAutoEnabled,
+           ready:window.__inkReady, glyphReady:window.__inkGlyphReady,
+           requests:window.__inkAssistRequests,
+           inflight:window.__inkAssistInFlight,
+           options:window.__inkSuggestionChoices,
+           ghost:window.__inkGhostPoints,
+           liveUpdates:window.__inkLivePreviewUpdates,
+           ocrReads:window.__inkAssistOCRReads,
+           cacheHits:window.__inkAssistCacheHits,
+           lastGuess:window.__inkLastGuess,
+           error:window.__inkLastGlyphError,
+           version:window.__inkGlyphVersion
+          };
+        """)
+        print("LIVE ASSIST FAILURE DIAGNOSTICS:",state,flush=True)
+        raise
     assert driver.execute_script("return window.__inkGhostSource")=="neural-stroke-sequence"
     print("PASS: local file:// draws genuine translucent neural vector preview",flush=True)
     before=driver.execute_script("return document.getElementById('pad').toDataURL()")
