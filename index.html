@@ -10719,7 +10719,7 @@ let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
 let glyphCachedReading=null,glyphCachedAt=0,glyphCachedGesture=-1;
-let ghostVerified=false;
+let ghostVerified=false,queuedGhostAccept=null;
 let glyphClassMemory=new Map();
 let ghostPending=null,ghostOptions=[],ghostChoice=0;
 window.__inkGlyphReady=false;
@@ -10743,6 +10743,7 @@ window.__inkLastPreviewLatencyMs=0;
 window.__inkLastPreviewTime=0;
 window.__inkAssistInFlight=false;
 window.__inkGhostVerified=false;
+window.__inkQueuedAcceptance=false;
 window.__inkClassifierCacheHits=0;
 window.__inkFallbackReady=false;
 window.__inkFallbackUsed=0;
@@ -10785,6 +10786,7 @@ async function loadValidatedBackup(){
 function clearGhost(){
  ghostCandidate=null;ghostOptions=[];ghostChoice=0;ghostPending=null;
  ghostVerified=false;window.__inkGhostVerified=false;
+ queuedGhostAccept=null;window.__inkQueuedAcceptance=false;
  ghostCtx.clearRect(0,0,ghostCanvas.width,ghostCanvas.height);
  window.__inkGhostPoints=0;window.__inkGhostSegments=0;
  window.__inkAssistLabel="";window.__inkGhostSource="none";
@@ -10938,6 +10940,13 @@ function createGlyphWorker(){
        ghostOptions=ordered;
        window.__inkSuggestionChoices=ordered.map(o=>o.label);
        ghostChoice=0;setGhostChoice(0);
+       if(ghostVerified&&queuedGhostAccept){
+        const pendingAccept=queuedGhostAccept;
+        queuedGhostAccept=null;window.__inkQueuedAcceptance=false;
+        if(pendingAccept.epoch===glyphEpoch&&
+           pendingAccept.inkCount===strokes.length&&
+           performance.now()-pendingAccept.at<5000)acceptGhost();
+       }
        if(ghostCandidate){
         glyphLastPreviewAt=performance.now();
         window.__inkLastPreviewTime=glyphLastPreviewAt;
@@ -11267,8 +11276,15 @@ function renderGhost(){
  }
 }
 function acceptGhost(){
- if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate||
-    !ghostVerified)return;
+ if(!assistEnabled||tool!=="pen"||pointer!==null||!ghostCandidate)return;
+ if(!ghostVerified){
+  // Do not drop the user's G keypress while CNN validation finishes.
+  // Accept only a subsequently validated neural path from the SAME ink.
+  queuedGhostAccept={epoch:glyphEpoch,inkCount:strokes.length,
+    at:performance.now()};
+  window.__inkQueuedAcceptance=true;
+  return;
+ }
  const paths=ghostCandidate.paths;
  for(const points of paths)
   strokes.push({tool:"pen",type:"vector-completion",
