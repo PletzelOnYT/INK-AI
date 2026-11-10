@@ -76,8 +76,16 @@ try:
           },55);
         """,coords,name)
         print("NEURAL_LIVE_LATENCY",result,flush=True)
-        assert result["liveUpdates"]>=1,("No actual neural live updates",name,result)
-        assert result["firstMs"]>=0 and result["firstMs"]<2700,("Late preview",name,result)
-    print("PASS: h, c and x all show neural suggestions while the pen is moving",flush=True)
+        assert result["liveUpdates"]>=2,("No sustained neural live updates",name,result)
+        assert result["firstMs"]>=0,("No first suggestion",name,result)
+        # Thresholds leave headroom for CI load but catch the prior
+        # 1.5–2.2 second first preview for x.
+        limit=1250 if name=="x" else 700
+        assert result["firstMs"]<limit,("Slow first suggestion",name,result)
+        assert result["activeTicks"]>=25,("Long empty gaps while drawing",name,result)
+        assert result["ghostBeforeRelease"]>=2,("No live preview at release",name,result)
+        assert result["ghostAfterRelease"]>=2,(
+            "Preview disappeared when pointerup was received",name,result)
+    print("PASS: h, c and x have low-latency neural previews that persist through pointerup",flush=True)
 finally:
     driver.quit()
