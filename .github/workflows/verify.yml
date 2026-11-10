@@ -47,10 +47,13 @@ jobs:
           assert Path("dist/ink-ai-standalone.html").stat().st_size>1400000
           print("PASS: full standalone index and lean editable shell both exist")
           PY
-      - name: Verify GRU rollout and prefix cache before browser tests
+      - name: Verify GRU rollout, teacher importer and prefix cache
         run: |
           node --check src/stroke_worker.js
           node tests/completer-prefix-cache.mjs
+          python3 tests/inksight-teacher-import.py
+          python3 -m py_compile src/train_google_teacher_big.py
+
       - name: Test downloaded index.html directly in Chrome, without source files
         run: |
           python3 -m pip install --quiet selenium
