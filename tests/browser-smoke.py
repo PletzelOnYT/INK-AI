@@ -26,7 +26,7 @@ try:
     print("PASS: pen/eraser/assist, drawing surface and live prediction are visible",flush=True)
     wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
     if Path("models/ink-cnn-v3.json").is_file():
-        assert driver.execute_script("return window.__inkRecognitionVersion in (3,5)"),"No validated real-pen V3/V5 loaded"
+        assert driver.execute_script("return [3,5].includes(window.__inkRecognitionVersion)"),"No validated real-pen V3/V5 loaded"
         print("PASS: Chrome loads independently validated pen-adapted V3 recognizer",flush=True)
     elif Path("models/ink-cnn-v2.json").is_file():
         # GitHub raw can publish V3 between checkout and this browser run.
