@@ -1,0 +1,88 @@
+name: Train V4 recognizer on four real handwriting datasets
+
+on:
+  push:
+    branches: [feature/recognition-multidataset-v4]
+    paths:
+      - "src/train_recognition_v4.py"
+      - "src/extra_handwriting_datasets.py"
+      - "tests/recognition-v4-data-unit.py"
+      - ".github/workflows/train-recognition-v4.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ink-handwriting-recognition-v4
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install local training dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Verify dataset adapters before any training
+        run: |
+          python -m py_compile src/extra_handwriting_datasets.py src/train_recognition_v4.py
+          python tests/recognition-v4-data-unit.py
+      - name: Train own V3 CNN on new human handwriting from HASYv2 and PenDigits
+        run: |
+          python -u src/train_recognition_v4.py --epochs 5 --samples-per-epoch 90000 --batch 192
+      - name: Verify held-out accuracy and fail closed on any regression
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path("models/recognition-v4-metrics.json").read_text())
+          counts=result["source_counts"]
+          assert counts["uji_independent"]>=1100
+          assert counts["hasy_training"]>=1500
+          assert counts["hasy_writer_heldout"]>=300
+          assert counts["pendigits_training"]==7494
+          assert counts["pendigits_unseen_writers"]==3498
+          assert result["training_presentations"]>=450000
+          if result["eligible"]:
+              model=json.loads(Path("models/ink-cnn-v4.json").read_text())
+              assert model["format"]=="ink-cnn-int8-v1"
+              assert len(model["layers"])==5
+              assert model["training"]["finetuned_from"]=="models/ink-cnn-v3.json"
+              assert len(model["labels"])==102
+              assert all(result["quality_gates"].values())
+              print("ACCEPT: independent unseen UJI writers improved")
+          else:
+              assert not Path("models/ink-cnn-v4.json").exists()
+              print("REJECT: baseline V3 remains default; no worse model published")
+          PY
+      - name: Publish measured results to experiment branch only
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/recognition-v4-metrics.json
+          if test -s models/ink-cnn-v4.json; then git add models/ink-cnn-v4.json; fi
+          git commit -m "Publish measured four-source handwriting training results"
+          for n in 1 2 3 4; do
+            git fetch origin feature/recognition-multidataset-v4
+            git rebase origin/feature/recognition-multidataset-v4
+            if git push origin HEAD:feature/recognition-multidataset-v4; then exit 0; fi
+            sleep 4
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-ai-v4-handwriting-evidence
+          path: |
+            models/recognition-v4-metrics.json
+            models/ink-cnn-v4.json
+          if-no-files-found: ignore
