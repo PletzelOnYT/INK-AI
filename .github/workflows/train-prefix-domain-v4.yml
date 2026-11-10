@@ -1,0 +1,87 @@
+name: Train and verify generative handwriting GRU V4
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_prefix_domain_v4.py"
+      - "tests/prefix-domain-v4-unit.py"
+      - ".github/workflows/train-prefix-domain-v4.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-ai-prefix-domain-v4
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 125
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Test real causal GRU learning and calibrated multi-step geometry loss
+        run: |
+          python -m py_compile src/train_prefix_domain_v4.py
+          python -u tests/prefix-domain-v4-unit.py
+      - name: Fine-tune actual released online GRU from V2 on original writer-labelled traces
+        run: |
+          python -u src/train_prefix_domain_v4.py \
+            --epochs 8 --samples-per-epoch 21500 --batch 96 --tail-steps 18
+      - name: Validate release independently; never promote a regression
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("models/stroke-prefix-domain-v4-metrics.json").read_text())
+          assert r["real_independent_glyphs"]>1100
+          assert r["seen"]>45000
+          assert r["parameters"]>300000
+          assert r["candidate_version"]==4
+          if r["eligible"]:
+            model=json.loads(Path("models/ink-stroke-prefix-domain-v4.json").read_text())
+            assert model["format"]=="ink-online-stroke-mdn-v1"
+            assert model["training"]["prefix_domain_v4"] is True
+            assert model["training"]["fine_tuned_own_model"]=="models/ink-stroke-prefix-domain-v2.json"
+            assert r["gain"]>=.020 and r["focus"]["gain"]>=.020
+            print("PASS unseen-writer GRU improvement:",r["gain"],flush=True)
+          else:
+            assert not Path("models/ink-stroke-prefix-domain-v4.json").exists()
+            print("Candidate rejected: existing offline model preserved",flush=True)
+          PY
+      - name: Test native browser GRU runtime before publishing trained weights
+        if: success()
+        run: |
+          node tests/domain-v4-runtime.mjs
+      - name: Publish evaluated outcome and only accepted model
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/stroke-prefix-domain-v4-metrics.json
+          if test -s models/ink-stroke-prefix-domain-v4.json; then
+            git add models/ink-stroke-prefix-domain-v4.json
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish measured V4 GRU handwriting training outcome"
+            for i in 1 2 3 4 5; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then exit 0; fi
+              sleep 3
+            done
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ink-ai-v4-genuine-handwriting-training
+          path: |
+            models/stroke-prefix-domain-v4-metrics.json
+            models/ink-stroke-prefix-domain-v4.json
+          if-no-files-found: ignore
