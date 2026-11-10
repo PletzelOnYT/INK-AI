@@ -10393,6 +10393,17 @@ function localNeuralPreview(prefix,rollout,label,confidence,variant){
   kept.push(p.slice());lastDir=[dx,dy];distance+=length;
  }
  if(kept.length<3||distance<.038)return null;
+ // On a two-stroke h the shoulder must genuinely descend toward the
+ // existing stem baseline. A tiny down-tick should not suppress the
+ // independently validated older neural model's complete right leg.
+ if(label==="h"&&prefix.filter(t=>t[2]<.5).length>=2){
+  let cursor=0,minY=Infinity,maxY=-Infinity;
+  for(const token of prefix){
+   cursor+=token[1];minY=Math.min(minY,cursor);maxY=Math.max(maxY,cursor);
+  }
+  if(maxY-minY>.35&&kept.at(-1)[1]<Math.max(y+.085,maxY-.155))
+   return null;
+ }
  // A forward proposal must not contradict the user's immediate pen
  // direction (except at a nearly stationary turning point).
  const prev=prefix.at(-1),previousLength=Math.hypot(prev[0],prev[1]);
