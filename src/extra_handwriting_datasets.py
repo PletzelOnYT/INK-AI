@@ -73,7 +73,8 @@ class HASYLetters(Dataset):
         self.augment=augment
         labels={}
         with tarfile.open(path,"r:bz2") as tar:
-            csv_info=next((m for m in tar if m.isfile()
+            members=tar.getmembers()
+            csv_info=next((m for m in members if m.isfile()
                  and m.name.endswith("hasy-data-labels.csv")),None)
             if csv_info is None:raise ValueError("HASY labels CSV missing")
             reader=csv.DictReader(io.TextIOWrapper(tar.extractfile(csv_info),
@@ -86,7 +87,7 @@ class HASYLetters(Dataset):
                 if (split=="validation")!=heldout:continue
                 labels[os.path.basename(row["path"])]=LOOKUP[ch]
             images=[];targets=[]
-            for member in tar:
+            for member in members:
                 if not member.isfile() or not member.name.endswith(".png"):continue
                 label=labels.get(os.path.basename(member.name))
                 if label is None:continue
