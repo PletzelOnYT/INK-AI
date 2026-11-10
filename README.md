@@ -49,11 +49,11 @@ The models run in browser workers and are embedded in the HTML, so it works with
 
 ### Recognizer
 
-![Recognizer accuracy](./docs/recognition-progress.svg)
+![Recognizer accuracy](./docs/recognition-vertical-bars.svg)
 
 ### Completer
 
-![Completer results](./docs/completion-progress.svg)
+![Completer results](./docs/completion-vertical-bars.svg)
 
 
 ### Training data and honest evaluation
