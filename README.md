@@ -10,7 +10,7 @@ A small browser-based drawing app for writing letters, numbers, and symbols. Dra
 
 **[Download index.html](./index.html)** and open it directly in Chrome, including offline. It includes the interface, JavaScript, and trained model weights in one file. No installation, API key, or separate assets required.
 
-For development, edit the small [HTML shell](./src/index.shell.html), [CSS](./src/app.css), and [JavaScript](./src/app.js). Generate an updated standalone HTML with `python3 scripts/build_standalone.py`, then use the file in `dist/`. GitHub Actions also [packages the offline build](./actions/workflows/package-offline.yml).
+The source code is stored in GitHub: edit the [small HTML shell](./src/index.shell.html), [CSS](./src/app.css), and [JavaScript](./src/app.js). The full `index.html` is generated from these files and the trained models. GitHub excludes this generated file from the source-language percentages, but it remains available to download and run offline. To rebuild it, run `python3 scripts/build_standalone.py`; GitHub Actions also [packages the offline build](./actions/workflows/package-offline.yml).
 
 ## Features
 
