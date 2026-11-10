@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "index.html"
+      - "src/index.shell.html"
       - "src/app.js"
       - "src/app.css"
       - "src/stroke_worker.js"
