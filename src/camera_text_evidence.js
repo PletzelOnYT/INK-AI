@@ -33,7 +33,7 @@
     corners[3].y-corners[0].y):height;
   const sw=Math.min(120,Math.max(3,Math.round(sourceW))),
     sh=Math.min(48,Math.max(4,Math.round(sourceH)));
-  const sample=new Float32Array(sw*sh),rgba=bitmap.data;
+  const sample=new Float32Array(sw*sh),rgb=new Uint8Array(sw*sh*3),rgba=bitmap.data;
   for(let y=0;y<sh;y++){
    const v=(y+.5)/sh;
    for(let x=0;x<sw;x++){
@@ -47,18 +47,26 @@
     const px=Math.max(0,Math.min(width-1,Math.round(xx-x0)));
     const py=Math.max(0,Math.min(height-1,Math.round(yy-y0)));
     const k=(py*width+px)*4;
-    sample[y*sw+x]=.299*rgba[k]+.587*rgba[k+1]+.114*rgba[k+2];
+    const at=y*sw+x;
+    sample[at]=.299*rgba[k]+.587*rgba[k+1]+.114*rgba[k+2];
+    rgb[at*3]=rgba[k];rgb[at*3+1]=rgba[k+1];rgb[at*3+2]=rgba[k+2];
    }
   }
   const histogram=new Uint32Array(256);
-  for(let i=0;i<sample.length;i++)histogram[Math.max(0,Math.min(255,Math.round(sample[i])))]++;
-  const quantile=p=>{
+  const channelHist=Array.from({length:3},()=>new Uint32Array(256));
+  for(let i=0;i<sample.length;i++){
+   histogram[Math.max(0,Math.min(255,Math.round(sample[i])))]++;
+   for(let channel=0;channel<3;channel++)channelHist[channel][rgb[i*3+channel]]++;
+  }
+  const quantile=(p,hist=histogram)=>{
    const threshold=Math.ceil(sample.length*p);
    let cumulative=0;
-   for(let i=0;i<256;i++)if((cumulative+=histogram[i])>=threshold)return i;
+   for(let i=0;i<256;i++)if((cumulative+=hist[i])>=threshold)return i;
    return 255;
   };
-  const contrast=quantile(.91)-quantile(.09);
+  // Opposite-colored glyphs can have identical grayscale brightness.
+  const contrast=Math.max(quantile(.91)-quantile(.09),
+   ...channelHist.map(hist=>quantile(.91,hist)-quantile(.09,hist)));
   const threshold=Math.max(12,Math.min(34,contrast*.29));
   let edges=0,vertical=0,horizontal=0,pairs=0;
   const columns=new Uint16Array(sw);
@@ -67,8 +75,12 @@
   for(let y=y0_inner;y<y1_inner;y++){
    for(let x=1;x<sw-1;x++){
     const i=y*sw+x;
-    const dx=Math.abs(sample[i+1]-sample[i-1])*.5;
-    const dy=Math.abs(sample[i+sw]-sample[i-sw])*.5;
+    let dx=Math.abs(sample[i+1]-sample[i-1])*.5;
+    let dy=Math.abs(sample[i+sw]-sample[i-sw])*.5;
+    for(let channel=0;channel<3;channel++){
+     dx=Math.max(dx,Math.abs(rgb[(i+1)*3+channel]-rgb[(i-1)*3+channel])*.5);
+     dy=Math.max(dy,Math.abs(rgb[(i+sw)*3+channel]-rgb[(i-sw)*3+channel])*.5);
+    }
     if(dx>threshold){horizontal++;columns[x]++}
     if(dy>threshold)vertical++;
     if(Math.max(dx,dy)>threshold)edges++;
@@ -103,7 +115,9 @@
   if(!raw||!/[\p{L}\p{N}]/u.test(raw)||!word?.box)return false;
   const chars=[...raw].filter(ch=>/[\p{L}\p{N}]/u.test(ch)).length;
   if(chars===0)return false;
-  if(chars===1&&lineWords<=1)return false;
+  // Isolated clock digits need stronger OCR confidence and repeated scans.
+  if(chars===1&&lineWords<=1&&
+     !(/^\d$/.test(raw)&&Number(word.confidence)>=.85))return false;
   const b=word.box;
   const corners=word.points;
   const oriented=Array.isArray(corners)&&corners.length===4&&
