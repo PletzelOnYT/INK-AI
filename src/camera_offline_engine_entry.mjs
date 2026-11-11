@@ -54,6 +54,34 @@ function extractWords(data){
  }
  return lines;
 }
+// Map OCR bounding boxes back to the original camera image after
+// Tesseract automatically straightens a tilted printed line.
+function restoreRotation(lines,angle,width,height){
+ if(!Number.isFinite(angle)||Math.abs(angle)<.005)return lines;
+ const c=Math.cos(-angle),q=Math.sin(-angle),cx=width/2,cy=height/2;
+ const transform=(box)=>{
+  const points=[
+   [box.x0,box.y0],[box.x1,box.y0],[box.x1,box.y1],[box.x0,box.y1]
+  ].map(([x,y])=>({
+   x:cx+c*(x-cx)-q*(y-cy),
+   y:cy+q*(x-cx)+c*(y-cy)
+  }));
+  return {points,box:{
+   x0:Math.min(...points.map(p=>p.x)),
+   y0:Math.min(...points.map(p=>p.y)),
+   x1:Math.max(...points.map(p=>p.x)),
+   y1:Math.max(...points.map(p=>p.y))
+  }};
+ };
+ return lines.map(line=>{
+  const lineRect=transform(line.box);
+  return {...line,box:lineRect.box,points:lineRect.points,
+   words:line.words.map(word=>{
+    const p=transform(word.box);
+    return {...word,box:p.box,points:p.points};
+   })};
+ });
+}
 async function create(){
  if(singleton)return singleton;
  if(creation)return creation;
@@ -87,9 +115,22 @@ async function create(){
     kind:"bundled-tesseract-wasm",
     async recognize(image,width,height){
      const now=performance.now();
-     const {data}=await worker.recognize(image,{}, {blocks:true});
-     const lines=extractWords(data);
-     return {engine:engine.kind,width,height,
+     let {data}=await worker.recognize(image,{}, {blocks:true});
+     let lines=extractWords(data);
+     let deskewed=false;
+     // Do not pay for an extra OCR pass on readable horizontal frames.
+     // If sparse scene recognition misses an angled brand/document,
+     // Tesseract estimates the text gradient and straightens it itself.
+     if(!lines.some(x=>x.text.replace(/[^A-Za-z0-9]/g,"").length>=3)){
+      const rotated=await worker.recognize(image,{rotateAuto:true},{blocks:true});
+      const rotatedLines=extractWords(rotated.data);
+      if(rotatedLines.some(x=>x.text.replace(/[^A-Za-z0-9]/g,"").length>=3)){
+       data=rotated.data;
+       lines=restoreRotation(rotatedLines,Number(data.rotateRadians)||0,width,height);
+       deskewed=true;
+      }
+     }
+     return {engine:engine.kind,width,height,deskewed,
       elapsedMs:Math.round(performance.now()-now),
       lines,words:lines.flatMap(x=>x.words),
       text:lines.map(x=>x.text).join("\n")};
