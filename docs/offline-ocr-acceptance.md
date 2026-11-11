@@ -7,7 +7,7 @@ No webcam image, cloud OCR, or external recognition request was used.
 
 ~~~text
 
-added 15 packages in 2s
+added 15 packages in 3s
 
 > ink-ai-offline-ocr-build@1.0.0 build:ocr
 > node scripts/build_offline_ocr.mjs
@@ -16,18 +16,18 @@ Bundling pretrained English OCR: 5199098 bytes
 
   dist/ink-offline-ocr.js  16.8mb ⚠️
 
-⚡ Done in 205ms
+⚡ Done in 185ms
 Built completely offline OCR engine: 17659113 bytes
 Bundled GRU: models/ink-stroke-prefix-domain-v2.json
 Built independent offline INK AI: /home/runner/work/INK-AI/INK-AI/dist/ink-ai-standalone.html 19379657 bytes
 PASS: text edges on both polarities; smooth shoulders, walls, lone seams and lone letters rejected
-OFFLINE OCR RESULT: {'elapsedMs': 199.09999999999854, 'engine': 'bundled-tesseract-wasm', 'lines': 2, 'text': 'NY THREADS\nTorrey Pines High School', 'words': 6}
+OFFLINE OCR RESULT: {'elapsedMs': 212.39999999999418, 'engine': 'bundled-tesseract-wasm', 'lines': 2, 'text': 'NY THREADS\nTorrey Pines High School', 'words': 6}
 PASS: GitHub index.html reads real printed text while completely offline
-SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 163, 'name': 'white-on-black', 'text': 'NY THREADS', 'words': 2}
-SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 105, 'name': 'dark-on-white-angle-12', 'text': 'NY THREADS', 'words': 2}
-SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 60, 'name': 'blue-on-yellow', 'text': 'NY THREADS', 'words': 2}
-SCENE {'ms': 172, 'name': 'empty-cabinet-geometry', 'text': '', 'words': 0}
-SCENE {'evidence': {'accepted': 0, 'rejected': 0}, 'ms': 108, 'name': 'smooth-shoulder', 'text': '', 'words': 0}
+SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 171, 'name': 'white-on-black', 'text': 'NY THREADS', 'words': 2}
+SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 142, 'name': 'dark-on-white-angle-12', 'text': 'NY THREADS', 'words': 2}
+SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 73, 'name': 'blue-on-yellow', 'text': 'NY THREADS', 'words': 2}
+SCENE {'ms': 178, 'name': 'empty-cabinet-geometry', 'text': '', 'words': 0}
+SCENE {'evidence': {'accepted': 0, 'rejected': 0}, 'ms': 115, 'name': 'smooth-shoulder', 'text': '', 'words': 0}
 SCENE {'evidence': {'accepted': 0, 'rejected': 0}, 'ms': 109, 'name': 'smooth-wall', 'text': '', 'words': 0}
 PASS: offline OCR preserves colored/angled text and rejects background, wall and shoulder
 ~~~
