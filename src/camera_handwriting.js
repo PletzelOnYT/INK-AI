@@ -9,6 +9,49 @@
  const working=document.createElement("canvas");
  const ctx=working.getContext("2d",{willReadFrequently:true,alpha:false});
  const WIDTH=960,MAX_GLYPHS=24,MAX_LINES=2;
+ // Optional offline vocabulary changes only readings supported by CNN
+ // alternatives. It never supplies unseen/missing letters or whole phrases.
+ const rawVocabulary=document.getElementById?.("inkEnglishWords")?.textContent||"";
+ const dictionary=new Map();
+ for(const word of rawVocabulary.toLowerCase().split(/\s+/)){
+  if(!/^[a-z]{4,24}$/.test(word))continue;
+  if(!dictionary.has(word.length))dictionary.set(word.length,[]);
+  dictionary.get(word.length).push(word);
+ }
+ function refineCaseAndConfusions(raw,predictions){
+  if(!/^[a-z][a-zA-Z]{3,23}$/.test(raw)||!/[A-Z]/.test(raw))
+   return raw;
+  const upper=(raw.match(/[A-Z]/g)||[]).length;
+  if(upper>Math.max(3,Math.floor(raw.length*.40)))return raw;
+  const lower=raw.toLowerCase();
+  const known=dictionary.get(lower.length)||[];
+  if(known.includes(lower))return lower;
+  // One visually ambiguous character may be refined using an explicitly
+  // ranked model alternative plus a known spelling. Never insert characters
+  // or rewrite an unfamiliar word to an unrelated dictionary entry.
+  let best=null,bestRatio=0;
+  for(const word of known){
+   if(word.slice(0,2)!==lower.slice(0,2))continue;
+   let count=0,ratio=1,valid=true;
+   for(let i=0;i<word.length;i++){
+    if(word[i]===lower[i])continue;
+    if(++count>1){valid=false;break}
+    const top=predictions[i]?.top||[];
+    const alt=top.find(x=>x.char===word[i]);
+    const first=top[0];
+    if(!alt||!first||alt.confidence<.10||
+       alt.confidence/Math.max(.001,first.confidence)<.16){
+     valid=false;break;
+    }
+    ratio*=alt.confidence/Math.max(.001,first.confidence);
+   }
+   if(valid&&count===1&&ratio>bestRatio){
+    best=word;bestRatio=ratio;
+   }
+  }
+  return best||lower;
+ }
+
  function median(values){
   if(!values.length)return 0;
   const sorted=[...values].sort((a,b)=>a-b);
@@ -116,6 +159,7 @@
    const box=bounds(items.map(item=>item.glyph));
    const projected={x0:box.x0*scaleX,y0:box.y0*scaleY,
     x1:box.x1*scaleX,y1:box.y1*scaleY};
+   text=refineCaseAndConfusions(text,items.map(item=>item.prediction));
    words.push({text,confidence,box:projected,
     recognitionEngine:engine});
   }
@@ -179,5 +223,5 @@
   return {lines:translated,attempted:true,regions:lines.length,
    glyphs:images.length,printAssistedGlyphs};
  }
- window.InkCameraHandwriting={recognize,decodeLine,normalizeGlyph,candidates};
+ window.InkCameraHandwriting={recognize,decodeLine,normalizeGlyph,candidates,refineCaseAndConfusions};
 })();
