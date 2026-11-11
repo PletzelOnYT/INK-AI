@@ -101,7 +101,7 @@
    }
   }
   const area=(arr,x0,y0,x1,y1)=>arr[(y1+1)*stride+x1+1]-arr[y0*stride+x1+1]-arr[(y1+1)*stride+x0]+arr[y0*stride+x0];
-  const masks=[new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h)];
+  const masks=[new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h)];
   const radius=8;
   for(let y=0;y<h;y++){
    const y0=Math.max(0,y-radius),y1=Math.min(h-1,y+radius);
@@ -121,6 +121,12 @@
     // the broader local adaptive mask may merge into one component.
     const pixelLum=.299*p[j]+.587*p[j+1]+.114*p[j+2];
     if(pixelLum>165&&luminosity>36&&contrast>42)masks[3][idx]=1;
+    // Document / form text: dark ink on a locally bright page. Camera text
+    // may be only 7-12px tall after video downsampling, so neighboring
+    // letters can merge under the older RGB-contrast threshold.
+    const paperLum=.299*rr+.587*gg+.114*bb;
+    if(paperLum>155&&pixelLum<155&&paperLum-pixelLum>55)
+      masks[4][idx]=1;
    }
   }
   return masks;
