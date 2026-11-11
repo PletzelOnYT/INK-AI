@@ -4,7 +4,7 @@
 // INK AI's handwriting recognizer and completer remain first-party systems.
 import tesseract from "tesseract.js";
 import {estimateTextAngle,rotatedSize,unrotateLines,rotationQueue} from "./camera_orientation_core.mjs";
-import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead} from "./camera_detail_core.mjs";
+import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead,perspectiveQuad,rectifyPerspectiveRGBA} from "./camera_detail_core.mjs";
 import englishList from "../data/english-words.txt";
 const vocabulary=new Set(englishList.trim().split(/\s+/));
 import {set} from "idb-keyval";
@@ -250,7 +250,7 @@ async function create(){
    // Recovery for small distant signs and low-contrast colored/pencil ink.
    // Crops only the CENTER of the camera view and maps all OCR geometry back.
    // It never creates artificial letter shapes or sends frames over the network.
-   async function detailRead(image,width,height,enhance){
+   async function detailRead(image,width,height,mode="center-detail"){
     const crop=centerDetailCrop(width,height);
     const output=detailSize(crop.width*1.7,crop.height*1.7,1920);
     detailCanvas.width=output.width;detailCanvas.height=output.height;
@@ -260,19 +260,30 @@ async function create(){
     detailContext.imageSmoothingQuality="high";
     detailContext.drawImage(image,crop.x,crop.y,crop.width,crop.height,
       0,0,output.width,output.height);
-    if(enhance){
+    let quad=null;
+    if(mode==="rgb"){
      const original=detailContext.getImageData(0,0,output.width,output.height);
      const processed=enhanceInkRGBA(original.data,output.width,output.height);
      if(processed.hasDetail){
       original.data.set(processed.data);
       detailContext.putImageData(original,0,0);
      }
+    }else if(mode.startsWith("yaw")||mode.startsWith("pitch")){
+     // Automatically trial bounded trapezoid hypotheses on hard reads.
+     // Map any returned word boxes through the SAME projective transform.
+     const axis=mode.startsWith("yaw")?"yaw":"pitch";
+     quad=perspectiveQuad(output.width,output.height,axis,
+       mode.endsWith("+")?1:-1);
+     const bitmap=detailContext.getImageData(0,0,output.width,output.height);
+     bitmap.data.set(rectifyPerspectiveRGBA(bitmap.data,output.width,
+       output.height,quad));
+     detailContext.putImageData(bitmap,0,0);
     }
     const scan=await worker.recognize(detailCanvas,{}, {blocks:true});
     const lines=remapDetailLines(extractWords(scan.data),crop,
-      output.width,output.height);
+      output.width,output.height,quad);
     return {lines,rotation:0,detailUpscaled:true,
-      enhancement:enhance?"local-rgb-contrast":"center-detail"};
+      enhancement:mode};
    }
    const engine={
     kind:"bundled-tesseract-wasm",
@@ -341,7 +352,9 @@ async function create(){
      // when a small clock/sign occupies only a fraction of a distant scene.
      if(!clearRead(candidate.lines)&&scanNumber%2===0){
       try{
-       const detail=await detailRead(image,width,height,scanNumber%4===0);
+       const modes=["center-detail","rgb","yaw+","yaw-","pitch+","pitch-"];
+       const detail=await detailRead(image,width,height,
+         modes[(Math.floor(scanNumber/2)-1)%modes.length]);
        consider(detail,"center-detail");
       }catch(_){/* Preserve ordinary/rotation OCR on unsupported canvases */}
      }
