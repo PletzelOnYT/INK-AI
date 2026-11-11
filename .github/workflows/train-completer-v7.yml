@@ -45,7 +45,7 @@ jobs:
           import json
           from pathlib import Path
           m=json.loads(Path("models/stroke-prefix-domain-v7-metrics.json").read_text())
-          assert m["candidate_version"]==6
+          assert m["candidate_version"]==7
           assert m["real_independent_glyphs"]>1100
           assert m["seen"]>70000
           assert m["deployable"] is False
