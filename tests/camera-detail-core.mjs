@@ -2,12 +2,23 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,
- isCompactNumericRead,perspectiveQuad,quadMapper,rectifyPerspectiveRGBA,findDarkDisplayRGBA,findAnalogClockRGBA,findDialGlyphRegionsRGBA} from "../src/camera_detail_core.mjs";
+ isCompactNumericRead,perspectiveQuad,quadMapper,rectifyPerspectiveRGBA,findDarkDisplayRGBA,findAnalogClockRGBA,findDialGlyphRegionsRGBA,documentFocusCrop} from "../src/camera_detail_core.mjs";
 
 assert.deepEqual(detailSize(1920,1080),{width:1920,height:1080});
 assert.deepEqual(detailSize(3840,2160),{width:1920,height:1080});
 const crop=centerDetailCrop(1920,1080,.6);
 assert.deepEqual(crop,{x:384,y:216,width:1152,height:648});
+const offCenter=documentFocusCrop(1920,1080,"lower-right");
+assert.deepEqual(offCenter,{x:672,y:378,width:1248,height:702});
+const upperLeft=documentFocusCrop(1920,1080,"upper-left");
+assert.deepEqual(upperLeft,{x:0,y:0,width:1248,height:702});
+const upperRight=documentFocusCrop(1920,1080,"upper-right");
+const lowerLeft=documentFocusCrop(1920,1080,"lower-left");
+assert.equal(upperRight.x,672);
+assert.equal(lowerLeft.y,378);
+assert.ok(offCenter.x<1920*.5&&offCenter.y<1080*.5,
+ "Document zones must overlap, rather than leave central blind strips");
+assert.throws(()=>documentFocusCrop(1920,1080,"wrong"));
 const original=[{text:"12:34",box:{x0:200,y0:100,x1:400,y1:150},
  words:[{text:"12:34",confidence:.96,box:{x0:200,y0:100,x1:400,y1:150}}]}];
 const mapped=remapDetailLines(original,crop,1152,648);
