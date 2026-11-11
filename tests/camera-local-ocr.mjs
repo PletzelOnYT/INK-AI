@@ -23,7 +23,7 @@ assert.match(camera,/rgba\(255,255,255,0\.30\)/);
 assert.match(camera,/hg\.fill\(\);hg\.stroke\(\)/);
 assert.match(camera,/paint\(regions,frame\)/);
 assert.match(camera,/Detector\.detect\(image,w,h\)/);
-assert.match(camera,/regionTracker\.update\(detectedWordRegions\(selected\)/);
+assert.match(camera,/regionTracker\.update\(detectedWordRegions\(geometry\)/);
 assert.match(camera,/Core\.decodePrintedWord\(selected,dictionaryByLength\.get/);
 assert.match(camera,/Core\.looksLikeWord\(text,confidence\)/);
 assert.match(camera,/regionTracker\.snapshot\(\)/);
