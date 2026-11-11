@@ -84,8 +84,7 @@ function looksLikeWord(text,confidence){
  if(/^[A-Za-z]{4,32}$/.test(word)){
   // Common printed words contain vowels; this rejects most strings made
   // from spurious geometric edges, including "JmzS".
-  const natural=/[aeiouy]/i.test(word);
-  return natural?confidence>=.65:confidence>=.96;
+  return /[aeiouy]/i.test(word)&&confidence>=.70;
  }
  if(/^[A-Za-z]{3}$/.test(word))
   return confidence>=.93&&/[aeiouy]/i.test(word);
