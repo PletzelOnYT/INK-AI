@@ -34,6 +34,8 @@ try:
           ctx.fillStyle=background;ctx.fillRect(1,1,2,2);
         };
         window.__inkDrawCameraFixture('#f8f8f8','#151515');
+        window.__inkCameraFixtureCanvas=canvas;
+        window.__inkDebugOCR=true;
         const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
         navigator.mediaDevices.getUserMedia=async()=>canvas.captureStream(12);
     """)
@@ -68,7 +70,9 @@ try:
                   "scan ms",driver.execute_script("return window.__inkCameraStats.lastScanMs"),flush=True)
         except Exception:
             print("FAIL",label,"highlight pixels",highlighted(driver),
-                  "camera status",driver.execute_script("return document.getElementById('guess').textContent"),flush=True)
+                  "camera status",driver.execute_script("return document.getElementById('guess').textContent"),
+                  "diagnostics",driver.execute_script("return {live:window.__inkCameraLiveDiagnostics,stats:window.__inkCameraStats,motion:window.__inkCameraMotionStats,recovery:window.__inkCameraDetailRecovery,errors:window.__inkCameraOfflineError}"),
+                  flush=True)
             raise
     driver.execute_script("document.getElementById('camera').click()")
     assert not driver.execute_script("return window.__inkCameraActive")
