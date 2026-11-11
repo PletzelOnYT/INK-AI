@@ -95,9 +95,23 @@ if v7_file.is_file():
     elif os.environ.get("INK_STROKE_PREVIEW_V7")=="1":
         stroke_path="models/ink-stroke-prefix-domain-v7.json"
 print("Bundled GRU:",stroke_path)
+# V5 is a genuine trained CNN. Its writer-disjoint score alone is not enough
+# to ship it. Real offline-browser validation must publish the acceptance flag.
+recognition_path="models/ink-cnn-v3.json"
+v5_weights=ROOT/"models/ink-cnn-v5.json"
+v5_metrics=ROOT/"models/recognition-v5-metrics.json"
+if v5_weights.is_file() and v5_metrics.is_file():
+    report=json.loads(v5_metrics.read_text())
+    valid=(report.get("eligible") is True and
+           report.get("independent_pen_v3",{}).get("overall",0)>=.77 and
+           report.get("best",{}).get("emnist",{}).get("overall",0)>=.82)
+    if valid and (report.get("browser_integration_passed") is True or
+                  os.environ.get("INK_RECOGNIZER_PREVIEW_V5")=="1"):
+        recognition_path="models/ink-cnn-v5.json"
+print("Bundled recognizer:",recognition_path)
 models=[
  ("inkRecognitionModel","application/json",
-  "models/ink-cnn-v3.json"),
+  recognition_path),
  ("inkStrokeModel","application/json",stroke_path),
  ("inkStrokeBackup","application/json","models/ink-stroke-sequence-v1.json"),
  ("inkEnglishWords","text/plain","data/english-words.txt"),
