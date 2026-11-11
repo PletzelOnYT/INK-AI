@@ -93,5 +93,9 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "Rebuild root standalone HTML"
+            # Other CI jobs may publish their test report while this large
+            # offline bundle is compiling. Rebase rather than lose the HTML
+            # update to a non-fast-forward push race.
+            git pull --rebase origin main
             git push origin HEAD:main
           fi
