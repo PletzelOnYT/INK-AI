@@ -82,6 +82,7 @@ jobs:
           node tests/camera-scene-detector.mjs
           node tests/camera-tracking.mjs
           node tests/camera-local-ocr.mjs
+          node tests/camera-detail-core.mjs
           node tests/completer-input-regression.mjs
           node tests/completer-fast-quality.mjs
           node tests/completer-no-straight-rays.mjs
