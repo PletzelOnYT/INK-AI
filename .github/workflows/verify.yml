@@ -138,6 +138,7 @@ jobs:
           command -v google-chrome || command -v chromium
           python3 tests/camera-mode-controls-browser.py
           python3 tests/camera-bundled-ocr-browser.py
+          python3 tests/camera-sideways-browser.py
           python3 tests/camera-scene-detector-browser.py
           python3 tests/camera-no-false-text-browser.py
           python3 tests/camera-colors-browser.py
