@@ -10,8 +10,8 @@ const build=read("scripts/build_standalone.py");
 assert.doesNotThrow(()=>new vm.Script(camera));
 assert.ok(!/Tesseract|tesseract\.js|cdn\.jsdelivr|createWorker\(["']eng/.test(camera),
  "Camera must not load a third-party OCR engine");
-assert.ok(!/\bfetch\s*\(|\bXMLHttpRequest\b/.test(camera),
- "Camera must not upload frames or fetch external text models");
+assert.ok(!/fetch\s*\(\s*["'`]https?:|\bXMLHttpRequest\b/.test(camera),
+ "Camera may load its own repository models but must not use remote OCR");
 assert.match(camera,/__inkCameraRecognize\(misses\.map\(i=>images\[i\]\)\)/);
 assert.match(camera,/Math\.atan\(dominant\.slope\)/);
 assert.match(camera,/const retries=\[-20,20,-40,40,-60,60,-85,85\]/);
@@ -42,5 +42,14 @@ assert.match(build,/\+scene\+/);
 assert.match(build,/inkTextnessModel/);
 assert.match(camera,/sceneMonitor\.update\(signature\.data/);
 assert.match(camera,/__inkCameraVerifyText\(/);
+assert.match(read("src/camera_line_runtime.js"),/gruDirection\(/);
+assert.match(read("src/camera_line_runtime.js"),/convolution\(/);
+assert.match(read("src/camera_line_runtime.js"),/recognize\(image\)/);
+assert.match(camera,/loadNativeLineOCR\(/);
+assert.match(camera,/lineRuntime\.read\(/);
+assert.match(camera,/captureWidth=1200/);
+assert.match(read("src/camera_text_detector.js"),/paperLum>155&&pixelLum<155/);
+assert.match(build,/inkLineModel/);
+assert.match(build,/\+line_runtime\+/);
 assert.match(build,/\+camera\+/);
 console.log("PASS: first-party camera OCR, white overlay, integrated standalone source");
