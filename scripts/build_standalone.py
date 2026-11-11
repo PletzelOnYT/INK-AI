@@ -11,8 +11,10 @@ import json,os
 ROOT=Path(__file__).resolve().parents[1]
 html=(ROOT/"src/index.shell.html").read_text(encoding="utf-8")
 assert '<script src="./src/app.js" defer></script>' in html
+html=html.replace('<script src="./src/camera_ocr.js" defer></script>', '')
 css=(ROOT/"src/app.css").read_text(encoding="utf-8")
 app=(ROOT/"src/app.js").read_text(encoding="utf-8")
+camera=(ROOT/"src/camera_ocr.js").read_text(encoding="utf-8")
 preference=(ROOT/"src/neural_preference_model.js").read_text(encoding="utf-8")
 def accepted_model(version):
     candidate=ROOT/f"models/ink-stroke-prefix-domain-{version}.json"
