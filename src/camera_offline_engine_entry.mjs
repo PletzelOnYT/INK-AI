@@ -4,6 +4,8 @@
 // INK AI's handwriting recognizer and completer remain first-party systems.
 import tesseract from "tesseract.js";
 import {estimateTextAngle,rotatedSize,unrotateLines,rotationQueue} from "./camera_orientation_core.mjs";
+import englishList from "../data/english-words.txt";
+const vocabulary=new Set(englishList.trim().split(/\s+/));
 import {set} from "idb-keyval";
 import {simd} from "wasm-feature-detect";
 import workerCode from "../.ocr-build/worker.bin";
@@ -157,8 +159,16 @@ async function create(){
       const certainty=Math.max(0,Math.min(1,Number(word.confidence)||0));
       // Short random OCR fragments must not block an actually rotated word.
       if(chars>=3&&certainty>=.56)meaningful++;
-      const value=Math.min(16,chars)*certainty*
-         (chars>=3?1:0.25);
+      // Prefer intact words over several implausible fragments, while
+      // still accepting new brand names not included in the dictionary.
+      const token=String(word.text||"").replace(/[^A-Za-z0-9]/g,"");
+      const inVocabulary=token.length>=4&&
+        vocabulary.has(token.toLowerCase());
+      const brokenCase=/^[A-Z]{2,}[a-z]{2,}$/.test(token);
+      const value=Math.min(18,chars)*certainty*
+           (chars>=4?1.06:chars>=3?.67:.25)+
+           (inVocabulary?2.7*certainty:0)-
+           (brokenCase?1.0:0);
       total+=value;best=Math.max(best,value);
      }
     }
@@ -181,10 +191,30 @@ async function create(){
     const rgba=probeContext.getImageData(0,0,260,probeH).data;
     return estimateTextAngle(rgba,260,probeH);
    }
+   function backgroundColor(image,width,height){
+    // Avoid introducing a false white diagonal when dark labels rotate
+    // into a larger canvas. Sample the scene's actual border colors.
+    try{
+     const ctx=image.getContext?.("2d");
+     if(ctx){
+      const corners=[[1,1],[width-2,1],[1,height-2],[width-2,height-2]];
+      const colors=corners.map(([x,y])=>{
+       const p=ctx.getImageData(Math.max(0,x),Math.max(0,y),1,1).data;
+       return [p[0],p[1],p[2]];
+      });
+      const values=[0,1,2].map(channel=>{
+       const sorted=colors.map(color=>color[channel]).sort((a,b)=>a-b);
+       return Math.round((sorted[1]+sorted[2])/2);
+      });
+      return "rgb("+values.join(",")+")";
+     }
+    }catch(_){}
+    return "#ffffff";
+   }
    async function tiltedRead(image,width,height,angle){
     const size=rotatedSize(angle,width,height);
     sideCanvas.width=size.width;sideCanvas.height=size.height;
-    sideContext.fillStyle="#fff";
+    sideContext.fillStyle=backgroundColor(image,width,height);
     sideContext.fillRect(0,0,size.width,size.height);
     sideContext.save();
     sideContext.translate(size.width/2,size.height/2);
@@ -289,10 +319,16 @@ async function create(){
      lines=candidate.lines;
      const selected=candidate.rotation||0;
      if(selected&&clearRead(lines)){
-      if(previousAngle!==null&&Math.abs(previousAngle-selected)<7)
-       previousStreak=Math.min(8,previousStreak+1);
-      else previousStreak=1;
-      previousAngle=selected;
+      const difference=skewHint?
+        Math.abs((((selected+hint.angle+90)%180)+180)%180-90):0;
+      if(!skewHint||difference<8){
+       if(previousAngle!==null&&Math.abs(previousAngle-selected)<7)
+        previousStreak=Math.min(8,previousStreak+1);
+       else previousStreak=1;
+       previousAngle=selected;
+      }else{
+       previousStreak=0;previousAngle=null;
+      }
       attemptCursor=0;
      }else if(selected===0&&clearRead(lines)){
       previousAngle=null;previousStreak=0;attemptCursor=0;
