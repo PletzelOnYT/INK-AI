@@ -30,15 +30,17 @@ try:
        ctx.textAlign="center";ctx.textBaseline="middle";
        ctx.fillText("NY THREADS",0,0);
        ctx.restore();
-       let match=null;
+       let match=null,readings=[];
        for(let attempt=0;attempt<7;attempt++){
         const read=await engine.recognize(canvas,960,540);
+        readings.push({text:read.text,rotation:read.quarterTurn,
+          confidence:read.lines?.map(x=>x.confidence)});
         if(read.text.toUpperCase().includes("THREADS")){
          match={text:read.text,angle,detected:read.quarterTurn,
            words:read.words,ms:read.elapsedMs,attempt:attempt+1};break;
         }
        }
-       cases.push(match||{angle,error:"No THREADS within seven scans"});
+       cases.push(match||{angle,error:"No THREADS within seven scans",readings});
       }
       done({ok:true,cases});
      })().catch(error=>done({ok:false,error:String(error.stack||error)}))
