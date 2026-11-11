@@ -133,7 +133,7 @@ gru_error=gru_report.get("candidate",{}).get("independent",{}).get("prefix_frame
 manifest={"format":"ink-ai-deployed-models-v1",
           "recognizer":{"weights":recognition_path,"heldout_writer_accuracy":cnn_measured},
           "completer":{"weights":stroke_path,"heldout_writer_trajectory_error":gru_error},
-          "note":"Only deployed models appear here; experimental and rejected checkpoints remain visible in model-history graphs."}
+          "note":"These are the actual neural checkpoints bundled into the standalone HTML. Other research checkpoints are not automatically released."}
 model_manifest=ROOT/"docs/current-models.json"
 model_manifest.parent.mkdir(exist_ok=True)
 model_manifest.write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
