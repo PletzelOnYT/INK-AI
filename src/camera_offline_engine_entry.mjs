@@ -335,7 +335,7 @@ async function create(){
    // A readable title is not evidence that the small fields elsewhere on
    // the document were seen. Scan 65%-width overlapping regions in turn.
    const focusZones=["lower-right","lower-left","upper-right","upper-left"];
-   let focusIndex=0,sceneSignature=null;
+   let focusIndex=0,sceneSignature=null,focusAttempts=0;
    const focusHistory=new Map();
    const sceneCanvas=document.createElement("canvas");
    sceneCanvas.width=32;sceneCanvas.height=18;
@@ -370,6 +370,10 @@ async function create(){
       "document-contrast":"document-focus";
      focusIndex++;
      const details=(await detailRead(image,width,height,mode,zone)).lines;
+     focusAttempts++;
+     window.__inkDocumentFocusStats={attempts:focusAttempts,zone,
+      mode,words:details.flatMap(x=>x.words||[]).length,
+      retainedZones:focusHistory.size+Number(!focusHistory.has(zone))};
      focusHistory.set(zone,{lines:details,scan:scanNumber});
     }
     // Keep only recognized pixels from a stable scene. The outside
