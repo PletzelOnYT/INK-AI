@@ -69,7 +69,7 @@ const mockCtx={getImageData(x,y,width,height){
 const visible=evidence.evidence(mockCtx,{x0:0,y0:0,x1:W,y1:H},W,H);
 assert.ok(visible.ok,"RGB channel separation must reveal colored strokes");
 assert.ok(evidence.plausibleWord({text:"9",confidence:.93,
- box:{x0:20,y0:2,x1:40,y1:30}},1,W,H));
+ box:{x0:20,y0:5,x1:40,y1:22}},1,W,H));
 assert.ok(!evidence.plausibleWord({text:"I",confidence:.93,
- box:{x0:20,y0:2,x1:40,y1:30}},1,W,H));
+ box:{x0:20,y0:5,x1:40,y1:22}},1,W,H));
 console.log("PASS: 1080p detail, magnified crop geometry, numeric clocks, pencil and RGB text evidence");
