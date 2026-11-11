@@ -21,9 +21,9 @@ try:
     outcomes=browser.execute_async_script("""
       const done=arguments[arguments.length-1];
       (async()=>{
-       const engine=await window.InkOfflineOCR.create();
+       const camera=await window.InkOfflineCamera.connect();
        const c=document.createElement("canvas");
-       c.width=1120;c.height=340;
+       c.width=1120;c.height=340;c.videoWidth=1120;c.videoHeight=340;
        const g=c.getContext("2d");
        const all=[];
        for(const cfg of [
@@ -36,8 +36,11 @@ try:
         g.rotate(cfg.angle*Math.PI/180);
         g.font="bold 96px Arial";g.textAlign="center";
         g.fillStyle=cfg.fg;g.fillText("NY THREADS",0,25);g.restore();
-        const o=await engine.recognize(c,c.width,c.height);
-        all.push({name:cfg.name,text:o.text,words:o.words.length,ms:o.elapsedMs});
+        camera.reset();
+        const o=await camera.recognize(c);
+        const state=camera.track(o,Date.now());
+        all.push({name:cfg.name,text:state.text,words:state.words.length,ms:o.elapsedMs,
+          evidence:window.__inkCameraEvidence});
        }
        // No text: straight cabinet lines and box edges alone must not
        // create high-confidence whole words.
@@ -47,21 +50,43 @@ try:
         g.strokeRect(x,20,80,280);
         g.beginPath();g.moveTo(x+35,85);g.lineTo(x+35,250);g.stroke();
        }
-       const empty=await engine.recognize(c,c.width,c.height);
-       all.push({name:"empty-cabinet-geometry",text:empty.text,
-         words:empty.words.length,ms:empty.elapsedMs});
+       camera.reset();
+       const empty=await camera.recognize(c);
+       const cleared=camera.track(empty,Date.now());
+       all.push({name:"empty-cabinet-geometry",text:cleared.text,
+         words:cleared.words.length,ms:empty.elapsedMs});
+       // Smooth gradients seen on shoulders and painted walls are a frequent
+       // false-positive source despite containing no text strokes.
+       for(const scene of ["smooth-shoulder","smooth-wall"]){
+        const fill=g.createLinearGradient(0,0,c.width,c.height);
+        if(scene==="smooth-shoulder"){
+         fill.addColorStop(0,"#b86f53");
+         fill.addColorStop(.5,"#d59a80");
+         fill.addColorStop(1,"#efbd9c");
+        }else{
+         fill.addColorStop(0,"#d0cbbe");
+         fill.addColorStop(.5,"#dcd8cb");
+         fill.addColorStop(1,"#e9e4d9");
+        }
+        g.fillStyle=fill;g.fillRect(0,0,c.width,c.height);
+        camera.reset();
+        const sampled=await camera.recognize(c);
+        const stable=camera.track(sampled,Date.now());
+        all.push({name:scene,text:stable.text,words:stable.words.length,
+          ms:sampled.elapsedMs,evidence:window.__inkCameraEvidence});
+       }
        done({ok:true,cases:all});
       })().catch(error=>done({ok:false,error:String(error.stack||error)}))
     """)
     assert outcomes.get("ok"),outcomes.get("error")
     for record in outcomes["cases"]:
         print("SCENE",record,flush=True)
-        if record["name"]=="empty-cabinet-geometry":
+        if record["name"] in ("empty-cabinet-geometry","smooth-shoulder","smooth-wall"):
             assert not any(len(token)>3 for token in record["text"].split()),(
                 "Geometric background hallucinated a long word",record)
         else:
             assert "THREADS" in record["text"].upper(),(
                 "Failed printed text test",record)
-    print("PASS: offline OCR handles white-on-black, color and angled labels",flush=True)
+    print("PASS: offline OCR preserves colored/angled text and rejects background, wall and shoulder",flush=True)
 finally:
     browser.quit()
