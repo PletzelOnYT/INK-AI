@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,
- isCompactNumericRead,perspectiveQuad,quadMapper,rectifyPerspectiveRGBA} from "../src/camera_detail_core.mjs";
+ isCompactNumericRead,perspectiveQuad,quadMapper,rectifyPerspectiveRGBA,findDarkDisplayRGBA} from "../src/camera_detail_core.mjs";
 
 assert.deepEqual(detailSize(1920,1080),{width:1920,height:1080});
 assert.deepEqual(detailSize(3840,2160),{width:1920,height:1080});
@@ -23,6 +23,19 @@ assert.ok(!isCompactNumericRead([{words:[{text:"7",confidence:.34,
 assert.ok(!isCompactNumericRead([{words:[{text:"L",confidence:.96,
  box:{y0:0,y1:24}}]}]));
 
+const pw=160,ph=90,preview=new Uint8ClampedArray(pw*ph*4);
+for(let y=0;y<ph;y++)for(let x=0;x<pw;x++){
+ const dark=x>=59&&x<=100&&y>=27&&y<=42;
+ const k=(y*pw+x)*4,v=dark?35:227;
+ preview[k]=preview[k+1]=preview[k+2]=v;
+ preview[k+3]=255;
+}
+const clockFace=findDarkDisplayRGBA(preview,pw,ph);
+assert.ok(clockFace,"Dark clock display must be located in room");
+assert.ok(clockFace.x>=54&&clockFace.x<=60&&clockFace.y>=23&&clockFace.y<=28);
+assert.ok(clockFace.width>=42&&clockFace.height>=16);
+const blank=new Uint8ClampedArray(pw*ph*4).fill(230);
+assert.equal(findDarkDisplayRGBA(blank,pw,ph),null,"Blank wall cannot contain a clock");
 const w=84,h=56,rgba=new Uint8ClampedArray(w*h*4);
 for(let y=0;y<h;y++)for(let x=0;x<w;x++){
  const k=(y*w+x)*4;
