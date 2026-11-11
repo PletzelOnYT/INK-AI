@@ -40,6 +40,8 @@ jobs:
           git reset --hard origin/main
           cp /tmp/ink-print-cnn-v1.json models/ink-print-cnn-v1.json
           cp /tmp/print-cnn-v1-metrics.json models/print-cnn-v1-metrics.json
+          npm install --no-audit --no-fund --ignore-scripts
+          npm run build:ocr
           python3 scripts/build_standalone.py
           cp dist/ink-ai-standalone.html index.html
           node --check src/camera_ocr.js
