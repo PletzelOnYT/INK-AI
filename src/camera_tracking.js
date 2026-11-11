@@ -158,8 +158,10 @@ function decodePrintedWord(predictions,words){
  // Uncertain similarly scoring words should not become arbitrary guesses.
  if(runner&&runner.text!==best.text&&
    best.confidence<runner.confidence*1.08)return null;
+ const allCaps=/^[A-Z0-9]+$/.test(raw)&&/[A-Z]/.test(raw);
  const titled=/^[A-Z]/.test(raw);
- return {text:titled?best.text[0].toUpperCase()+best.text.slice(1):best.text,
+ return {text:allCaps?best.text.toUpperCase():
+    titled?best.text[0].toUpperCase()+best.text.slice(1):best.text,
    confidence:best.confidence,lexicon:true,changes:best.changes};
 }
 // Accumulate original CNN probabilities across nearby camera frames. This
