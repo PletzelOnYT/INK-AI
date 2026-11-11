@@ -439,6 +439,7 @@ self.onmessage=e=>{
      parameters:network.parameter_count,classes:characters.length,
      prefixTuned:Boolean(network.training?.prefix_tuned),
      prefixDomain:Boolean(network.training?.prefix_domain_v2),
+     naturalMotionV4:Boolean(network.training?.natural_motion_v4),
      prefixDomainV3:Boolean(network.training?.prefix_domain_v3),
      prefixDomainV4:Boolean(network.training?.prefix_domain_v4),
      penLift:Boolean(network.training?.penlift_calibrated_v3),

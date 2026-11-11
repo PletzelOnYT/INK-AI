@@ -6,7 +6,7 @@ embedded neural weights, word data, JavaScript and CSS.
 """
 from pathlib import Path
 import sys
-import json
+import json,os
 
 ROOT=Path(__file__).resolve().parents[1]
 html=(ROOT/"src/index.shell.html").read_text(encoding="utf-8")
@@ -20,9 +20,20 @@ def accepted_model(version):
     if not (candidate.is_file() and report.is_file()):return False
     metrics=json.loads(report.read_text(encoding="utf-8"))
     return metrics.get("eligible") is True and metrics.get("deployable") is True
+# A new candidate can only become the downloaded default after both
+# writer-disjoint quality checks and real offline Chrome integration pass.
+natural_file=ROOT/"models/ink-stroke-natural-v4.json"
+natural_metrics=ROOT/"models/stroke-natural-v4-metrics.json"
+def natural_allowed():
+    if not(natural_file.is_file() and natural_metrics.is_file()):return False
+    metric=json.loads(natural_metrics.read_text())
+    return metric.get("eligible") is True and (
+        metric.get("browser_integration_passed") is True or
+        os.environ.get("INK_STROKE_PREVIEW_V4")=="1")
 stroke_path=next((f"models/ink-stroke-prefix-domain-{v}.json"
                   for v in ("v4","v3") if accepted_model(v)),
                  "models/ink-stroke-prefix-domain-v2.json")
+if natural_allowed():stroke_path="models/ink-stroke-natural-v4.json"
 print("Bundled GRU:",stroke_path)
 models=[
  ("inkRecognitionModel","application/json",
