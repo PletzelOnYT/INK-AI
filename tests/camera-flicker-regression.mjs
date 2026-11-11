@@ -65,4 +65,16 @@ const weak=noiseTracker.update({width:960,height:500,
 assert.equal(weak.text,"",
  "Unsupported single-word guesses still require repeat evidence");
 
+
+const spacingTracker=window.InkOfflineCamera.createTracker();
+let spacing=spacingTracker.update({width:1920,height:1080,
+ lines:[line("OCTOBER 21ST",405,720)]},1000);
+assert.ok(spacing.text.includes("OCTOBER 21ST"));
+spacing=spacingTracker.update({width:1920,height:1080,
+ lines:[line("OCTOBER21ST",405,720)]},1300);
+assert.equal((spacing.text.match(/OCTOBER/gi)||[]).length,1,
+ "Missing-space OCR variants cannot duplicate a printed heading");
+assert.ok(spacing.text.includes("OCTOBER 21ST"),
+ "Prefer previously confirmed word boundaries when characters agree");
+
 console.log("PASS: independent flyer rows, partial words, single-frame mistakes and crop omissions no longer make OCR text or boxes flash");
