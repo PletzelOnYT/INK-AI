@@ -87,10 +87,7 @@ The source app loads local model files and runs inference entirely in browser wo
 ![Completer results](./docs/completion-vertical-bars.svg)
 
 
-**How to read the timelines:** The two original README images are now **timeline line charts with labeled model milestones**, each with two small-multiple benchmark panels. The dotted connections show the chronological *sequence of tested versions*, including experiments that got worse; they are not a claim that every newer model is better. **Blue marks the single model actually included in the downloadable `index.html`**, taken from [the build's model manifest](./docs/current-models.json). Gray or outlined points are older versions and non-deployed experiments. For the Recognizer, UJI unseen-writer and EMNIST accuracy are shown on separate timelines. For the Completer, the independent-writer position error (lower is better) and pen-lift F1 (higher is better) are shown separately; old Sequence V1/V2 NLL scores appear as explicitly labeled legacy annotations, not fabricated trajectory scores. Each named version is shown even if its benchmark is not yet published; such points are marked *unmeasured*. Validated new checkpoints become blue only after real offline-browser acceptance, and packaging regenerates both timelines from the actual weights in use.
-
-**Which models does the downloadable HTML actually run?** See the generated [deployed-model manifest](./docs/current-models.json). It is produced with `index.html` from the exact CNN and GRU weights selected during that build. The graphs also show rejected and unverified experiments, which are **not** necessarily enabled. V5 CNN is promoted only after real offline Chrome acceptance, and V7 GRU only after unseen-writer, pen-lift, termination and browser acceptance.
-
+**Blue = current model.** Each point shows a real benchmark score; a dash means that version was not measured on that benchmark. [Current deployed models](./docs/current-models.json).
 
 ### Training data and honest evaluation
 
