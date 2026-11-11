@@ -1,0 +1,19 @@
+{
+  "schema": "ink-ai-recognition-branch-metrics-v1",
+  "source": {
+    "repository": "PletzelOnYT/INK-AI",
+    "branch": "feature/recognition-multidataset-v4",
+    "file": "models/recognition-v4-metrics.json",
+    "blob_sha": "90d49458844c11c8281cfbeb4cf66dd572067f58"
+  },
+  "eligible": false,
+  "independent_uji_v4": {
+    "overall": 0.744036,
+    "tested": 1551
+  },
+  "emnist": {
+    "overall": 0.83325,
+    "tested": 12000
+  },
+  "note": "Snapshot of measured, rejected V4 candidate on the experiment branch; not deployable."
+}
