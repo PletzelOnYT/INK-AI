@@ -18,7 +18,7 @@ const sceneCanvas=document.createElement("canvas");
 sceneCanvas.width=24;sceneCanvas.height=14;
 const sceneContext=sceneCanvas.getContext("2d",{willReadFrequently:true});
 const cache=new Map();
-let lineRuntime=null,lineInit=null;
+let lineRuntime=null,lineInit=null,visionClient=null,visionFailures=0;
 window.__inkCameraLineReady=false;
 async function loadNativeLineOCR(){
  if(lineInit||!window.InkLineRuntime)return lineInit;
@@ -74,6 +74,8 @@ function stop(){
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
  tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
  if(lineRuntime){lineRuntime.terminate();lineRuntime=null}
+ if(visionClient){visionClient.reset();visionClient=null}
+ visionFailures=0;window.__inkCameraEngine="ink-print-cnn-rotated";
  lineInit=null;window.__inkCameraLineReady=false;
  captureWidth=800;usedDocumentUpscale=false;
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
@@ -432,6 +434,44 @@ function schedule(id,delay=100){
 }
 async function scan(id){
  if(!active||id!==epoch||reading)return;
+ // On macOS, the optional locally running Apple Vision companion bypasses
+ // all expensive browser-side RGB segmentation and character-by-character
+ // inference. Video remains native-rate; OCR processes only fresh frames.
+ if(visionClient){
+  if(video.readyState<2||!video.videoWidth){schedule(id,70);return}
+  reading=true;
+  const started=performance.now();
+  try{
+   const payload=await visionClient.recognize(video);
+   if(!active||id!==epoch)return;
+   if(payload){
+    const current=visionClient.track(payload,Date.now());
+    window.__inkCameraText=current.text;
+    window.__inkCameraWords=current.words;
+    visionClient.paint(overlay,video,board,current);
+    if(current.text)show(current.text,false);
+    else show("Point the camera at printed or handwritten text.");
+    const metrics=window.__inkCameraStats;
+    metrics.scans++;
+    metrics.engine="apple-vision-local";
+    metrics.lastScanMs=Math.round(performance.now()-started);
+    metrics.ocrMs=Math.round(Number(payload.elapsedMs)||0);
+    metrics.recognizedWords=current.words.length;
+    visionFailures=0;
+   }
+  }catch(error){
+   visionFailures++;
+   if(visionFailures>=4){
+    visionClient.reset();visionClient=null;
+    window.__inkCameraEngine="ink-print-cnn-rotated";
+    show("Local Vision companion disconnected — using INK AI OCR.");
+   }
+  }finally{
+   reading=false;
+   if(active&&id===epoch)schedule(id,30);
+  }
+  return;
+ }
  if(!window.__inkReady||!window.__inkCameraRecognize){
   show("Loading INK AI's local character model…");schedule(id,150);return;
  }
@@ -592,8 +632,18 @@ async function start(){
    video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
   if(!active||id!==epoch){incoming.getTracks().forEach(t=>t.stop());return}
   stream=incoming;video.srcObject=stream;await video.play();
-  show("Point the camera at clear text.");
-  loadNativeLineOCR();
+  if(window.InkVisionBridge?.connect){
+   visionClient=await window.InkVisionBridge.connect();
+   if(!active||id!==epoch){visionClient?.reset();visionClient=null;return}
+  }
+  if(visionClient){
+   window.__inkCameraEngine="apple-vision-local";
+   show("Apple Vision ready — point the camera at any text.");
+  }else{
+   window.__inkCameraEngine="ink-print-cnn-rotated";
+   show("Point the camera at clear text.");
+   loadNativeLineOCR();
+  }
   schedule(id,20);
  }catch(error){
   if(!active||id!==epoch)return;
