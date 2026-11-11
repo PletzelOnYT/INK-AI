@@ -3,79 +3,58 @@ import {readFileSync} from "node:fs";
 import vm from "node:vm";
 const source=readFileSync(new URL("../src/camera_tracking.js",import.meta.url),"utf8");
 const win={};
-vm.runInNewContext(source,{window:win,Date,Math,Number,Map,Set});
+vm.runInNewContext(source,{window:win,Date,Math,Number,Map,Set,Uint8Array});
 const core=win.InkCameraCore;
-assert.ok(core?.createTracker&&core?.projectBox&&core?.anglesForPass);
-assert.equal(core.looksLikeWord("Jmz5",.99),false,"Screenshot false positive must be rejected");
-assert.equal(core.looksLikeWord("JmzS",.94),false,"Letter-like gibberish must be rejected");
-assert.equal(core.looksLikeWord("Chromebook",.84),true,"Valid printed labels must remain eligible");
-assert.equal(core.looksLikeWord("HELLO",.81),true);
-const printedLetters=Array.from({length:10},(_,i)=>({
- x0:10+i*19,x1:22+i*19,y0:36+(i%3),y1:65+(i%2)
-}));
-assert.equal(core.looksLikeTextLine(printedLetters),true,"A regular printed text row should pass");
-const doorEdges=Array.from({length:10},(_,i)=>({
- x0:5+i*34,x1:6+i*34,y0:8+i*3,y1:110+i*3
-}));
-assert.equal(core.looksLikeTextLine(doorEdges),false,"Door seams and cabinet edges must not be text");
-assert.equal(core.looksLikeTextLine(printedLetters.slice(0,2)),false,
- "Two random marks must not be called a text line");
-const candidateWord=(text,prob=.82)=>({top:[
- {char:text,confidence:prob},{char:text==='a'?'o':'a',confidence:.06}
-]});
-const decoded=core.decodePrintedWord(
- [..."Thank"].map(ch=>candidateWord(ch)),["thank","think","thing","thunk"]);
-assert.ok(decoded&&decoded.text==="Thank",
- "The native CNN plus local vocabulary should recover an ordinary printed word");
-const highlights=core.createRegionTracker();
-const region={box:{x0:120,y0:75,x1:310,y1:110},
- polygon:[{x:120,y:75},{x:310,y:75},{x:310,y:110},{x:120,y:110}]};
-assert.equal(highlights.update([region],1000).length,0,
- "One random region should not be highlighted");
-assert.equal(highlights.update([region],1120).length,1,
- "A stable printed region should highlight without waiting for exact character OCR");
-assert.equal(highlights.update([],2800).length,0,
- "Lost regions should stop being highlighted");
-const box={x0:120,y0:75,x1:310,y1:110};
-const polygon=[{x:120,y:75},{x:310,y:75},{x:310,y:110},{x:120,y:110}];
-const t=core.createTracker();
-let state=t.update([{text:"Chromebook",confidence:.90,box,polygon,angle:40}],1000);
-assert.equal(state.text,"","Unconfirmed words must not instantly enter the transcript");
-state=t.update([{text:"Chromebook",confidence:.90,box,polygon,angle:40}],1120);
-assert.equal(state.text,"Chromebook","A word must survive two separate camera frames");
-assert.equal(state.words.length,1);
-assert.equal(state.activeAngle,40);
-state=t.update([],1300);
-assert.equal(state.text,"Chromebook","One missed scan must not erase recognized text");
-state=t.update([],3700);
-assert.equal(state.text,"Chromebook","Transcript survives disappearance from camera");
-assert.equal(state.words.length,0,"Old highlighters must eventually expire");
-state=t.update([{text:"Chromebook",confidence:.92,box,polygon,angle:40}],3900);
-assert.equal(state.text,"Chromebook","Recurring frames must not append duplicate words");
-state=t.update([{text:"Laptop",confidence:.47,box:{x0:135,y0:120,x1:230,y1:146},polygon,angle:0}],4100);
-assert.equal(state.text,"Chromebook","Weak one-frame reading is not committed");
-state=t.update([{text:"Laptop",confidence:.48,box:{x0:136,y0:121,x1:231,y1:147},polygon,angle:0}],4260);
-assert.equal(state.text,"Chromebook","Weak guesses must stay unconfirmed despite repetition");
-state=t.update([{text:"Laptop",confidence:.75,box:{x0:136,y0:121,x1:231,y1:147},polygon,angle:0}],4380);
-assert.equal(state.text,"Chromebook Laptop","A high-confidence reading must be confirmed with previous frames");
-t.reset();
-assert.equal(t.snapshot(4300).text,"","Camera shutdown must clear its session");
-
-function rotate(x,y,angle,source){
- const rad=angle*Math.PI/180,c=Math.cos(rad),s=Math.sin(rad);
- const width=Math.ceil(Math.abs(c)*source.width+Math.abs(s)*source.height);
- const height=Math.ceil(Math.abs(c)*source.height+Math.abs(s)*source.width);
- const dx=x-source.width/2,dy=y-source.height/2;
- return {x:width/2+c*dx-s*dy,y:height/2+s*dx+c*dy,width,height};
-}
+assert.ok(core?.createTracker&&core?.projectBox&&core?.createSceneMonitor);
+assert.equal(core.looksLikeWord("Jmz5",.99),false);
+assert.equal(core.looksLikeWord("JmzS",.99),false);
+assert.equal(core.looksLikeWord("Chromebook",.84),true);
+const preds=word=>[...word].map(ch=>({top:[
+ {char:ch,confidence:.82},{char:"z",confidence:.09}]}));
+const valid=core.decodePrintedWord(preds("Thank"),["thank","think","thunk"]);
+assert.equal(valid.text,"Thank");
+assert.ok(valid.confidence<=.83,
+ "Dictionary correction must never inflate model confidence");
+assert.equal(core.decodePrintedWord(preds("JmzS"),["nancy","thank"]),null,
+ "Unrelated dictionary entries must not be invented from visual noise");
+const b={x0:120,y0:75,x1:310,y1:110},poly=[
+ {x:120,y:75},{x:310,y:75},{x:310,y:110},{x:120,y:110}];
+const item={text:"Chromebook",confidence:.82,box:b,polygon:poly,angle:28};
+const tracker=core.createTracker();
+assert.equal(tracker.update([item],1000).text,"");
+assert.equal(tracker.update([item],1150).text,"");
+assert.equal(tracker.update([item],1300).text,"Chromebook");
+assert.equal(tracker.snapshot(1400).words.length,1);
+assert.equal(tracker.update([],2600).text,"Chromebook",
+ "One missed scan should not make the word flicker");
+assert.equal(tracker.update([],4700).text,"",
+ "A removed document must not leave old words on screen indefinitely");
+const word1={...item,text:"Thank",angle:0,box:{x0:100,y0:20,x1:180,y1:44}};
+const word2={...item,text:"you",angle:0,box:{x0:190,y0:20,x1:246,y1:44}};
+for(let i=0;i<3;i++)tracker.update([word2,word1],5000+i*150);
+assert.equal(tracker.snapshot(5500).text,"Thank you",
+ "Transcription must follow reading order, not detection order");
+const word3={...item,text:"November",box:{x0:100,y0:75,x1:250,y1:100}};
+for(let i=0;i<3;i++)tracker.update([word3],5650+i*130);
+assert.equal(tracker.snapshot(6100).text,"Thank you\nNovember",
+ "Separate lines must remain in document order");
+tracker.reset();
+assert.equal(tracker.snapshot(6500).text,"");
+const monitor=core.createSceneMonitor();
+const frame=(r,g,b)=>new Uint8Array(Array.from({length:24*14},()=>[r,g,b,255]).flat());
+assert.equal(monitor.update(frame(240,235,223),1000).changed,false);
+assert.equal(monitor.update(frame(237,233,220),1100).changed,false);
+assert.equal(monitor.update(frame(67,78,91),1200).changed,true,
+ "A paper replaced by a room must reset the old transcript");
+assert.equal(monitor.update(frame(68,80,90),1300).changed,false);
 for(const angle of [-85,-60,-40,-20,0,20,40,60,85]){
- const source={width:640,height:360};
- const p=rotate(290,120,angle,source);
- const back=core.pointFromRotated(p.x,p.y,{angle,width:p.width,height:p.height},source);
- assert.ok(Math.abs(back.x-290)<1e-8&&Math.abs(back.y-120)<1e-8,
-  "Rotated camera coordinates must map back to video at "+angle+" degrees");
+ const source={width:640,height:360},radians=angle*Math.PI/180;
+ const w=Math.ceil(Math.abs(Math.cos(radians))*640+Math.abs(Math.sin(radians))*360);
+ const h=Math.ceil(Math.abs(Math.cos(radians))*360+Math.abs(Math.sin(radians))*640);
+ const dx=290-320,dy=120-180;
+ const x=w/2+Math.cos(radians)*dx-Math.sin(radians)*dy;
+ const y=h/2+Math.sin(radians)*dx+Math.cos(radians)*dy;
+ const back=core.pointFromRotated(x,y,{width:w,height:h,angle},source);
+ assert.ok(Math.abs(back.x-290)<1e-8&&Math.abs(back.y-120)<1e-8);
 }
-for(let pass=0;pass<4;pass++)assert.ok(core.anglesForPass(pass,null).some(a=>a!==0),
- "Every camera scan must include an angled view");
-assert.deepEqual([...core.anglesForPass(0,40)].sort((a,b)=>a-b),[-20,0,20,40]);
-console.log("PASS: fast first-read, persistent transcript, no duplicate words, multi-angle mapping");
+console.log("PASS: no dictionary hallucinations, spatial consensus, reading order, scene reset and angled mapping");
