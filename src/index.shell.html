@@ -20,6 +20,7 @@
     <canvas id="pad" width="1200" height="550" data-tool="pen" aria-label="Write or draw here"></canvas>
     <canvas id="ghost" width="1200" height="550" aria-hidden="true"></canvas>
     <video id="cameraVideo" autoplay muted playsinline aria-label="Live camera preview"></video>
+    <canvas id="cameraFrozen" aria-hidden="true"></canvas>
     <canvas id="cameraHighlights" aria-hidden="true"></canvas>
   </div>
   <div id="guess" data-muted="true" aria-live="polite">Loading AI…</div>
@@ -30,6 +31,7 @@
 <script src="./src/camera_text_detector.js" defer></script>
 <script src="./src/camera_line_runtime.js" defer></script>
 <script src="./src/camera_text_evidence.js" defer></script>
+<script src="./src/camera_document_layout.js" defer></script>
 <script src="./src/camera_offline_bridge.js" defer></script>
 <script src="./src/camera_ocr.js" defer></script>
 </body>
