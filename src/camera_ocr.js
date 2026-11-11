@@ -11,7 +11,7 @@ const rotated=document.createElement("canvas"),rg=rotated.getContext("2d",{willR
 const hg=overlay.getContext("2d");
 const tracker=Core.createTracker();
 const cache=new Map();
-let active=false,stream=null,timer=0,reading=false,epoch=0,pass=0;
+let active=false,stream=null,timer=0,frameCallback=0,reading=false,epoch=0,pass=0;
 let previousBoxes=[],previousBoxesAt=0;
 window.__inkCameraActive=false;
 window.__inkCameraText="";
@@ -26,6 +26,9 @@ function show(text,muted=true){
 function clearMarks(){hg.clearRect(0,0,overlay.width,overlay.height)}
 function stop(){
  active=false;epoch++;clearTimeout(timer);timer=0;
+ if(frameCallback&&typeof video.cancelVideoFrameCallback==="function")
+  video.cancelVideoFrameCallback(frameCallback);
+ frameCallback=0;
  if(stream)stream.getTracks().forEach(t=>t.stop());
  stream=null;video.pause();video.srcObject=null;
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
@@ -272,7 +275,28 @@ function decode(lines,predictions){
 }
 function schedule(id,delay=100){
  clearTimeout(timer);
- if(active&&id===epoch)timer=setTimeout(()=>scan(id),delay);
+ if(frameCallback&&typeof video.cancelVideoFrameCallback==="function")
+  video.cancelVideoFrameCallback(frameCallback);
+ frameCallback=0;
+ if(!active||id!==epoch)return;
+ // Prefer a new camera frame to a fixed polling delay. The fallback keeps
+ // static canvas streams and older browsers working without frozen reads.
+ if(typeof video.requestVideoFrameCallback==="function"){
+  let fired=false;
+  frameCallback=video.requestVideoFrameCallback(()=>{
+   if(fired)return;
+   fired=true;frameCallback=0;clearTimeout(timer);
+   if(active&&id===epoch)scan(id);
+  });
+  timer=setTimeout(()=>{
+   if(fired)return;
+   fired=true;
+   if(frameCallback&&typeof video.cancelVideoFrameCallback==="function")
+    video.cancelVideoFrameCallback(frameCallback);
+   frameCallback=0;
+   if(active&&id===epoch)scan(id);
+  },Math.max(180,delay));
+ }else timer=setTimeout(()=>scan(id),delay);
 }
 async function scan(id){
  if(!active||id!==epoch||reading)return;
