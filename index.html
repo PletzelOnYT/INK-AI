@@ -12719,12 +12719,14 @@ if(typeof module!=="undefined"&&module.exports)module.exports=api;
 (()=>{
 const button=document.getElementById("camera"),board=document.querySelector(".board");
 const video=document.getElementById("cameraVideo"),overlay=document.getElementById("cameraHighlights");
-const output=document.getElementById("guess"),Core=window.InkCameraCore;
-if(!button||!board||!video||!overlay||!output||!Core)return;
+const output=document.getElementById("guess"),Core=window.InkCameraCore,
+ Detector=window.InkCameraDetector;
+if(!button||!board||!video||!overlay||!output||!Core||!Detector)return;
 const base=document.createElement("canvas"),bg=base.getContext("2d",{willReadFrequently:true});
 const rotated=document.createElement("canvas"),rg=rotated.getContext("2d",{willReadFrequently:true});
 const hg=overlay.getContext("2d");
 const tracker=Core.createTracker();
+const regionTracker=Core.createRegionTracker();
 const cache=new Map();
 let active=false,stream=null,timer=0,frameCallback=0,reading=false,epoch=0,pass=0;
 
@@ -12732,7 +12734,7 @@ window.__inkCameraActive=false;
 window.__inkCameraText="";
 window.__inkCameraWords=[];
 window.__inkCameraEngine="ink-print-cnn-rotated";
-window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false};
+window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0};
 function show(text,muted=true){
  if(!active)return;
  if(output.textContent!==text)output.textContent=text;
@@ -12747,7 +12749,7 @@ function stop(){
  if(stream)stream.getTracks().forEach(t=>t.stop());
  stream=null;video.pause();video.srcObject=null;
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
- tracker.reset();cache.clear();
+ tracker.reset();regionTracker.reset();cache.clear();
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
  window.__inkCameraWords=[];
  output.textContent=window.__inkLastGuess||"Draw something";
@@ -12766,7 +12768,7 @@ function runs(values,minimum=1,gap=0){
 function makeBase(){
  // Camera frames are downscaled before per-pixel RGB segmentation. The
  // original high-resolution video remains untouched in the preview.
- const w=Math.min(640,video.videoWidth);
+ const w=Math.min(800,video.videoWidth);
  base.width=w;base.height=Math.max(1,Math.round(video.videoHeight*w/video.videoWidth));
  bg.drawImage(video,0,0,base.width,base.height);
 }
@@ -12789,71 +12791,7 @@ function makeView(angle){
 function extract(view){
  const w=view.width,h=view.height;
  const image=view.canvas.getContext("2d",{willReadFrequently:true}).getImageData(0,0,w,h);
- const p=image.data,stride=w+1,n=(w+1)*(h+1);
- const red=new Uint32Array(n),green=new Uint32Array(n),blue=new Uint32Array(n);
- for(let y=0;y<h;y++){
-  let r=0,g=0,b=0;
-  for(let x=0;x<w;x++){
-   const j=(y*w+x)*4;
-   r+=p[j];g+=p[j+1];b+=p[j+2];
-   const i=(y+1)*stride+x+1,above=y*stride+x+1;
-   red[i]=red[above]+r;green[i]=green[above]+g;blue[i]=blue[above]+b;
-  }
- }
- const area=(a,x0,y0,x1,y1)=>a[(y1+1)*stride+x1+1]-a[y0*stride+x1+1]-
-   a[(y1+1)*stride+x0]+a[y0*stride+x0];
- const masks=[new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h)];
- const radius=9;
- for(let y=0;y<h;y++){
-  const y0=Math.max(0,y-radius),y1=Math.min(h-1,y+radius);
-  for(let x=0;x<w;x++){
-   const x0=Math.max(0,x-radius),x1=Math.min(w-1,x+radius);
-   const size=(x1-x0+1)*(y1-y0+1);
-   const rr=area(red,x0,y0,x1,y1)/size,gg=area(green,x0,y0,x1,y1)/size,
-     bb=area(blue,x0,y0,x1,y1)/size;
-   const j=(y*w+x)*4,dr=p[j]-rr,dg=p[j+1]-gg,db=p[j+2]-bb;
-   const luminance=.299*dr+.587*dg+.114*db;
-   const chroma=Math.max(Math.abs(dr),Math.abs(dg),Math.abs(db));
-   const idx=y*w+x;
-   if(luminance<-21&&chroma>27)masks[0][idx]=1;
-   else if(luminance>21&&chroma>27)masks[1][idx]=1;
-   else if(Math.abs(luminance)<=21&&chroma>45)masks[2][idx]=1;
-  }
- }
- function findLines(mask){
-  const rows=new Uint16Array(h);
-  for(let i=0;i<mask.length;i++)if(mask[i])rows[Math.floor(i/w)]++;
-  const bands=runs(rows,Math.max(3,Math.round(w*.0027)),2);
-  const lines=[];
-  for(const [top,bottom] of bands){
-   const lh=bottom-top+1;
-   if(lh<8||lh>Math.min(h*.23,120))continue;
-   const cols=new Uint16Array(w);
-   for(let y=top;y<=bottom;y++)for(let x=0;x<w;x++)cols[x]+=mask[y*w+x];
-   const spans=runs(cols,Math.max(2,Math.round(lh*.065)),1);
-   const letters=[];
-   for(const [left,right] of spans){
-    let low=bottom,high=top,ink=0;
-    for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
-     if(mask[y*w+x]){ink++;low=Math.min(low,y);high=Math.max(high,y)}
-    }
-    const bw=right-left+1,bh=high-low+1;
-    if(bw<2||bh<6||bw>Math.max(29,lh*1.6)||bh>120||
-       ink<Math.max(8,bw*bh*.045)||ink/(bw*bh)>.83)continue;
-    letters.push({x0:left,y0:low,x1:right,y1:high,mask});
-   }
-   if(letters.length<4||letters.length>38)continue;
-   const heights=letters.map(a=>a.y1-a.y0+1).sort((a,b)=>a-b);
-   const median=heights[Math.floor(heights.length/2)];
-   const plausible=letters.filter(a=>(a.y1-a.y0+1)>=median*.4&&
-         (a.y1-a.y0+1)<=median*2.05).length;
-   if(plausible/letters.length<.78||!Core.looksLikeTextLine(letters))continue;
-   const score=(plausible/letters.length)+Math.min(1,letters.length/8);
-   lines.push({letters,score});
-  }
-  return lines;
- }
- const lines=[...findLines(masks[0]),...findLines(masks[1]),...findLines(masks[2])];
+ const lines=Detector.detect(image,w,h);
  return {w,h,image,view,lines};
 }
 function characterImage(item,frame){
@@ -12899,9 +12837,10 @@ function paint(candidateBoxes,frame){
  const cw=Math.max(1,Math.round(bw*dpr)),ch=Math.max(1,Math.round(bh*dpr));
  if(overlay.width!==cw||overlay.height!==ch){overlay.width=cw;overlay.height=ch}
  hg.setTransform(dpr,0,0,dpr,0,0);clearMarks();
- // Critical: candidate boxes ARE NOT text. Highlight only confirmed OCR words
- // to avoid drawing white rectangles on cabinet edges, people or furniture.
- const accepted=tracker.snapshot().words.filter(t=>t.polygon?.length===4);
+ // Text-shaped regions are highlighted only after successive scans.
+ // OCR transcription remains a separate, stricter confirmation.
+ const accepted=[...regionTracker.snapshot(),...tracker.snapshot().words]
+  .filter(t=>t.polygon?.length===4);
  if(!accepted.length||!video.videoWidth)return;
  const fit=Math.min(bw/video.videoWidth,bh/video.videoHeight);
  const dx=(bw-video.videoWidth*fit)/2,dy=(bh-video.videoHeight*fit)/2;
@@ -12917,6 +12856,33 @@ function paint(candidateBoxes,frame){
    hg.lineTo(dx+polygon[i].x*sx,dy+polygon[i].y*sy);
   hg.closePath();hg.fill();hg.stroke();
  }
+}
+function detectedWordRegions(selected){
+ const regions=[];
+ for(const {line,frame} of selected){
+  const letters=line.letters;
+  if(letters.length<4)continue;
+  const height=line.medianHeight||
+    Math.max(10,letters.reduce((n,c)=>n+(c.y1-c.y0+1),0)/letters.length);
+  let group=[];
+  const flush=()=>{
+   if(group.length<2){group=[];return}
+   const box={x0:Math.min(...group.map(c=>c.x0)),
+    x1:Math.max(...group.map(c=>c.x1)),
+    y0:Math.min(...group.map(c=>c.y0)),
+    y1:Math.max(...group.map(c=>c.y1))};
+   const projected=project(box,frame);
+   if(Core.visibility(projected.points,base.width,base.height))
+    regions.push({box:projected.box,polygon:projected.points});
+   group=[];
+  };
+  for(const c of letters){
+   if(group.length&&c.x0-group[group.length-1].x1-1>Math.max(7,height*.65))flush();
+   group.push(c);
+  }
+  flush();
+ }
+ return dedupe(regions);
 }
 function keyFor(image){
  // The old 1-bit every-other-pixel cache key conflated distinct letters.
@@ -13068,6 +13034,9 @@ async function scan(id){
   }
   const fresh=dedupe(candidateBoxes);
   const frame={w:base.width,h:base.height};
+  const regions=regionTracker.update(detectedWordRegions(selected),Date.now());
+  stats.detectedLines=selected.length;
+  stats.highlightedRegions=regions.length;
   const images=selected.flatMap(item=>item.line.letters.map(box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
   if(!active||id!==epoch)return;
@@ -13076,6 +13045,7 @@ async function scan(id){
   window.__inkCameraWords=state.words;
   window.__inkCameraText=state.text;
   if(state.text)show(state.text,false);
+  else if(regions.length)show("Printed text detected — character reading is uncertain.");
   else show("Point your camera at clearly printed text.");
   paint(fresh,frame);
   stats.scans++;stats.lastScanMs=Math.round(performance.now()-t0);
@@ -13094,7 +13064,7 @@ async function start(){
  active=true;const id=++epoch;pass=0;tracker.reset();cache.clear();
  window.__inkCameraActive=true;
  window.__inkCameraText="";window.__inkCameraWords=[];
- window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false};
+ window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0};
  board.classList.add("camera-active");button.setAttribute("aria-pressed","true");
  show("Requesting camera access…");
  try{
