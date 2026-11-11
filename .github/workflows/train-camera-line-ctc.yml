@@ -1,0 +1,58 @@
+name: Train INK native whole-line OCR
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_camera_line_ctc.py"
+      - ".github/workflows/train-camera-line-ctc.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-native-line-ctc
+  cancel-in-progress: true
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install training dependencies
+        run: python3 -m pip install --quiet torch numpy pillow
+      - name: Train from scratch on synthetic lines; withhold font families
+        run: python3 src/train_camera_line_ctc.py --epochs 9 --samples 14000
+      - name: Verify full-line word accuracy and no invented webcam results
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path("models/native-line-ctc-v1-metrics.json").read_text())
+          w=json.loads(Path("models/ink-native-line-ctc-v1.json").read_text())
+          assert m["trained_from_scratch"] and m["eligible"]
+          assert m["heldout_font_count"]>=2 and m["validation_lines"]>=1200
+          assert m["heldout_character_error_rate"]<.48
+          assert m["heldout_exact_line_accuracy"]>.16
+          assert m["real_camera_word_accuracy"] is None
+          assert w["format"]=="ink-line-ctc-v1" and w["input"]==[1,32,256]
+          assert len(w["convolutions"])==4 and "rnn" in w
+          PY
+      - name: Commit only measured model and rebuild actual GitHub index.html
+        run: |
+          cp models/ink-native-line-ctc-v1.json /tmp/ink-native-line-ctc-v1.json
+          cp models/native-line-ctc-v1-metrics.json /tmp/native-line-ctc-v1-metrics.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/ink-native-line-ctc-v1.json models/ink-native-line-ctc-v1.json
+          cp /tmp/native-line-ctc-v1-metrics.json models/native-line-ctc-v1-metrics.json
+          node --check src/camera_line_runtime.js
+          node --check src/camera_ocr.js
+          node --check src/camera_text_detector.js
+          python3 scripts/build_standalone.py
+          cp dist/ink-ai-standalone.html index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/ink-native-line-ctc-v1.json models/native-line-ctc-v1-metrics.json index.html
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish trained native whole-line OCR, measured metrics and standalone HTML"
+            git push origin HEAD:main
+          fi
