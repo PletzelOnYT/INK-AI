@@ -20,12 +20,16 @@ try:
         const canvas=document.createElement('canvas');
         canvas.width=960;canvas.height=500;
         const ctx=canvas.getContext('2d');
-        window.__inkDrawCameraFixture=(background,foreground)=>{
+        window.__inkDrawCameraFixture=(background,foreground,angle=0)=>{
           ctx.fillStyle=background;ctx.fillRect(0,0,960,500);
+          ctx.save();
+          ctx.translate(480,250);
+          ctx.rotate(angle*Math.PI/180);
           ctx.font='bold 88px Arial';
           ctx.textBaseline='middle';
           ctx.fillStyle=foreground;
-          ctx.fillText('Chromebook',55,250);
+          ctx.fillText('Chromebook',-372,0);
+          ctx.restore();
           // Keep sending updated video frames, as a real webcam would.
           ctx.fillStyle=background;ctx.fillRect(1,1,2,2);
         };
@@ -40,9 +44,15 @@ try:
       ("light_on_dark","#1e1e1e","#f8f8f8"),
       ("colored_text","#f6f6f6","#184dda"),
       ("colored_background","#491a86","#f8e545"),
+      ("tilted_right_28","#f8f8f8","#171717",28),
+      ("tilted_left_28","#1e1e1e","#f8f8f8",-28),
     ]
-    for label,bg,fg in scenarios:
-        driver.execute_script("window.__inkDrawCameraFixture(arguments[0],arguments[1])",bg,fg)
+    for scenario in scenarios:
+        label,bg,fg=scenario[:3]
+        angle=scenario[3] if len(scenario)>3 else 0
+        before=driver.execute_script("return window.__inkCameraStats.scans")
+        driver.execute_script("window.__inkDrawCameraFixture(arguments[0],arguments[1],arguments[2])",bg,fg,angle)
+        WebDriverWait(driver,20).until(lambda d:d.execute_script("return window.__inkCameraStats.scans")>before)
         def highlighted(d):
             return d.execute_script("""
               const canvas=document.getElementById('cameraHighlights');
@@ -53,8 +63,9 @@ try:
               return count;
             """)
         try:
-            WebDriverWait(driver,10).until(lambda d:highlighted(d)>70)
-            print("PASS",label,"white-highlight pixels",highlighted(driver),flush=True)
+            WebDriverWait(driver,15).until(lambda d:highlighted(d)>70)
+            print("PASS",label,"white-highlight pixels",highlighted(driver),
+                  "scan ms",driver.execute_script("return window.__inkCameraStats.lastScanMs"),flush=True)
         except Exception:
             print("FAIL",label,"highlight pixels",highlighted(driver),
                   "camera status",driver.execute_script("return document.getElementById('guess').textContent"),flush=True)
