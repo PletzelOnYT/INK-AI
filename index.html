@@ -13171,11 +13171,23 @@ async function scan(id){
  try{
   makeBase();
   const preferred=tracker.snapshot().activeAngle;
-  const angles=Core.anglesForPass(pass++,preferred);
+  const first=extract(makeView(0));
+  const dominant=[...first.lines].sort((a,b)=>b.score-a.score)[0];
+  const tilt=dominant?-Math.atan(dominant.slope)*180/Math.PI:null;
+  const angles=[0];
+  if(tilt!==null&&Math.abs(tilt)>=2&&Math.abs(tilt)<49){
+   angles.push(Math.round(tilt));
+  }else if(preferred!==null&&Math.abs(preferred)>=4&&pass%3!==0){
+   angles.push(preferred);
+  }else if(!dominant){
+   const retries=[-20,20,-40,40,-60,60,-85,85];
+   angles.push(retries[pass%retries.length]);
+  }
+  pass++;
   stats.lastAngles=angles;stats.modelReady=Boolean(window.__inkPrintReady);
   const frames=[],choices=[];
   for(const angle of angles){
-   const frame=extract(makeView(angle));
+   const frame=angle===0?first:extract(makeView(angle));
    frames.push(frame);
    for(const line of frame.lines){
     const region={x0:Math.min(...line.letters.map(l=>l.x0)),
