@@ -4,7 +4,7 @@ on:
     branches: [main]
     paths:
       - "src/train_completer_v7.py"
-      - "tests/completer-v7-prefix.py"
+      - "tests/completer-v7-boundaries.py"
       - "tests/completer-v7-runtime.mjs"
       - ".github/workflows/train-completer-v7.yml"
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
       - name: Prove input matches training and no future strokes leak
         run: |
           python -m py_compile src/train_completer_v7.py
-          python tests/completer-v7-prefix.py
+          python tests/completer-v7-boundaries.py
           node --check src/stroke_worker.js
           node tests/completer-fast-quality.mjs
           node tests/completer-no-straight-rays.mjs
