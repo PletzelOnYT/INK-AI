@@ -24101,8 +24101,10 @@ poison
      }
      tracked.key=key;tracked.box=line.box;tracked.lastSeen=now;
     }
-    regions=regions.filter(t=>now-t.lastSeen<=1050);
-    const active=regions.filter(t=>t.text&&now-t.lastSeen<=1050);
+    // Slow neural OCR passes should not erase an otherwise static document
+    // between updates; tracked boxes have a bounded 2.8s TTL.
+    regions=regions.filter(t=>now-t.lastSeen<=2800);
+    const active=regions.filter(t=>t.text&&now-t.lastSeen<=2800);
     active.sort((a,b)=>{
      const ya=py(a.box),yb=py(b.box);
      if(Math.abs(ya-yb)>Math.max(12,(a.box.y1-a.box.y0)*.5))
@@ -24154,40 +24156,57 @@ poison
   if(!window.InkOfflineOCR?.create)return null;
   const engine=await window.InkOfflineOCR.create();
   const tracker=createTracker();
-  let scan=0,weakScans=0,detailFrames=0,lastDetailBurst=-100,previousWidth=0;
-  let handAttempts=0,handAccepted=0;
+  let scan=0,handAttempts=0,handAccepted=0;
+  const nativeZones=["lower-right","lower-left","upper-right","upper-left"];
+  function transformRegion(item,offsetX,offsetY,scaleX,scaleY){
+   const project=point=>({x:offsetX+point.x*scaleX,
+    y:offsetY+point.y*scaleY});
+   const box=item.box?{x0:offsetX+item.box.x0*scaleX,
+    y0:offsetY+item.box.y0*scaleY,
+    x1:offsetX+item.box.x1*scaleX,
+    y1:offsetY+item.box.y1*scaleY}:undefined;
+   const points=Array.isArray(item.points)?
+    item.points.map(project):undefined;
+   return {...item,...(box?{box}:{}),
+    ...(points?{points}:{}),
+    ...(item.words?{words:item.words.map(w=>
+     transformRegion(w,offsetX,offsetY,scaleX,scaleY))}:{})};
+  }
   return {
    engine:"offline-tesseract-wasm",
    async recognize(video){
     ++scan;
-    // Ordinary text stays at a responsive 1280px. Only repeated weak OCR
-    // activates short native-1080p bursts, for small distant letters/digits.
-    const highResPossible=video.videoWidth>=1600;
-    if(highResPossible&&detailFrames===0&&weakScans>=4&&
-       scan-lastDetailBurst>=12){
-     detailFrames=3;lastDetailBurst=scan;
-    }
-    const highRes=highResPossible&&detailFrames>0;
-    if(detailFrames>0)detailFrames--;
-    const width=Math.min(highRes?outputWidth:regularWidth,video.videoWidth);
-    const height=Math.max(1,Math.round(video.videoHeight*width/video.videoWidth));
-    if(previousWidth&&previousWidth!==width)tracker.reset();
-    previousWidth=width;
+    const nativeW=video.videoWidth,nativeH=video.videoHeight;
+    if(!nativeW||!nativeH)throw Error("Camera video has no frame dimensions");
+    // Every third pass covers the entire camera view for quick new-text
+    // discovery; intervening passes see native pixels from overlapping
+    // ~65% focus regions. This preserves distant glyph pixels without
+    // running full-frame 1920px Tesseract on every webcam frame.
+    const nativeFocus=nativeW>=1500&&scan%3!==1;
+    const zone=nativeZones[(Math.floor((scan-2)/3)*2+
+      (scan%3===0?1:0)+nativeZones.length*10)%nativeZones.length];
+    const frac=nativeFocus?.66:1;
+    const sw=Math.round(nativeW*frac),sh=Math.round(nativeH*frac);
+    const ox=nativeFocus&&zone.endsWith("right")?nativeW-sw:0;
+    const oy=nativeFocus&&zone.startsWith("lower")?nativeH-sh:0;
+    const width=Math.max(1,Math.min(regularWidth,sw));
+    const height=Math.max(1,Math.round(sh*width/sw));
     if(canvas.width!==width||canvas.height!==height){
      canvas.width=width;canvas.height=height;
     }
-    context.drawImage(video,0,0,width,height);
-    // Only the latest live frame is recognized by the bundled neural worker.
-    const result=await engine.recognize(canvas,width,height);
+    context.drawImage(video,ox,oy,sw,sh,0,0,width,height);
+    const result=await engine.recognize(canvas,width,height,
+     nativeFocus?{fastRegion:true,documentMode:scan%4===0}:
+      {skipOptionalDetail:scan%4!==1});
     let accepted=checkedPayload(result,width,height);
     // Primary path remains the bundled Tesseract LSTM, which handles
     // printed and joined text better. On weak/partial reads, also run the
     // handwriting-trained CNN on segmented ink; occasionally check mixed
     // printed and handwritten pages without slowing every frame.
     const reliable=hasReliableText(accepted);
-    const tryHandwriting=Handwriting?.recognize&&
+    const tryHandwriting=!nativeFocus&&Handwriting?.recognize&&
      window.__inkHandwritingReady===true&&
-     ((!reliable&&scan%2===0)||(reliable&&scan%6===0));
+     ((!reliable&&scan%6===1)||(reliable&&scan%12===1));
     if(tryHandwriting){
      const started=performance.now();
      handAttempts++;
@@ -24224,26 +24243,26 @@ poison
        error:String(error?.message||error),modelReady:true};
      }
     }
-    // A fragment such as "112" is not a complete dial read. Keep trying
-    // full-detail OCR until independent digits or real words are verified.
-    const acceptedWords=accepted.words||[];
-    const dialCount=acceptedWords.filter(w=>w.clockDial).length;
-    const completeText=acceptedWords.some(w=>
-     /[A-Za-z]{4,}/.test(String(w.text||"")))||
-     acceptedWords.filter(w=>/^\d{1,2}$/.test(String(w.text||""))).length>=5;
-    if(completeText)weakScans=0;
-    else weakScans=Math.min(12,weakScans+1);
-    if(highRes&&(completeText||dialCount>=1))
-     detailFrames=Math.max(detailFrames,3);
+    // Use one stable native coordinate system for the transcript and
+    // highlights, even when the OCR input alternates full-frame and crops.
+    // Do not reset the tracker when its source sampling resolution changes.
+    const nativeLines=accepted.lines.map(line=>
+     transformRegion(line,ox,oy,sw/width,sh/height));
+    accepted={...accepted,width:nativeW,height:nativeH,
+     lines:nativeLines,words:nativeLines.flatMap(line=>line.words||[]),
+     elapsedMs:result.elapsedMs};
     window.__inkCameraDetailRecovery={
-      used:!!result.detailUpscaled,enhancement:result.enhancement||null,
-      captureWidth:width,captureHeight:height,highResolution:highRes
+     used:nativeFocus||!!result.detailUpscaled,
+     enhancement:nativeFocus?"native-focus-"+zone:result.enhancement||null,
+     captureWidth:width,captureHeight:height,
+     sourceWidth:nativeW,sourceHeight:nativeH,
+     nativeFocus,zone:nativeFocus?zone:null,highResolution:nativeFocus
     };
     return accepted;
    },
    track:tracker.update,
-   reset(){tracker.reset();weakScans=0;detailFrames=0;previousWidth=0;
-    handAttempts=0;handAccepted=0},
+   reset(){tracker.reset();scan=0;handAttempts=0;handAccepted=0},
+   clearTranscript(){tracker.reset()},
    paint
   };
  }
