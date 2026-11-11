@@ -61,8 +61,16 @@ async function create(){
   // Tesseract worker uses the same IndexedDB key/value store as idb-keyval.
   // If this fails, do NOT silently fetch traineddata from the internet.
   await set(CACHE+"/eng.traineddata",engData);
-  const workerPath=blobURL(workerCode);
-  const corePath=blobURL((await simd())?simdCore:baselineCore)+"#core.js";
+  // Chrome opens file:// pages with an opaque origin. A Worker created as
+  // blob:null may run, but a SECOND importScripts(blob:null) for the WASM
+  // core fails. Preload the selected Emscripten core inside the same classic
+  // Worker script, so Tesseract's getCore sees global.TesseractCore already.
+  const selectedCore=(await simd())?simdCore:baselineCore;
+  const workerPath=blobURL(new Blob([selectedCore,"\n;",workerCode],
+    {type:"text/javascript"}));
+  // The core has already been installed in the worker's global scope.
+  // This path is not accessed, but prevents a default CDN fallback.
+  const corePath="data:text/javascript,void%200#core.js";
   let worker=null;
   try{
    worker=await tesseract.createWorker("eng",1,{
