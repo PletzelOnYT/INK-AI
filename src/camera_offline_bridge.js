@@ -99,79 +99,127 @@
  const py=box=>(box.y0+box.y1)/2;
  function proximity(a,b){
   if(!a||!b)return false;
+  const ha=Math.max(1,a.y1-a.y0),hb=Math.max(1,b.y1-b.y0);
+  // Adjacent lines are not the same line, even if x centers overlap.
+  const verticalOverlap=Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
+  if(verticalOverlap/Math.min(ha,hb)<.28)return false;
   const w=Math.max(1,Math.max(a.x1-a.x0,b.x1-b.x0));
-  const h=Math.max(1,Math.max(a.y1-a.y0,b.y1-b.y0));
-  return Math.abs(px(a)-px(b))<=Math.max(35,w*.6)&&
-    Math.abs(py(a)-py(b))<=Math.max(15,h*1.15);
+  return Math.abs(px(a)-px(b))<=Math.max(34,w*.64);
+ }
+ const normalized=value=>String(value||"").toLowerCase()
+  .replace(/[^a-z0-9]+/g," ").trim();
+ function relatedText(a,b){
+  const aa=normalized(a),bb=normalized(b);
+  if(!aa||!bb)return false;
+  if(aa===bb||aa.includes(bb)||bb.includes(aa))return true;
+  const aset=new Set(aa.split(" "));
+  return bb.split(" ").some(token=>token.length>=3&&aset.has(token));
+ }
+ function moveBox(box,dx,dy){
+  return {x0:box.x0+dx,y0:box.y0+dy,x1:box.x1+dx,y1:box.y1+dy};
  }
  function createTracker(){
   let regions=[];
+  function snapshot(width,height,now){
+   regions=regions.filter(t=>now-t.lastSeen<=6500);
+   const present=regions.filter(t=>t.text&&now-t.lastSeen<=6500);
+   // OCR crops can recognize both an old short fragment and its longer
+   // replacement. Display the more complete reading, never duplicate boxes.
+   const active=present.filter(t=>!present.some(other=>
+    other!==t&&proximity(other.box,t.box)&&
+    relatedText(other.text,t.text)&&
+    other.text.length>t.text.length&&
+    other.lastSeen>=t.lastSeen-2100));
+   active.sort((a,b)=>{
+    const dy=py(a.box)-py(b.box);
+    if(Math.abs(dy)>Math.max(11,(a.box.y1-a.box.y0)*.45))return dy;
+    return a.box.x0-b.box.x0;
+   });
+   const transcript=Layout?.formatDocument?Layout.formatDocument(active):
+    active.map(t=>t.text).join("\n");
+   return {text:transcript.slice(0,6000),
+    words:active.flatMap(t=>t.words),
+    sourceWidth:width,sourceHeight:height};
+  }
   return {
    update(payload,now=Date.now()){
     const entries=(payload?.lines||[]).filter(line=>
-     line?.box&&typeof line.text==="string"&&
-     /[A-Za-z0-9]/.test(line.text)&&
-     Array.isArray(line.words)&&line.words.length);
+      line?.box&&typeof line.text==="string"&&
+      /[A-Za-z0-9]/.test(line.text)&&
+      Array.isArray(line.words)&&line.words.length);
     const visited=new Set();
     for(const line of entries){
-     const cleaned=Layout?.lineText?Layout.lineText(line):line.text.replace(/\s+/g," ").trim();
-     const key=cleaned.toLowerCase();
-     let tracked=regions.find(t=>!visited.has(t)&&proximity(t.box,line.box));
+     const cleaned=Layout?.lineText?
+      Layout.lineText(line):line.text.replace(/\s+/g," ").trim();
+     const key=normalized(cleaned);
+     if(!key)continue;
+     let tracked=regions.find(t=>!visited.has(t)&&
+       proximity(t.box,line.box)&&relatedText(t.text||t.candidate||t.key,cleaned));
      if(!tracked){
-      tracked={box:line.box,text:"",key:"",words:[],
-       lastSeen:0,confidence:0,votes:0};
+      tracked={box:line.box,text:"",key:"",words:[],candidate:"",votes:0,
+       lastSeen:0,confidence:0,lastCandidate:0};
       regions.push(tracked);
      }
      visited.add(tracked);
-     if(key===tracked.key)tracked.votes=Math.min(8,tracked.votes+1);
-     else{
-      tracked.votes=1;
-      // Do not display yesterday's text over a new label or document
-      // while the new lower-confidence OCR read is being confirmed.
-      if(tracked.key&&!key.startsWith(tracked.key)&&
-         !tracked.key.startsWith(key)){
-       tracked.text="";tracked.words=[];
-      }
-     }
-     // A genuine high-confidence printed phrase should appear on the
-     // first read. A suspicious single-word result over a wall/shoulder
-     // must repeat at the same position in a new frame before display.
      const confidence=Number(line.confidence)||0;
      const quality=Number(line.visualQuality);
      const hasPixels=Number.isFinite(quality);
      const chars=cleaned.replace(/[^\p{L}\p{N}]/gu,"").length;
-     const multiWord=line.words.length>=2;
-     const strongVisual=hasPixels&&quality>=.79;
-     const instant=confidence>=.84&&strongVisual&&
-       (multiWord||(chars>=5&&quality>=.87));
-     const verified=tracked.votes>=2&&confidence>=.48&&
-       (!hasPixels||quality>=.43);
-     if(instant||verified||(!hasPixels&&confidence>=.88)){
-      tracked.text=cleaned;
-      tracked.words=line.words.filter(w=>w.box&&
-       typeof w.text==="string"&&Number(w.confidence)>=.25);
-      tracked.confidence=confidence;
-      tracked.blockIndex=line.blockIndex;
-      tracked.paragraphIndex=line.paragraphIndex;
-      tracked.lineIndex=line.lineIndex;
+     const enoughInk=!hasPixels||quality>=.43;
+     const instant=confidence>=.82&&enoughInk&&
+      (line.words.length>=2||chars>=4)&&
+      (!hasPixels||quality>=.72);
+     const same=key===tracked.key;
+     const compatible=relatedText(tracked.text,cleaned);
+     if(key===tracked.candidate)tracked.votes=Math.min(8,tracked.votes+1);
+     else{tracked.candidate=key;tracked.votes=1}
+     const verified=tracked.votes>=2&&confidence>=.43&&enoughInk;
+     const accepted=(instant||verified||(!hasPixels&&confidence>=.88));
+     if(accepted){
+      // Partial OCR on a later pass must not destroy a fuller earlier line
+      // (e.g., "Open House" -> "House" -> "Open House").
+      const incomingChars=key.replace(/ /g,"").length;
+      const oldChars=tracked.key.replace(/ /g,"").length;
+      const keepFull=compatible&&tracked.text&&incomingChars<oldChars&&
+       now-tracked.lastSeen<6500;
+      if(keepFull){
+       // If at least one identical word moved, translate the retained
+       // whole phrase to the new location rather than flashing its boxes.
+       const common=tracked.words.find(old=>line.words.some(current=>
+        normalized(old.text)===normalized(current.text)&&normalized(old.text)));
+       const fresh=common&&line.words.find(word=>
+        normalized(word.text)===normalized(common.text));
+       if(common&&fresh){
+        const dx=px(fresh.box)-px(common.box);
+        const dy=py(fresh.box)-py(common.box);
+        tracked.box=moveBox(tracked.box,dx,dy);
+        tracked.words=tracked.words.map(w=>({...w,
+         box:moveBox(w.box,dx,dy),
+         ...(Array.isArray(w.points)?{
+          points:w.points.map(p=>({x:p.x+dx,y:p.y+dy}))}:{})}));
+       }
+      }else{
+       tracked.text=cleaned;
+       tracked.key=key;
+       tracked.box=line.box;
+       tracked.words=line.words.filter(w=>w.box&&
+        typeof w.text==="string"&&Number(w.confidence)>=.25);
+       tracked.confidence=confidence;
+       tracked.blockIndex=line.blockIndex;
+       tracked.paragraphIndex=line.paragraphIndex;
+       tracked.lineIndex=line.lineIndex;
+      }
+      tracked.lastSeen=now;
+     }else if(compatible&&tracked.text){
+      // An uncertain partial read confirms the same physical line is still
+      // visible; do not erase or reset confidence on this single frame.
+      tracked.lastSeen=now;
      }
-     tracked.key=key;tracked.box=line.box;tracked.lastSeen=now;
     }
-    // Slow neural OCR passes should not erase an otherwise static document
-    // between updates; tracked boxes have a bounded 2.8s TTL.
-    regions=regions.filter(t=>now-t.lastSeen<=2800);
-    const active=regions.filter(t=>t.text&&now-t.lastSeen<=2800);
-    active.sort((a,b)=>{
-     const ya=py(a.box),yb=py(b.box);
-     if(Math.abs(ya-yb)>Math.max(12,(a.box.y1-a.box.y0)*.5))
-      return ya-yb;
-     return a.box.x0-b.box.x0;
-    });
-    const transcript=Layout?.formatDocument?Layout.formatDocument(active):
-     active.map(x=>x.text).join("\n");
-    return {text:transcript.slice(0,6000),
-     words:active.flatMap(x=>x.words),
-     sourceWidth:payload?.width,sourceHeight:payload?.height};
+    return snapshot(payload?.width,payload?.height,now);
+   },
+   snapshot(now=Date.now(),width=0,height=0){
+    return snapshot(width,height,now);
    },
    reset(){regions=[]}
   };
