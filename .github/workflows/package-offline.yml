@@ -38,6 +38,9 @@ on:
       - "models/ink-stroke-sequence-v1.json"
       - "data/english-words.txt"
   workflow_dispatch:
+concurrency:
+  group: ink-offline-html-main
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
