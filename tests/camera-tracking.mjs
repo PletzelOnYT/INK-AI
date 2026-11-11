@@ -17,6 +17,27 @@ assert.ok(valid.confidence<=.83,
  "Dictionary correction must never inflate model confidence");
 assert.equal(core.decodePrintedWord(preds("JmzS"),["nancy","thank"]),null,
  "Unrelated dictionary entries must not be invented from visual noise");
+// When a printed glyph is ambiguous in one frame, aggregate its actual
+// neural probabilities over multiple frames rather than forcing a word.
+const evidence=core.createGlyphEvidenceTracker();
+const fusionBox={x0:30,y0:20,x1:170,y1:46};
+const fusionPolygon=[{x:30,y:20},{x:170,y:20},{x:170,y:46},{x:30,y:46}];
+const glyphs=(noisy=false)=>[..."Thank"].map((ch,i)=>({top:
+ noisy&&i===2?[{char:"m",confidence:.41},{char:ch,confidence:.40}]:
+ [{char:ch,confidence:.84},{char:"m",confidence:.07}]}));
+const input=predictions=>({box:fusionBox,polygon:fusionPolygon,
+ angle:20,predictions});
+assert.equal(evidence.update([input(glyphs(true))],2000).length,0);
+let joined=evidence.update([input(glyphs())],2160);
+assert.equal(joined.length,1);
+assert.equal(joined[0].predictions.map(p=>p.top[0].char).join(""),"Thank");
+joined=evidence.update([input(glyphs())],2300);
+const fusedWord=core.decodePrintedWord(joined[0].predictions,["thank","think"]);
+assert.equal(fusedWord.text,"Thank");
+assert.ok(fusedWord.confidence<.9,
+ "Evidence fusion must not invent certainty absent from the source CNN");
+evidence.reset();
+assert.equal(evidence.update([],2500).length,0);
 const b={x0:120,y0:75,x1:310,y1:110},poly=[
  {x:120,y:75},{x:310,y:75},{x:310,y:110},{x:120,y:110}];
 const item={text:"Chromebook",confidence:.82,box:b,polygon:poly,angle:28};
