@@ -8,8 +8,14 @@ const shell=read("src/index.shell.html");
 const css=read("src/app.css");
 const build=read("scripts/build_standalone.py");
 assert.doesNotThrow(()=>new vm.Script(camera));
-assert.ok(!/Tesseract|tesseract\.js|cdn\.jsdelivr|createWorker\(["']eng/.test(camera),
- "Camera must not load a third-party OCR engine");
+const offline=read("src/camera_offline_engine_entry.mjs");
+const bridge=read("src/camera_offline_bridge.js");
+assert.doesNotThrow(()=>new vm.Script(bridge));
+assert.match(camera,/window\.InkOfflineCamera\.connect\(\)/);
+assert.match(camera,/offlineClient\.recognize\(video\)/);
+assert.match(bridge,/InkOfflineOCR\.create\(\)/);
+assert.doesNotMatch(offline,/\bfetch\s*\(/,
+ "Bundled WebAssembly engine may not fetch assets at runtime");
 assert.ok(!/fetch\s*\(\s*["'`]https?:|\bXMLHttpRequest\b/.test(camera),
  "Camera may load its own repository models but must not use remote OCR");
 assert.match(camera,/__inkCameraRecognize\(misses\.map\(i=>images\[i\]\)\)/);
@@ -51,5 +57,8 @@ assert.match(camera,/captureWidth=1200/);
 assert.match(read("src/camera_text_detector.js"),/paperLum>155&&pixelLum<155/);
 assert.match(build,/inkLineModel/);
 assert.match(build,/\+line_runtime\+/);
+assert.match(build,/ocr_bundle_file/);
+assert.match(build,/\+ocr_bundle\+/);
+assert.match(build,/\+offline_bridge\+/);
 assert.match(build,/\+camera\+/);
-console.log("PASS: first-party camera OCR, white overlay, integrated standalone source");
+console.log("PASS: bundled local browser OCR, first-party fallback, white overlay and standalone build");
