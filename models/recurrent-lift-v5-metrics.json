@@ -1,0 +1,234 @@
+{
+  "eligible": false,
+  "candidate_version": 5,
+  "source": "models/ink-stroke-prefix-domain-v2.json",
+  "calibration_glyphs": 1551,
+  "independent_writer_glyphs": 1550,
+  "real_training_glyphs": 6210,
+  "seen": 140000,
+  "baseline": {
+    "calibration": {
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "true_lifts": 673,
+      "predicted_lifts": 0,
+      "true_positive": 0,
+      "false_positive": 0,
+      "normal_pen_down_accuracy": 1.0
+    },
+    "independent": {
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "true_lifts": 679,
+      "predicted_lifts": 0,
+      "true_positive": 0,
+      "false_positive": 0,
+      "normal_pen_down_accuracy": 1.0
+    },
+    "position": {
+      "prefix_frame_position_error": 0.335994,
+      "pen_lift_f1": 0.0,
+      "pen_lift_precision": 0.0,
+      "pen_lift_recall": 0.0,
+      "eval_steps": 14544,
+      "cut_errors": {
+        "8": 0.393784,
+        "13": 0.333716,
+        "21": 0.277039
+      }
+    }
+  },
+  "candidate": {
+    "calibration": {
+      "pen_lift_f1": 0.085856,
+      "pen_lift_precision": 0.056954,
+      "pen_lift_recall": 0.174312,
+      "true_lifts": 545,
+      "predicted_lifts": 1668,
+      "true_positive": 95,
+      "false_positive": 1573,
+      "normal_pen_down_accuracy": 0.968572
+    },
+    "independent": {
+      "pen_lift_f1": 0.068484,
+      "pen_lift_precision": 0.044225,
+      "pen_lift_recall": 0.151694,
+      "true_lifts": 679,
+      "predicted_lifts": 2329,
+      "true_positive": 103,
+      "false_positive": 2226,
+      "normal_pen_down_accuracy": 0.96508
+    },
+    "position": {
+      "prefix_frame_position_error": 0.967328,
+      "pen_lift_f1": 0.061598,
+      "pen_lift_precision": 0.033684,
+      "pen_lift_recall": 0.359551,
+      "eval_steps": 14544,
+      "cut_errors": {
+        "8": 1.105668,
+        "13": 0.940287,
+        "21": 0.848954
+      }
+    }
+  },
+  "best": {
+    "epoch": 6,
+    "train_loss": 0.4419,
+    "calibration": {
+      "pen_lift_f1": 0.085856,
+      "pen_lift_precision": 0.056954,
+      "pen_lift_recall": 0.174312,
+      "true_lifts": 545,
+      "predicted_lifts": 1668,
+      "true_positive": 95,
+      "false_positive": 1573,
+      "normal_pen_down_accuracy": 0.968572
+    },
+    "offset": 0.375,
+    "seen": 105000,
+    "seconds": 60.2,
+    "score": 0.10038458
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.658677,
+      "calibration": {
+        "pen_lift_f1": 0.040179,
+        "pen_lift_precision": 0.028869,
+        "pen_lift_recall": 0.066055,
+        "true_lifts": 545,
+        "predicted_lifts": 1247,
+        "true_positive": 36,
+        "false_positive": 1211,
+        "normal_pen_down_accuracy": 0.975805
+      },
+      "offset": -0.75,
+      "seen": 17500,
+      "seconds": 60.4
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.583567,
+      "calibration": {
+        "pen_lift_f1": 0.08325,
+        "pen_lift_precision": 0.057281,
+        "pen_lift_recall": 0.152294,
+        "true_lifts": 545,
+        "predicted_lifts": 1449,
+        "true_positive": 83,
+        "false_positive": 1366,
+        "normal_pen_down_accuracy": 0.972708
+      },
+      "offset": -0.5,
+      "seen": 35000,
+      "seconds": 60.0
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.506908,
+      "calibration": {
+        "pen_lift_f1": 0.077732,
+        "pen_lift_precision": 0.051766,
+        "pen_lift_recall": 0.155963,
+        "true_lifts": 545,
+        "predicted_lifts": 1642,
+        "true_positive": 85,
+        "false_positive": 1557,
+        "normal_pen_down_accuracy": 0.968892
+      },
+      "offset": 0.125,
+      "seen": 52500,
+      "seconds": 60.0
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.466139,
+      "calibration": {
+        "pen_lift_f1": 0.08269,
+        "pen_lift_precision": 0.054952,
+        "pen_lift_recall": 0.166972,
+        "true_lifts": 545,
+        "predicted_lifts": 1656,
+        "true_positive": 91,
+        "false_positive": 1565,
+        "normal_pen_down_accuracy": 0.968732
+      },
+      "offset": 0.25,
+      "seen": 70000,
+      "seconds": 60.4
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.452949,
+      "calibration": {
+        "pen_lift_f1": 0.067251,
+        "pen_lift_precision": 0.045786,
+        "pen_lift_recall": 0.126606,
+        "true_lifts": 545,
+        "predicted_lifts": 1507,
+        "true_positive": 69,
+        "false_positive": 1438,
+        "normal_pen_down_accuracy": 0.971269
+      },
+      "offset": 0.375,
+      "seen": 87500,
+      "seconds": 60.3
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.4419,
+      "calibration": {
+        "pen_lift_f1": 0.085856,
+        "pen_lift_precision": 0.056954,
+        "pen_lift_recall": 0.174312,
+        "true_lifts": 545,
+        "predicted_lifts": 1668,
+        "true_positive": 95,
+        "false_positive": 1573,
+        "normal_pen_down_accuracy": 0.968572
+      },
+      "offset": 0.375,
+      "seen": 105000,
+      "seconds": 60.2
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.43056,
+      "calibration": {
+        "pen_lift_f1": 0.058233,
+        "pen_lift_precision": 0.040083,
+        "pen_lift_recall": 0.106422,
+        "true_lifts": 545,
+        "predicted_lifts": 1447,
+        "true_positive": 58,
+        "false_positive": 1389,
+        "normal_pen_down_accuracy": 0.972248
+      },
+      "offset": 0.5,
+      "seen": 122500,
+      "seconds": 60.8
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.423666,
+      "calibration": {
+        "pen_lift_f1": 0.065871,
+        "pen_lift_precision": 0.044516,
+        "pen_lift_recall": 0.126606,
+        "true_lifts": 545,
+        "predicted_lifts": 1550,
+        "true_positive": 69,
+        "false_positive": 1481,
+        "normal_pen_down_accuracy": 0.97041
+      },
+      "offset": 0.5,
+      "seen": 140000,
+      "seconds": 60.2
+    }
+  ],
+  "evaluation": "Independent human writers; pen-up F1, precision, recall, false-up specificity and natural vector trajectory drift"
+}
