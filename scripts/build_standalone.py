@@ -136,18 +136,6 @@ models=[
  ("inkEnglishWords","text/plain","data/english-words.txt"),
  ("strokeWorkerSource","text/plain","src/stroke_worker.js"),
 ]
-# Research V5 is optional and NEVER silently replaces the released generator.
-# The UI exposes the checkpoint only as an explicitly selected model.
-research_lift_path=ROOT/"models/ink-stroke-lift-aware-v5-experimental.json"
-if research_lift_path.is_file():
-    research=json.loads(research_lift_path.read_text(encoding="utf-8"))
-    if not (research.get("format")=="ink-online-stroke-mdn-v1" and
-            research.get("training",{}).get("recurrent_lift_v5") is True and
-            research.get("training",{}).get("fine_tuned_own_model")==
-              "models/ink-stroke-prefix-domain-v2.json"):
-        raise RuntimeError("Experimental V5 weights fail identity checks")
-    models.append(("inkStrokeExperimentalV5","application/json",
-                   "models/ink-stroke-lift-aware-v5-experimental.json"))
 # Include the locally trained printed-character CNN when the checked-in
 # checkpoint exists; keep older source builds functional until it is trained.
 if (ROOT/"models/ink-print-cnn-v1.json").is_file():
