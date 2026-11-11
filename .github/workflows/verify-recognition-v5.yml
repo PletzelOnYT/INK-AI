@@ -1,0 +1,86 @@
+name: Verify and release trained recognizer V5 only after browser acceptance
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/app.js"
+      - "scripts/build_standalone.py"
+      - "models/ink-cnn-v5.json"
+      - "tests/recognition-v5-browser.py"
+      - ".github/workflows/verify-recognition-v5.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-recognition-v5-acceptance
+  cancel-in-progress: true
+jobs:
+  validate-v5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify held-out writers and model identity
+        run: |
+          node tests/recognition-v3-metrics.mjs
+          node tests/model-versions-release.mjs
+          python3 - <<'PY'
+          import json
+          v3=json.load(open("models/recognition-v3-metrics.json"))
+          v5=json.load(open("models/recognition-v5-metrics.json"))
+          m=json.load(open("models/ink-cnn-v5.json"))
+          assert v5["eligible"] is True
+          assert v5["independent_pen_v3"]["tested"]>=1100
+          assert v5["independent_pen_v3"]["overall"]>v3["independent_pen_v3"]["overall"]
+          assert v5["best"]["emnist"]["overall"]>=.82
+          assert m["training"]["finetuned_from"]=="models/ink-cnn-v3.json"
+          assert m["training"]["uji_independent_accuracy"]==v5["independent_pen_v3"]["overall"]
+          print("PASS: V5 independently improves recognition and keeps EMNIST")
+          PY
+      - name: Build real offline V5 canary with its own bundled weights
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts
+          npm run build:ocr
+          INK_RECOGNIZER_PREVIEW_V5=1 python3 scripts/build_standalone.py
+          cp dist/ink-ai-standalone.html index.html
+      - name: Run actual browser recognition and UI regressions
+        id: browser
+        run: |
+          python3 -m pip install --quiet selenium
+          python3 tests/recognition-v5-browser.py
+          python3 tests/camera-mode-controls-browser.py
+          node tests/model-versions-release.mjs
+      - name: Publish V5 acceptance only if real browser passed
+        if: steps.browser.outcome == 'success'
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("models/recognition-v5-metrics.json")
+          result=json.loads(p.read_text())
+          assert result["eligible"] is True
+          result["browser_integration_passed"]=True
+          result["deployable"]=True
+          p.write_text(json.dumps(result,indent=2)+"\n")
+          PY
+          python3 scripts/update_model_graphs.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/recognition-v5-metrics.json docs/recognition-vertical-bars.svg docs/completion-vertical-bars.svg
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Release browser-tested V5 CNN recognition checkpoint"
+          for attempt in 1 2 3 4; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 2
+          done
+          exit 1
