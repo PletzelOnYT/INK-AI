@@ -259,7 +259,7 @@ function trajectorySupport(prefix,paths,label,penUps){
  // A round letter cannot be completed by the MDN's default near-straight
  // ray. Require a measurable arc with enough learned pen coordinates.
  if(curved&&(points<6||longRun<.12||straightness>.945||
-    turn<.65||largestTurn>2.55))
+    turn<.65||turn>9||largestTurn>2.3))
   return {ok:false,why:"straight-or-jittery-curve",rank:-10,
     straightness,turn,points};
  // The first stroke of x/t is not "completed" by making it longer.
@@ -432,7 +432,14 @@ function generateCandidates(m,isFallback=false){
    // The prior 12-rollout search delayed the live drawing by several seconds.
    // Five scored genuine neural rollouts keep diverse candidates while
    // dramatically reducing main suggestion latency. More options remain on Tab.
-   const perLabel=live?(hiddenSize>=300?2:3):(hiddenSize>=300?3:5);
+   const basePerLabel=live?(hiddenSize>=300?2:3):(hiddenSize>=300?3:5);
+   // Older independent neural handwriting model sometimes generates true
+   // rounded arcs where the newer prefix-tuned model only generates lines.
+   // Give it enough chances to find a natural arc, not 12 samples for
+   // every glyph. This fallback is used only when the primary failed.
+   const curvedPreferred=/^[acegoqsACGJOQSU]$/.test(m.preferred||"");
+   const perLabel=isFallback&&curvedPreferred?
+      Math.max(basePerLabel,live?4:7):basePerLabel;
    let previewSent=false;
    for(let j=0;j<options.length;j++){
     const choice=options[j];
