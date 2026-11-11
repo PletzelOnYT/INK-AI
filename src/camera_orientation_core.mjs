@@ -49,7 +49,7 @@ export function estimateTextAngle(rgba,width,height,options={}){
  }
  const n=w*h;
  const quantile=p=>{const stop=Math.ceil(n*p);let sum=0;for(let i=0;i<256;i++){sum+=hist[i];if(sum>=stop)return i}return 255};
- const low=quantile(.05),high=quantile(.95);
+ const low=quantile(.002),high=quantile(.998);
  if(high-low<28)return {angle:null,confidence:0,reason:"low-contrast"};
  let totalSum=0,backgroundSum=0,backgroundCount=0,best=-1,bestT=127;
  for(let i=0;i<256;i++)totalSum+=i*hist[i];
