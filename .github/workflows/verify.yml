@@ -71,6 +71,7 @@ jobs:
           node --check src/camera_line_runtime.js
           node --check src/camera_text_evidence.js
           node --check src/camera_offline_bridge.js
+          node tests/camera-text-evidence.mjs
           node tests/camera-offline-bridge.mjs
           node tests/camera-line-runtime.mjs
           node tests/camera-scene-detector.mjs
