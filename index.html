@@ -24288,7 +24288,9 @@ poison
       // (e.g., "Open House" -> "House" -> "Open House").
       const incomingChars=key.replace(/ /g,"").length;
       const oldChars=tracked.key.replace(/ /g,"").length;
-      const keepFull=compatible&&tracked.text&&incomingChars<oldChars&&
+      const keepFull=compatible&&tracked.text&&
+       (incomingChars<oldChars||
+        (!same&&incomingChars<=oldChars&&tracked.votes<2))&&
        now-tracked.lastSeen<6500;
       if(keepFull){
        // If at least one identical word moved, translate the retained
