@@ -11877,11 +11877,12 @@ function request(cmd,payload){
 }
 // Public, narrow interface for the camera's own OCR pipeline.
 // Reuses INK AI's locally trained CNN; no external camera OCR provider.
+window.__inkPrintReady=false;
 window.__inkCameraRecognize=async images=>{
  if(!loaded||!worker)throw Error("INK AI character model isn't ready");
- const output=[];
+ const output=[],cmd=window.__inkPrintReady?"readPrint":"read";
  for(let i=0;i<images.length;i+=16){
-  const result=await request("read",{images:images.slice(i,i+16)});
+  const result=await request(cmd,{images:images.slice(i,i+16)});
   output.push(...result.predictions);
  }
  return output;
@@ -12325,6 +12326,7 @@ function createWorker(){
  const source=String.raw`
 "use strict";
 let labels=[],c1,c2,c3,f1,f2;
+let printLabels=[],printLayers=null;
 function unpack(layer){
  const raw=atob(layer.weights);
  const w=new Float32Array(raw.length),b=new Float32Array(layer.bias);
@@ -12377,6 +12379,19 @@ function predict(image){
  return {top:probabilities.map((p,i)=>({char:labels[i],confidence:p/sum}))
      .sort((a,b)=>b.confidence-a.confidence).slice(0,5)};
 }
+function predictPrint(image){
+ if(!printLayers)throw Error("Printed CNN unavailable");
+ let a=pool(conv(Float32Array.from(image),printLayers[0],32),12,32);
+ a=pool(conv(a,printLayers[1],16),24,16);
+ a=pool(conv(a,printLayers[2],8),32,8);
+ const logits=dense(dense(a,printLayers[3],true),printLayers[4],false);
+ let high=-Infinity;
+ for(const p of logits)high=Math.max(high,p);
+ const probabilities=Array.from(logits,v=>Math.exp((v-high)/1.25));
+ const sum=probabilities.reduce((a,b)=>a+b,0);
+ return {top:probabilities.map((p,i)=>({char:printLabels[i],confidence:p/sum}))
+  .sort((a,b)=>b.confidence-a.confidence).slice(0,5)};
+}
 self.onmessage=e=>{
  const {id,cmd}=e.data;
  try{
@@ -12388,6 +12403,15 @@ self.onmessage=e=>{
    self.postMessage({id,result:{classes:labels.length}});
   }else if(cmd==="read"){
    self.postMessage({id,result:{predictions:e.data.images.map(predict)}});
+  }else if(cmd==="initPrint"){
+   const m=e.data.model;
+   if(m.format!=="ink-cnn-int8-v1"||m.layers?.length!==5||m.labels?.length!==62)
+    throw Error("Wrong printed CNN format");
+   printLabels=m.labels;
+   printLayers=m.layers.map(unpack);
+   self.postMessage({id,result:{classes:printLabels.length}});
+  }else if(cmd==="readPrint"){
+   self.postMessage({id,result:{predictions:e.data.images.map(predictPrint)}});
   }else throw Error("Unsupported command");
  }catch(error){self.postMessage({id,error:String(error?.message||error)})}
 };
@@ -12451,6 +12475,23 @@ async function load(){
     throw Error("Bad model data");
   createWorker();
   await request("init",{model});
+  // Load the independent printed CNN only when measured on independent fonts.
+  try{
+   let printed=null;
+   const embeddedPrint=document.getElementById("inkPrintModel");
+   if(embeddedPrint)printed=JSON.parse(embeddedPrint.textContent);
+   else if(location.protocol!=="file:"){
+    const p=await fetch("models/ink-print-cnn-v1.json");
+    if(p.ok)printed=await p.json();
+   }
+   if(printed?.format==="ink-cnn-int8-v1"&&printed.labels?.length===62&&
+      printed.training?.heldout_font_count>=2&&
+      printed.training?.heldout_accuracy>=.50){
+    await request("initPrint",{model:printed});
+    window.__inkPrintReady=true;
+    window.__inkPrintAccuracy=printed.training.heldout_accuracy;
+   }
+  }catch(_){/* Use the old CNN until an eligible print model is published. */}
   window.__inkRecognitionVersion=version;
   window.__inkRecognitionAccuracy=model.training?.emnist_test_accuracy||0;
   window.__inkRecognitionPenAccuracy=model.training?.uji_independent_accuracy||null;
