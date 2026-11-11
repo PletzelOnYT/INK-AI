@@ -141,8 +141,19 @@ def main():
     }
     Path("models/recurrent-lift-v5-metrics.json").write_text(json.dumps(report,indent=2))
     if not valid:
-        Path(a.output).unlink(missing_ok=True)
-        print("REJECT: V5 recurrent lift did not pass human-writer and shape gates",flush=True)
-    else:print("PASS V5 recurrent pen-lift and trajectory quality gates",flush=True)
+        # Keep an explicitly labeled, opt-in research checkpoint for people
+        # comparing motion styles. Never replace the release-gated weights.
+        research_path=Path(a.output).with_name(
+            Path(a.output).stem+"-experimental.json")
+        research_path.parent.mkdir(parents=True,exist_ok=True)
+        Path(a.output).replace(research_path)
+        report["research_weights"]=str(research_path)
+        Path("models/recurrent-lift-v5-metrics.json").write_text(
+            json.dumps(report,indent=2))
+        print("RESEARCH ONLY: V5 failed independent-writer quality gates; "
+              "the opt-in checkpoint is preserved separately. "
+              "Validated V2 remains default.",flush=True)
+    else:
+        print("PASS V5 recurrent pen-lift and trajectory quality gates",flush=True)
 
 if __name__=="__main__":main()
