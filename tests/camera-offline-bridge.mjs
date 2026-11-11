@@ -87,4 +87,53 @@ assert.doesNotMatch(source2,/\bfetch\s*\(/,
 assert.match(source2,/cacheMethod:"readOnly"/);
 assert.match(source2,/workerBlobURL:false/);
 assert.match(source2,/workerPath,corePath/);
+
+// Compact real numerals were previously discarded despite 96% OCR certainty
+// and strong visual ink. The exception must NOT allow arbitrary high-contrast
+// garbage or isolated nonnumeric hallucinations.
+const metrics={ok:false,score:.928,contrast:225,edgeRate:.79,
+ verticalStrokeRate:.59,bands:2,reason:"too-many-edges"};
+const fakeContext={getImageData(){return {data:new Uint8ClampedArray(0)}}};
+const scoped={
+ window:{InkTextEvidence:{
+  plausibleWord:()=>true,
+  evidence:(_ctx,box)=>{
+   if(box.x0>=400)return {...metrics,contrast:10,score:.30,bands:0};
+   if(box.x0>=200)return {...metrics,bands:1,score:.904,edgeRate:.71};
+   return metrics;
+  }
+ }},
+ document:{createElement:()=>({getContext:()=>fakeContext})},
+ Math,Number,Map,Set,Date
+};
+vm.runInNewContext(source,scoped);
+const numericWord={text:"22567",confidence:.96,
+ box:{x0:10,y0:10,x1:67,y1:23}};
+const addressWords=[
+ {text:"San",confidence:.96,box:{x0:220,y0:65,x1:252,y1:79}},
+ {text:"Diego",confidence:.96,box:{x0:253,y0:65,x1:302,y1:79}},
+ {text:"CA",confidence:.95,box:{x0:303,y0:65,x1:326,y1:79}}
+];
+const rejectedWord={text:"texture",confidence:.96,
+ box:{x0:100,y0:105,x1:174,y1:118}};
+const rejectedLowContrast={text:"noise",confidence:.96,
+ box:{x0:420,y0:105,x1:485,y1:118}};
+const checked=scoped.window.InkOfflineCamera.checkedPayload({
+ lines:[
+  {text:"22567",confidence:.96,words:[numericWord],box:numericWord.box},
+  {text:"San Diego CA",confidence:.95,words:addressWords,
+   box:{x0:220,y0:65,x1:326,y1:79}},
+  {text:"texture",confidence:.96,words:[rejectedWord],box:rejectedWord.box},
+  {text:"noise",confidence:.96,words:[rejectedLowContrast],box:rejectedLowContrast.box}
+ ]
+},1000,500);
+assert.ok(checked.words.some(w=>w.text==="22567"),
+ "High-confidence compact five-digit receipt number needs visible recognition");
+assert.ok(checked.words.some(w=>w.text==="San"),
+ "High-confidence word supported by a neighboring printed line should survive");
+assert.ok(!checked.words.some(w=>w.text==="texture"),
+ "No general exception for isolated alphabetic texture guesses");
+assert.ok(!checked.words.some(w=>w.text==="noise"),
+ "Low-contrast background must remain excluded");
+
 console.log("PASS: local-only engine, real printed word boxes, stable transcript, no service dependency");
