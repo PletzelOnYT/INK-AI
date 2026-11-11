@@ -6,7 +6,7 @@ const calls=[];
 let painted=0;
 const context={
  setTransform(){},clearRect(){},beginPath(){},roundRect(){},
- rect(){},fill(){painted++},stroke(){},drawImage(){}
+ rect(){},moveTo(){},lineTo(){},closePath(){},fill(){painted++},stroke(){},drawImage(){}
 };
 function canvas(){return {width:0,height:0,getContext:()=>context,
  toBlob:callback=>callback({type:"image/jpeg",size:42188})}}
@@ -19,7 +19,9 @@ const word=(text,x0,x1)=>({text,confidence:.96,box:{x0,y0:22,x1,y1:53}});
 const payload={engine:"apple-vision-local",width:1000,height:500,elapsedMs:75,
  lines:[{text:"NY THREADS",confidence:.96,
   box:{x0:120,y0:22,x1:490,y1:53},
-  words:[word("NY",120,198),word("THREADS",211,490)]}],
+  words:[{...word("NY",120,198),points:[
+   {x:120,y:22},{x:198,y:20},{x:198,y:51},{x:120,y:53}
+  ]},word("THREADS",211,490)]}],
  words:[word("NY",120,198),word("THREADS",211,490)]};
 const fetch=async (url,request)=>{
  calls.push({url,request});
