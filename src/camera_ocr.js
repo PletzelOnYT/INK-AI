@@ -546,6 +546,15 @@ async function scan(id){
    if(!active||id!==epoch||frozen||document.hidden||revision!==freezeRevision)return;
    if(payload){
     const current=offlineClient.track(payload,Date.now());
+    if(window.__inkDebugOCR===true)
+     window.__inkCameraLiveDiagnostics={
+      rawWords:(payload.words||[]).slice(0,25).map(w=>({
+       text:w.text,confidence:w.confidence,box:w.box})),
+      displayedWords:(current.words||[]).slice(0,25).map(w=>w.text),
+      sourceWidth:payload.width,sourceHeight:payload.height,
+      scanMs:Math.round(performance.now()-started),
+      evidence:window.__inkCameraEvidence,
+      motion:window.__inkCameraMotionStats||null};
     window.__inkCameraText=current.text;
     window.__inkCameraWords=current.words;
     latestOCRState=current;
