@@ -1,6 +1,6 @@
 # Real Chrome offline OCR acceptance
 
-**NOT PASSED:** build or browser OCR needs repair. Do not claim production accuracy.
+**PASS:** local standalone HTML recognized text on generated label, color and tilted fixtures while completely offline.
 
 Test fixture: printed NY THREADS and Torrey Pines High School, generated in Chrome.
 No webcam image, cloud OCR, or external recognition request was used.
@@ -16,17 +16,15 @@ Bundling pretrained English OCR: 5199098 bytes
 
   dist/ink-offline-ocr.js  16.8mb ⚠️
 
-⚡ Done in 190ms
-Built completely offline OCR engine: 17658324 bytes
+⚡ Done in 106ms
+Built completely offline OCR engine: 17659113 bytes
 Bundled GRU: models/ink-stroke-prefix-domain-v2.json
-Built independent offline INK AI: /home/runner/work/INK-AI/INK-AI/dist/ink-ai-standalone.html 19371200 bytes
-OFFLINE OCR RESULT: {'elapsedMs': 204.5, 'engine': 'bundled-tesseract-wasm', 'lines': 2, 'text': 'NY THREADS\nTorrey Pines High School', 'words': 6}
+Built independent offline INK AI: /home/runner/work/INK-AI/INK-AI/dist/ink-ai-standalone.html 19371989 bytes
+OFFLINE OCR RESULT: {'elapsedMs': 127.70000000001164, 'engine': 'bundled-tesseract-wasm', 'lines': 2, 'text': 'NY THREADS\nTorrey Pines High School', 'words': 6}
 PASS: GitHub index.html reads real printed text while completely offline
-SCENE {'ms': 176, 'name': 'white-on-black', 'text': 'NY THREADS', 'words': 2}
-SCENE {'ms': 42, 'name': 'dark-on-white-angle-12', 'text': '', 'words': 0}
-Traceback (most recent call last):
-  File "/home/runner/work/INK-AI/INK-AI/tests/camera-ocr-colors-angles-browser.py", line 63, in <module>
-    assert "THREADS" in record["text"].upper(),(
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AssertionError: ('Failed printed text test', {'ms': 42, 'name': 'dark-on-white-angle-12', 'text': '', 'words': 0})
+SCENE {'ms': 105, 'name': 'white-on-black', 'text': 'NY THREADS', 'words': 2}
+SCENE {'ms': 80, 'name': 'dark-on-white-angle-12', 'text': 'NY THREADS', 'words': 2}
+SCENE {'ms': 42, 'name': 'blue-on-yellow', 'text': 'NY THREADS', 'words': 2}
+SCENE {'ms': 118, 'name': 'empty-cabinet-geometry', 'text': '', 'words': 0}
+PASS: offline OCR handles white-on-black, color and angled labels
 ~~~
