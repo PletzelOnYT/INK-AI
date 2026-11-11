@@ -21,6 +21,7 @@ on:
       - "src/train_print_cnn.py"
       - "models/ink-print-cnn-v1.json"
       - "models/print-cnn-v1-metrics.json"
+      - "models/recognition-v4-evaluation-summary.json"
       - "models/recognition-v3-metrics.json"
       - "models/stroke-prefix-domain-v2-metrics.json"
       - ".github/workflows/package-offline.yml"
@@ -61,11 +62,13 @@ jobs:
         run: |
           git fetch origin main
           git reset --hard origin/main
-          python3 scripts/update_model_graphs.py
           {
             npm install --no-audit --no-fund --ignore-scripts
             npm run build:ocr
             python3 scripts/build_standalone.py
+            # Build selects weights and writes docs/current-models.json first.
+            # Only then can the blue chart highlights reflect the actual HTML.
+            python3 scripts/update_model_graphs.py
           } 2>&1 | tee /tmp/ink-offline-ocr-build.log
       - name: Preserve the actual build error when packaging fails
         if: failure()
