@@ -34,6 +34,8 @@ on:
       - "models/ink-stroke-prefix-domain-v4.json"
       - "models/ink-stroke-prefix-domain-v6.json"
       - "models/stroke-prefix-domain-v6-metrics.json"
+      - "models/*-metrics.json"
+      - "scripts/update_model_graphs.py"
       - "models/ink-stroke-prefix-domain-v7.json"
       - "models/stroke-prefix-domain-v7-metrics.json"
       - "models/ink-stroke-lift-aware-v5.json"
@@ -55,6 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Regenerate model history from released evaluation files
+        run: python3 scripts/update_model_graphs.py
       - name: Compile and embed offline pretrained OCR
         run: |
           git fetch origin main
@@ -94,7 +98,7 @@ jobs:
         run: |
           cp dist/ink-ai-standalone.html index.html
           rm -f docs/offline-ocr-build-error.md
-          git add index.html
+          git add index.html docs/recognition-vertical-bars.svg docs/completion-vertical-bars.svg
           git add -u docs/offline-ocr-build-error.md 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
