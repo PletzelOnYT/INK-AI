@@ -71,12 +71,16 @@ jobs:
           result["deployable"]=True
           p.write_text(json.dumps(result,indent=2)+"\n")
           PY
+          git restore -- index.html docs/current-models.json
           python3 scripts/update_model_graphs.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add models/recognition-v5-metrics.json docs/recognition-vertical-bars.svg docs/completion-vertical-bars.svg
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Release browser-tested V5 CNN recognition checkpoint"
+          # The canary build modifies the root HTML and deployed-model manifest.
+          # Never rebase with these uncommitted preview changes present.
+          git reset --hard HEAD
           for attempt in 1 2 3 4; do
             git fetch origin main
             git rebase origin/main
