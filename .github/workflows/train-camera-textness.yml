@@ -1,0 +1,62 @@
+name: Train native INK camera textness AI
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_camera_textness.py"
+      - ".github/workflows/train-camera-textness.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-camera-textness
+  cancel-in-progress: true
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools for own from-scratch CNN
+        run: python3 -m pip install --quiet torch numpy pillow
+      - name: Train on independent fonts and synthetic hard negatives
+        run: python3 src/train_camera_textness.py --epochs 6 --samples 10000
+      - name: Require reproducible benchmark evidence before publishing
+        run: |
+          python3 - <<'PY'
+          import json
+          m=json.load(open("models/camera-textness-v1-metrics.json"))
+          w=json.load(open("models/ink-camera-textness-v1.json"))
+          assert m["trained_from_scratch"] and m["publishable_synthetic"]
+          assert m["heldout_font_count"]>=2
+          assert m["validation_examples"]>=2500
+          assert m["heldout_text_recall"]>=.88
+          assert m["heldout_clutter_false_positive_rate"]<=.035
+          assert m["real_camera_accuracy"] is None
+          assert w["format"]=="ink-textness-cnn-int8-v1"
+          assert len(w["layers"])==5
+          PY
+      - name: Rebase native checkpoint onto latest source and package HTML
+        run: |
+          cp models/ink-camera-textness-v1.json /tmp/ink-camera-textness-v1.json
+          cp models/camera-textness-v1-metrics.json /tmp/camera-textness-v1-metrics.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/ink-camera-textness-v1.json models/ink-camera-textness-v1.json
+          cp /tmp/camera-textness-v1-metrics.json models/camera-textness-v1-metrics.json
+          node --check src/camera_tracking.js
+          node --check src/camera_ocr.js
+          node --check src/camera_text_detector.js
+          node tests/camera-local-ocr.mjs
+          node tests/camera-scene-detector.mjs
+          python3 scripts/build_standalone.py
+          cp dist/ink-ai-standalone.html index.html
+      - name: Save native model weights, exact metrics and root HTML
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/ink-camera-textness-v1.json models/camera-textness-v1-metrics.json index.html
+          if ! git diff --cached --quiet; then
+            git commit -m "Train native scene textness CNN and update INK standalone HTML"
+            git push origin HEAD:main
+          fi
