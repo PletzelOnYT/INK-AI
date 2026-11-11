@@ -61,6 +61,9 @@ models=[
 # checkpoint exists; keep older source builds functional until it is trained.
 if (ROOT/"models/ink-print-cnn-v1.json").is_file():
     models.append(("inkPrintModel","application/json","models/ink-print-cnn-v1.json"))
+# Dedicated native text-vs-background CNN (published only after synthetic tests).
+if (ROOT/"models/ink-camera-textness-v1.json").is_file():
+    models.append(("inkTextnessModel","application/json","models/ink-camera-textness-v1.json"))
 tags=[]
 for ident,kind,path in models:
     content=(ROOT/path).read_text(encoding="utf-8")
