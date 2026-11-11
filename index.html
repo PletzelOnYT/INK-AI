@@ -11118,19 +11118,33 @@ function completionInput(){
  for(let i=recent.length-2;i>=Math.max(0,recent.length-7);i--){
   const n=bounds(recent[i]);
   const dx=Math.max(0,n.l-box.r,box.l-n.r),dy=Math.max(0,n.t-box.b,box.t-n.b);
-  if(dx>48||dy>65||Math.max(box.r,n.r)-Math.min(box.l,n.l)>280)break;
+  // Adjacent letters in a word can be only 12–30px apart. The old 48px
+  // proximity threshold combined their strokes into an impossible "glyph".
+  // A multi-stroke letter must actually share horizontal ink coverage or
+  // have strokes touching, including i/j dots and crossing x/t strokes.
+  const overlapX=Math.min(n.r,box.r)-Math.max(n.l,box.l);
+  const overlapY=Math.min(n.b,box.b)-Math.max(n.t,box.t);
+  const minWidth=Math.max(1,Math.min(n.r-n.l,box.r-box.l));
+  const touching=dx<=Math.max(4,Math.min(10,(box.b-box.t)*.055))&&overlapY>0;
+  const sameGlyph=overlapX>=Math.max(1,minWidth*.12)||touching;
+  if(!sameGlyph||dy>65||
+     Math.max(box.r,n.r)-Math.min(box.l,n.l)>280)break;
   group.unshift(recent[i]);
   box={l:Math.min(box.l,n.l),r:Math.max(box.r,n.r),
        t:Math.min(box.t,n.t),b:Math.max(box.b,n.b)};
  }
- const frameSize=Math.max(105,Math.min(290,Math.max(box.r-box.l,box.b-box.t)*1.4));
- const frame={x:box.l-frameSize*.16,y:box.t-frameSize*.16,size:frameSize};
+ // The released GRU was trained with glyphs centered at (.5,.5), spanning
+ // about .68 of its normalized frame. Match that actual training scale.
+ // Frame coordinates depend only on strokes already drawn, never future ink.
+ const frameSize=Math.max(105,Math.min(290,Math.max(box.r-box.l,box.b-box.t)/.68));
+ const frame={x:(box.l+box.r-frameSize)/2,
+   y:(box.t+box.b-frameSize)/2,size:frameSize};
  const prefix=[];let prev=[frame.x,frame.y];
  for(const stroke of group){
   const pts=stroke.points,selected=[pts[0]];
   for(let j=1;j<pts.length;j++){
    const p=pts[j],q=selected[selected.length-1];
-   if(Math.hypot(p[0]-q[0],p[1]-q[1])>=Math.max(4,frameSize*.019)||
+   if(Math.hypot(p[0]-q[0],p[1]-q[1])>=Math.max(3,frameSize*.025)||
       j===pts.length-1)selected.push(p);
   }
   for(let j=0;j<selected.length;j++){
@@ -11141,20 +11155,28 @@ function completionInput(){
  }
  if(prefix.length<2)return null;
  if(prefix.length>85){
-  // Reframe only the current stroke; never truncate away the absolute token.
-  const p=group[group.length-1].points,selected=[];
-  const stride=Math.max(1,Math.ceil(p.length/55));
-  for(let j=0;j<p.length;j+=stride)selected.push(p[j]);
-  if(selected.length<2)return null;
-  const b=bounds(group[group.length-1]);
-  const sz=Math.max(105,Math.min(290,Math.max(b.r-b.l,b.b-b.t)*1.4));
-  const f={x:b.l-sz*.16,y:b.t-sz*.16,size:sz};
-  let prev=[f.x,f.y],short=[];
-  selected.forEach((p,j)=>{
-   short.push([(p[0]-prev[0])/sz,(p[1]-prev[1])/sz,j?1:0]);
-   prev=p;
-  });
-  return {frame:f,prefix:short,box:b};
+  // Keep ALL stroke starts and ends when a fast pen supplies many pointer
+  // events. The previous fallback kept only the LAST stroke, destroying
+  // multi-stroke letters and forcing the model to complete the wrong glyph.
+  let reduction=Math.max(2,Math.ceil(prefix.length/74)),short=[];
+  do{
+   short=[];let prev=[frame.x,frame.y];
+   for(const stroke of group){
+    const pts=stroke.points;
+    const selected=[pts[0]];
+    for(let j=reduction;j<pts.length-1;j+=reduction)selected.push(pts[j]);
+    selected.push(pts.at(-1));
+    for(let j=0;j<selected.length;j++){
+     const p=selected[j];
+     short.push([(p[0]-prev[0])/frameSize,
+       (p[1]-prev[1])/frameSize,j?1:0]);
+     prev=p;
+    }
+   }
+   reduction++;
+  }while(short.length>85&&reduction<=120);
+  if(short.length>85)return null;
+  return {frame,prefix:short,box,group};
  }
  return {frame,prefix,box,group};
 }
