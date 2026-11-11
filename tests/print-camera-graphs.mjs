@@ -24,6 +24,22 @@ assert.match(readme,/Graph update rule/);
 assert.match(shell,/id="cameraHighlights"/);
 assert.ok(!/Tesseract|cdn\.|api\.openai\.com/.test(camera));
 assert.ok(printed.startsWith("<svg")&&systems.startsWith("<svg"));
+const recognizer=get("docs/recognition-vertical-bars.svg");
+for(const [name,svg] of [["camera",printed],["all-systems",systems]]){
+ assert.match(svg,/width="850" height="465" viewBox="0 0 850 465"/,
+   name+" must use the same dimensions as the existing benchmark charts");
+ assert.match(svg,/<rect width="850" height="465" fill="#fff"\/>/,
+   name+" must match the original white chart background");
+ assert.match(svg,/x1="90" y1="360" x2="800" y2="360"/,
+   name+" must have the vertical chart baseline");
+ assert.match(svg,/x1="90" y1="100" x2="800" y2="100"/,
+   name+" must have the vertical chart grid");
+ assert.match(svg,/fill="#4285f4"/,name+" needs blue vertical measured bars");
+ assert.match(svg,/text-anchor="middle"/,name+" needs centered bar labels");
+ assert.doesNotMatch(svg,/width="665" height="23"/,
+   name+" must not regress to horizontal bars");
+}
+assert.match(recognizer,/width="850" height="465"/);
 const report="models/print-cnn-v1-metrics.json";
 if(fs.existsSync(report)){
  const m=JSON.parse(get(report));
