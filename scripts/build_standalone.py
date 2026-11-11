@@ -82,6 +82,18 @@ if v6_file.is_file():
         stroke_path="models/ink-stroke-prefix-domain-v6.json"
     elif os.environ.get("INK_STROKE_PREVIEW_V6")=="1":
         stroke_path="models/ink-stroke-prefix-domain-v6.json"
+# V7 may replace the published GRU ONLY after independent real-writer
+# pen-lift, EOS and trajectory benchmarks AND actual Chrome path acceptance.
+v7_file=ROOT/"models/ink-stroke-prefix-domain-v7.json"
+v7_report=ROOT/"models/stroke-prefix-domain-v7-metrics.json"
+if v7_file.is_file():
+    trial=json.loads(v7_report.read_text()) if v7_report.is_file() else {}
+    if (trial.get("eligible") is True and
+        trial.get("deployable") is True and
+        trial.get("browser_integration_passed") is True):
+        stroke_path="models/ink-stroke-prefix-domain-v7.json"
+    elif os.environ.get("INK_STROKE_PREVIEW_V7")=="1":
+        stroke_path="models/ink-stroke-prefix-domain-v7.json"
 print("Bundled GRU:",stroke_path)
 models=[
  ("inkRecognitionModel","application/json",
