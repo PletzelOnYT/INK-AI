@@ -56,8 +56,28 @@ try:
         g.fillStyle="#f9f9f5";g.fillRect(0,0,960,540);
         const blank=await window.InkCameraHandwriting.recognize(
           canvas,960,540);
+        // End-to-end camera fusion: intentionally supply an OCR worker with
+        // no printed detections to verify the handwritten route is actually
+        // accepted, visually checked, and exposed through the camera bridge.
+        g.font="italic 56px cursive";g.fillStyle="#1a2430";
+        g.fillText("handwriting example",125,260);
+        Object.defineProperty(canvas,"videoWidth",{value:960});
+        Object.defineProperty(canvas,"videoHeight",{value:540});
+        const originalCreate=window.InkOfflineOCR.create;
+        window.InkOfflineOCR.create=async()=>({
+          recognize:async()=>({width:960,height:540,lines:[],words:[]})
+        });
+        let fused;
+        try{
+          const camera=await window.InkOfflineCamera.connect();
+          await camera.recognize(canvas);
+          fused=await camera.recognize(canvas);
+          camera.reset();
+        }finally{window.InkOfflineOCR.create=originalCreate}
         done({ok:true,modelCalls,modelGlyphs,results,
           blankLines:blank.lines.length,
+          fusedWords:fused.words.map(w=>w.text),
+          fusedText:fused.lines.map(line=>line.text).join(" "),
           version:window.__inkRecognitionVersion,rawSamples,printSamples});
       })().catch(error=>done({ok:false,error:String(error.stack||error)}));
     """)
@@ -67,6 +87,8 @@ try:
     assert result["blankLines"]==0, result
     assert result["results"][0]["text"], result
     assert result["results"][1]["text"], result
+    assert result["results"][1]["text"]=="handwriting example", result
+    assert result["fusedWords"], "Camera rejected all model readings: "+str(result)
     print("PASS: offline Chrome invokes shipped handwriting CNN on actual camera-style glyph pixels", flush=True)
     print("HANDWRITING_DIAGNOSTICS",result,flush=True)
 finally:
