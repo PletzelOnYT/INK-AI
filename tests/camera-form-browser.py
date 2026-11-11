@@ -37,13 +37,14 @@ try:
         };
         const collected=[];
         async function readFrames(n){
-          const seen=[],sources=[];
+          const seen=[],sources=[],focus=[];
           for(let i=0;i<n;i++){
             const output=await engine.recognize(canvas,1280,720);
             seen.push(output.text);
             sources.push(output.enhancement||"ordinary");
+            focus.push(window.__inkDocumentFocusStats||null);
           }
-          return {seen,sources,all:seen.join("\\n")};
+          return {seen,sources,focus,all:seen.join("\\n")};
         }
         // Strong headline and address at left; small gray date/receipt
         // table at lower-right. Large text cannot preempt small fields.
@@ -66,6 +67,23 @@ try:
         text("RECEIPT NUMBER",722,459,"bold 17px Arial");
         text("22567",781,500,"bold 20px Arial");
         collected.push({name:"receipt",...(await readFrames(9))});
+        // Harder receipt: the clearly readable heading competes with
+        // much smaller shaded date/number cells at the edge of the view.
+        set("#d9dad2");
+        c.fillStyle="#fcfcf9";c.fillRect(480,185,640,528);
+        text("RECEIPT",755,281,"bold 38px Arial");
+        text("Torrey Pines High School",515,322,"bold 25px Arial");
+        text("3710 Del Mar Heights Rd",515,354,"19px Arial");
+        text("San Diego, CA 92130",515,382,"19px Arial");
+        c.fillStyle="#cccac6";c.fillRect(801,470,235,35);
+        border(801,470,235,78);
+        text("DATE",895,495,"bold 13px Arial");
+        text("August 12, 2026",840,530,"13px Arial","#343537");
+        c.fillStyle="#c7c5c1";c.fillRect(801,560,235,35);
+        border(801,560,235,83);
+        text("RECEIPT NUMBER",833,583,"bold 12px Arial");
+        text("22567",893,627,"bold 14px Arial");
+        collected.push({name:"distant-receipt",...(await readFrames(10))});
         // Colored print and reversed polarities must both produce actual
         // recognized tokens, never be replaced by expected document labels.
         set("#211c53");
@@ -91,6 +109,10 @@ try:
     assert "august" in receipt and "2026" in receipt, (
       "Receipt date was missed: "+repr(receipt))
     assert "receipt" in receipt, "Receipt heading regressed"
+    focus=result["cases"][1]["focus"]
+    assert any(f and f["attempts"]>=1 for f in focus), (
+      "Focused document recovery did not run")
+    assert all(f is None or f["words"]>=0 for f in focus)
     print("PASS: offline Chrome reads small receipt date and serial below clear headings",flush=True)
 finally:
     driver.quit()
