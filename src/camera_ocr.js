@@ -72,6 +72,7 @@ function stop(){
  if(stream)stream.getTracks().forEach(t=>t.stop());
  stream=null;video.pause();video.srcObject=null;
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
+ button.title="Read text with webcam";
  tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
  if(lineRuntime){lineRuntime.terminate();lineRuntime=null}
  if(visionClient){visionClient.reset();visionClient=null}
@@ -638,9 +639,11 @@ async function start(){
   }
   if(visionClient){
    window.__inkCameraEngine="apple-vision-local";
+   button.title="Apple Vision on-device OCR is active";
    show("Apple Vision ready — point the camera at any text.");
   }else{
    window.__inkCameraEngine="ink-print-cnn-rotated";
+   button.title="Experimental INK OCR. For native Mac accuracy launch: bash mac/start-ink-vision.sh";
    show("Point the camera at clear text.");
    loadNativeLineOCR();
   }
