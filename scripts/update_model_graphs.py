@@ -53,126 +53,112 @@ def format_score(value, kind):
 
 def graph(title, subtitle, rows, first_name, second_name,
           first_max, second_max, first_kind, second_kind, notes, target):
-    """Two vertically stacked milestone timelines; each panel is one metric.
-
-    Dashed connectors show the measured sequence of experiments, not a
-    guaranteed improvement or proof that successive candidates were released.
-    Only the exact deployed-model weight from the build manifest gets blue.
-    """
-    active = [r for r in rows if r["active"]]
-    if len(active) != 1:
-        raise ValueError(f"{title}: exactly one deployed checkpoint required")
-    if len(rows) < 2:
-        raise ValueError("Need two or more model milestones")
-    width = max(1240, len(rows) * 160 + 180)
-    left, right = 112, width - 74
-    panel_height = 294
-    first_panel = 170
-    height = first_panel + 2 * panel_height + 112
-    white, ink, muted, grid, blue, gray = (
-        "#ffffff", "#111827", "#64748b", "#e2e8f0", "#2563eb", "#94a3b8")
-    xcoords = [left + (right-left)*i/(len(rows)-1) for i in range(len(rows))]
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
-           f'height="{height}" viewBox="0 0 {width} {height}" '
-           f'role="img" aria-label="{escape(title)}">',
-           rect(0, 0, width, height, white),
-           '<g font-family="Arial,Helvetica,sans-serif">',
-           text(36, 46, title, 29, ink, "700"),
-           text(36, 73, subtitle, 15, muted),
-           rect(37, 94, 12, 12, blue, radius=6),
-           text(60, 106, "Blue node = model deployed in index.html", 13, ink),
-           rect(425, 94, 12, 12, gray, radius=6),
-           text(448, 106, "Gray = earlier version / trial", 13, muted),
-           text(785, 106, "Dotted line = measured trial history; not guaranteed improvement",
-                13, muted),
-           text(36, 132, "Milestones ordered by version (not calendar date)", 12, muted)]
-    for panel, (field, name, high, kind) in enumerate(
-        (("first", first_name, first_max, first_kind),
-         ("second", second_name, second_max, second_kind))):
-        top = first_panel + panel * panel_height
-        plot_top, plot_bottom = top + 46, top + 185
-        out.append(text(36, top+4, name, 18, ink, "700"))
-        out.append(text(width-40, top+4,
-                        "LOWER IS BETTER" if kind == "error" else "HIGHER IS BETTER",
-                        12, muted, anchor="end"))
-        for grid_index in range(5):
-            number = high * grid_index/4
-            y = (plot_top + (number/high)*(plot_bottom-plot_top)
-                 if kind == "error" else
-                 plot_bottom - (number/high)*(plot_bottom-plot_top))
-            out.append(f'<line x1="{left-6:.1f}" y1="{y:.1f}" '
-                       f'x2="{right+6:.1f}" y2="{y:.1f}" stroke="{grid}"/>')
-            out.append(text(left-15, y+4, format_score(number, kind),
-                            12, muted, anchor="end"))
-        scored = []
-        for i, row in enumerate(rows):
-            value = row[field]
-            if value is None:
-                continue
-            y = (plot_top + value/high*(plot_bottom-plot_top)
-                 if kind == "error" else
-                 plot_bottom - value/high*(plot_bottom-plot_top))
-            # Axis bounds must include every nonmissing score; do not clip
-            # failures merely to make the progress line look better.
-            if not plot_top-0.01 <= y <= plot_bottom+0.01:
-                raise ValueError(f"Score outside axis: {row['name']} / {name}: {value}")
-            scored.append((i, xcoords[i], y))
-        # Each dot is a distinct milestone. The dashed link is a visual
-        # experiment history rather than a continuous model family.
-        for first, second in zip(scored, scored[1:]):
-            ax, ay, bx, by = first[1], first[2], second[1], second[2]
-            out.append(f'<path d="M {ax:.1f} {ay:.1f} L {bx:.1f} {by:.1f}" '
-                       f'fill="none" stroke="#cbd5e1" stroke-width="2.5" '
-                       f'stroke-dasharray="7 6" />')
-        for i, row in enumerate(rows):
-            x = xcoords[i]
-            value = row[field]
-            used = row["active"]
-            out.append(
-                f'<g data-model="{escape(row["name"])}" '
-                f'data-active="{str(used).lower()}" '
-                f'data-weight="{escape(row["weights"])}" '
-                f'data-metric="{field}">')
-            if value is None:
-                if panel == 0 and row.get("legacy"):
-                    out.append(text(x, plot_top+26, row["legacy"],
-                                    12, muted, anchor="middle"))
-                    out.append(text(x, plot_top+44, "different benchmark",
-                                    10, muted, anchor="middle"))
-                else:
-                    out.append(text(x, plot_bottom-9, "unmeasured",
-                                    11, muted, anchor="middle"))
+    """Compact milestone lines. Names and real scores only; detailed data in SVG tooltips."""
+    if sum(row["active"] for row in rows) != 1:
+        raise ValueError("Exactly one model per chart must be the deployed checkpoint")
+    # Keep the wide version histories readable in GitHub's narrower README.
+    width = 1000 if len(rows) <= 6 else 1260
+    height = 572
+    left, right = 95, width - 40
+    xs = [left + (right-left)*i/(len(rows)-1) for i in range(len(rows))]
+    blue, gray, ink, faint = "#2563eb", "#94a3b8", "#172033", "#e5e7eb"
+    out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img" aria-label="{escape(title)}">',
+        rect(0, 0, width, height, "#ffffff"),
+        '<g font-family="Arial,Helvetica,sans-serif">',
+        text(30, 43, title.replace(" — every model version", ""), 30, ink, "700"),
+        '<circle cx="36" cy="66" r="6" fill="#2563eb"/>',
+        text(49, 71, "In use", 14, blue, "600"),
+    ]
+    panel_top = (96, 315)
+    for panel, (key, label, scale, kind) in enumerate((
+        ("first", first_name, first_max, first_kind),
+        ("second", second_name, second_max, second_kind))):
+        top = panel_top[panel]
+        ytop, ybottom = top + 42, top + 155
+        out.append(text(30, top+10, label, 19, ink, "600"))
+        valid = [row[key] for row in rows if row[key] is not None]
+        # Each panel has an honest visible scale, tightly framing the scores.
+        # We do not invent missing values or clip poor-performing trials.
+        if valid:
+            lo, hi = min(valid), max(valid)
+            if kind == "percent":
+                lo = max(0, math.floor((lo - 1.5)/5)*5)
+                hi = min(100, math.ceil((hi + 1.5)/5)*5)
             else:
-                y = (plot_top + value/high*(plot_bottom-plot_top)
-                     if kind == "error" else
-                     plot_bottom - value/high*(plot_bottom-plot_top))
-                if used:
-                    out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="12.5" '
-                               f'fill="#dbeafe" stroke="{blue}" stroke-width="2"/>')
+                margin = max(.02, (hi-lo)*.16)
+                lo = max(0, math.floor((lo-margin)*100)/100)
+                hi = math.ceil((hi+margin)*100)/100
+            if hi <= lo:
+                hi = lo + (10 if kind == "percent" else .1)
+        else:
+            lo, hi = 0, scale
+        for t in range(3):
+            v = lo+(hi-lo)*t/2
+            yy = ybottom - (v-lo)/(hi-lo)*(ybottom-ytop)
+            out.append(f'<line x1="{left-9:.1f}" y1="{yy:.1f}" '
+                       f'x2="{right+9:.1f}" y2="{yy:.1f}" '
+                       f'stroke="{faint}" stroke-width="1"/>')
+            out.append(text(left-15, yy+5, format_score(v,kind),
+                            12, "#667085", anchor="end"))
+        # A dash between consecutive measured versions is a timeline, not a
+        # claim of monotonic progress. Missing measurements break the line.
+        positions = []
+        for i, row in enumerate(rows):
+            value = row[key]
+            positions.append(
+                None if value is None
+                else (xs[i],ybottom-(value-lo)/(hi-lo)*(ybottom-ytop)))
+        for p, q in zip(positions, positions[1:]):
+            if p and q:
+                out.append(f'<path d="M {p[0]:.1f} {p[1]:.1f} L {q[0]:.1f} {q[1]:.1f}" '
+                           f'fill="none" stroke="#cbd5e1" stroke-width="2.5" '
+                           f'stroke-dasharray="5 4"/>')
+        for i, row in enumerate(rows):
+            x, value = xs[i], row[key]
+            active = row["active"]
+            out.append(f'<g data-model="{escape(row["name"])}" '
+                       f'data-active="{str(active).lower()}" '
+                       f'data-weight="{escape(row["weights"])}" data-metric="{key}">')
+            details = (f'{row["name"]} | {row["status"]} | {label}: '
+                       f'{format_score(value,kind) if value is not None else row.get("legacy") or "N/A"}')
+            out.append(f'<title>{escape(details)}</title>')
+            if value is None:
+                # Legacy sequence models have an NLL rather than a trajectory
+                # measurement; display the actual NLL without faking a dot.
+                legacy = row.get("legacy") if key == "first" else None
+                if legacy:
+                    out.append(text(x, ybottom-12, legacy, 12, "#667085",
+                                    anchor="middle"))
+                else:
+                    out.append(text(x, ybottom-12, "—", 18, gray, anchor="middle"))
+            else:
+                y = positions[i][1]
+                if active:
+                    out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="13" '
+                               'fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>')
                 out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" '
-                           f'r="{7.5 if used else 6.5}" '
-                           f'fill="{blue if used else white if row["status"]=="REJECTED" else gray}" '
-                           f'stroke="{blue if used else gray}" stroke-width="2.6"/>')
-                label_y = y - 17
-                # Avoid touching the top boundary; place extreme scores below.
-                if label_y < plot_top + 4:
-                    label_y = y + 24
-                out.append(text(x, label_y, format_score(value, kind),
-                                14, blue if used else "#334155",
-                                "700" if used else "500", "middle"))
-            out.append(text(x, plot_bottom+28, row["name"], 13,
-                            blue if used else ink, "700" if used else "500",
-                            "middle"))
-            status = "IN USE" if used else row["status"]
-            out.append(text(x, plot_bottom+47, status, 11,
-                            blue if used else muted, "700" if used else "400",
-                            "middle"))
+                           f'r="{8 if active else 6.5}" '
+                           f'fill="{blue if active else "#ffffff"}" '
+                           f'stroke="{blue if active else gray}" stroke-width="2.8"/>')
+                score_y = y-18
+                if score_y < ytop+5:
+                    score_y = y+30
+                out.append(text(x, score_y, format_score(value,kind),
+                                15 if active else 13, blue if active else ink,
+                                "700" if active else "500", "middle"))
+            if panel == 1:
+                label_name = row["name"].replace("Sequence ","Seq ").replace(
+                    "Prefix ","Pre ").replace("Domain ","Dom ").replace(
+                    "PenLift ","Pen ").replace("Natural ","Nat ").replace("Lift ","Lift ")
+                out.append(text(x, ybottom+29, label_name,
+                                15 if active else 13,
+                                blue if active else ink,
+                                "700" if active else "500", "middle"))
             out.append("</g>")
-    footer_y = first_panel + 2 * panel_height + 11
-    for j, note in enumerate(notes):
-        out.append(text(36, footer_y+j*24, note, 12, muted))
     out.append("</g></svg>")
-    DOCS.joinpath(target).write_text("".join(out), encoding="utf-8")
+    DOCS.joinpath(target).write_text("".join(out),encoding="utf-8")
 
 manifest = load("docs/current-models.json")
 selected_cnn = manifest.get("recognizer", {}).get("weights")
@@ -223,9 +209,9 @@ for path in sorted(MODELS.glob("recognition-v*-metrics.json")):
                                "VALIDATED" if m.get("deployable") and m.get("browser_integration_passed")
                                else "NOT RELEASED"))
 graph(
-    "Recognizer — every model version",
-    "Two DIFFERENT accuracy benchmarks; higher is better in each column.",
-    recognition, "Unseen UJI pen writers · accuracy", "EMNIST · accuracy",
+    "Recognizer",
+    "",
+    recognition, "Handwriting accuracy", "EMNIST accuracy",
     100, 100, "percent", "percent",
     ["V1 was not scored on the UJI writer split. V4 evidence is preserved from its experiment branch.",
      "A higher standalone accuracy does not authorize deployment without the required browser tests."],
@@ -251,13 +237,13 @@ completer = [
     gru_row("Sequence V1", "models/ink-stroke-sequence-v1.json", None,
             nested(seq, "baseline_v1", "independent", "pen_lift_f1"),
             "SUPERSEDED", "Original stroke GRU",
-            legacy=(f"Legacy NLL {nested(seq,'baseline_v1','independent','nll'):.3f}"
+            legacy=(f"NLL {nested(seq,'baseline_v1','independent','nll'):.3f}"
                     if nested(seq,'baseline_v1','independent','nll') is not None else None)),
     gru_row("Sequence V2", "models/ink-stroke-sequence-v2.json", None,
             nested(seq, "v2", "independent", "pen_lift_f1"),
             "REJECTED" if seq.get("eligible") is False else "UNVERIFIED",
             "Larger sequence model",
-            legacy=(f"Legacy NLL {nested(seq,'v2','independent','nll'):.3f}"
+            legacy=(f"NLL {nested(seq,'v2','independent','nll'):.3f}"
                     if nested(seq,'v2','independent','nll') is not None else None)),
     gru_row("Prefix V1", "models/ink-stroke-prefix-v1.json",
             nested(domain2, "baseline", "independent", "prefix_frame_position_error"),
@@ -324,9 +310,9 @@ lift_scale = max(15, 5 * math.ceil(max(measured_lifts, default=0) / 5))
 measured_errors = [x["first"] for x in completer if x["first"] is not None]
 error_scale = max(1.1, math.ceil(max(measured_errors, default=0)*10)/10)
 graph(
-    "Completer — every model version",
-    "Writer-disjoint movement error (lower is better) and pen-lift F1 (higher is better).",
-    completer, "Free-running position error · lower", "Pen-lift F1 · higher",
+    "Completer",
+    "",
+    completer, "Trajectory error ↓", "Pen-lift F1 ↑",
     error_scale, lift_scale, "error", "percent",
     ["Sequence V1/V2: only independent legacy sequence NLL is comparable within that pair.",
      "Error and pen-lift F1 are different metrics. A low error alone cannot pass the release gate.",
