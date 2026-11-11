@@ -117,7 +117,9 @@
   if(chars===0)return false;
   // Isolated clock digits need stronger OCR confidence and repeated scans.
   if(chars===1&&lineWords<=1&&
-     !(/^\d$/.test(raw)&&Number(word.confidence)>=.85))return false;
+     !(/^\d$/.test(raw)&&Number(word.confidence)>=.85)&&
+     !(word.clockDial===true&&/^\d$/.test(raw)&&
+       Number(word.confidence)>=.67))return false;
   const b=word.box;
   const corners=word.points;
   const oriented=Array.isArray(corners)&&corners.length===4&&
