@@ -2,7 +2,9 @@
 // INK AI browser-only OCR adapter. No localhost, API, CDN or remote fetch.
 // The optional engine is embedded in the checked-in index.html at build time.
 (()=>{
- const outputWidth=1280;
+ // Keep native 1080p detail when available: downsampling a room clock to
+ // 1280px made its digits too small for the pretrained LSTM OCR.
+ const outputWidth=1920;
  const canvas=document.createElement("canvas");
  const context=canvas.getContext("2d",{alpha:false});
  const Evidence=window.InkTextEvidence;
@@ -169,6 +171,9 @@
     context.drawImage(video,0,0,width,height);
     // No queue of old video frames: each call awaits one existing worker.
     const result=await engine.recognize(canvas,width,height);
+    window.__inkCameraDetailRecovery={used:!!result.detailUpscaled,
+      enhancement:result.enhancement||null,
+      captureWidth:width,captureHeight:height};
     return checkedPayload(result,width,height);
    },
    track:tracker.update,
