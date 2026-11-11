@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Rebuild INK AI model graphs whenever a system or benchmark changes.
-Never fill in unknown metrics with invented numbers.
+"""Rebuild the vertical benchmark charts using the original INK AI graph style.
+
+Every percentage comes from a checked-in benchmark report. Missing webcam
+measurements are visibly labeled, never fabricated as zeros.
 """
 import json
 from pathlib import Path
@@ -9,51 +11,76 @@ from xml.sax.saxutils import escape
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"docs"
 OUT.mkdir(exist_ok=True)
-metrics_path=ROOT/"models/print-cnn-v1-metrics.json"
-print_metrics=json.loads(metrics_path.read_text()) if metrics_path.exists() else {}
-recognition_metrics=json.loads((ROOT/"models/recognition-v3-metrics.json").read_text())
-completion_metrics=json.loads((ROOT/"models/stroke-prefix-domain-v2-metrics.json").read_text())
-hand_accuracy=recognition_metrics["independent_pen_v3"]["overall"]
-completion_gain=completion_metrics["gain"]
-accuracy=print_metrics.get("heldout_accuracy")
-real_camera=print_metrics.get("real_camera_word_accuracy")
-if accuracy is not None and not 0<=accuracy<=1:raise ValueError("Bad heldout accuracy")
-if real_camera is not None and not 0<=real_camera<=1:raise ValueError("Bad camera accuracy")
-def svg_start(title,subtitle,width=920,height=460):
-    return [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-label="{escape(title)}">',
-      f'<rect width="{width}" height="{height}" fill="#ffffff"/>',
-      '<g font-family="Arial,Helvetica,sans-serif">',
-      f'<text x="36" y="46" font-size="26" font-weight="bold" fill="#202124">{escape(title)}</text>',
-      f'<text x="36" y="76" font-size="14" fill="#5f6368">{escape(subtitle)}</text>']
-def text(x,y,s,size=15,color="#30343a",bold=False):
-    return f'<text x="{x}" y="{y}" font-size="{size}" fill="{color}"'+(' font-weight="bold"' if bold else '')+'>'+escape(str(s))+'</text>'
-def bar(x,y,value,label):
-    a=[text(x,y-9,label,15,bold=True),f'<rect x="{x}" y="{y+10}" width="665" height="23" rx="6" fill="#eceff1"/>']
-    if value is not None:
-        a.append(f'<rect x="{x}" y="{y+10}" width="{665*value:.2f}" height="23" rx="6" fill="#4285f4"/>')
-        a.append(text(x+685,y+28,f"{value*100:.2f}%",17,bold=True))
-    else:a.append(text(x+685,y+28,"Not measured",14,color="#68737d"))
-    return a
-parts=svg_start("Camera printed-text recognition","Synthetic-font evaluation is NOT a webcam benchmark.")
-parts+=bar(45,128,accuracy,"PRINT CNN V1 | Character accuracy on independent font families")
-parts+=bar(45,222,real_camera,"Camera | Correct complete words on real photos")
-font_n=print_metrics.get("heldout_font_count")
-n=print_metrics.get("heldout_characters")
-if accuracy is not None:
-    parts.append(text(45,334,f"Holdout: {n} synthetic glyphs across {font_n} fonts; trained from scratch.",14))
-else:
-    parts.append(text(45,334,"Printed CNN training/independent evaluation is pending.",14))
-parts.append(text(45,375,"All text/background colors: local RGB contrast detection; real-camera validation pending.",14))
-parts.append(text(45,412,"New systems must supply independently measured metrics. Unknown values stay unplotted.",13,color="#59626b"))
-parts.append("</g></svg>")
-(OUT/"camera-print-benchmarks.svg").write_text("".join(parts),encoding="utf8")
 
-parts=svg_start("INK AI | Model and system benchmarks","Different metrics, different datasets. Bar heights must not be compared as one score.",920,590)
-parts+=bar(45,125,hand_accuracy,"Handwriting CNN V3 | UJI held-out writers | character accuracy")
-parts+=bar(45,230,completion_gain,"Completer Domain V2 | reduction in pen trajectory error")
-parts+=bar(45,335,accuracy,"Printed CNN V1 | synthetic held-out fonts | character accuracy")
-parts+=bar(45,440,real_camera,"Camera OCR | real-world complete-word accuracy")
-parts.append(text(45,547,"Handwriting and completion figures: existing repository benchmark graphs.",13,color="#59626b"))
-parts.append("</g></svg>")
-(OUT/"ai-systems.svg").write_text("".join(parts),encoding="utf8")
-print("Updated camera-print-benchmarks.svg and ai-systems.svg; no fabricated results")
+def report(name):
+    path=ROOT/"models"/name
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+printing=report("print-cnn-v1-metrics.json")
+handwriting=report("recognition-v3-metrics.json")
+completion=report("stroke-prefix-domain-v2-metrics.json")
+print_value=printing.get("heldout_accuracy")
+camera_value=printing.get("real_camera_word_accuracy")
+hand_value=handwriting.get("independent_pen_v3",{}).get("overall")
+completion_value=completion.get("gain")
+
+def check_fraction(value):
+    if value is not None and (not isinstance(value,(int,float)) or not 0<=value<=1):
+        raise ValueError("Benchmark percentages must be real fractions: "+repr(value))
+    return value
+
+def vertical_chart(title, subtitle, bars, footer):
+    for _,_,value in bars:check_fraction(value)
+    out=[
+      '<svg xmlns="http://www.w3.org/2000/svg" width="850" height="465" viewBox="0 0 850 465" role="img" aria-label="'+escape(title)+'">',
+      '<rect width="850" height="465" fill="#fff"/>',
+      '<g font-family="Arial,Helvetica,sans-serif">',
+      '<text x="42" y="45" font-size="25" font-weight="600" fill="#202124">'+escape(title)+'</text>',
+      '<text x="42" y="70" font-size="13" fill="#5f6368">'+escape(subtitle)+'</text>'
+    ]
+    for tick in range(0,101,20):
+        y=360-260*tick/100
+        stroke="#bdc1c6" if tick==0 else "#e8eaed"
+        out.append(f'<line x1="90" y1="{y:.0f}" x2="800" y2="{y:.0f}" stroke="{stroke}"/>')
+        out.append(f'<text x="77" y="{y+4:.0f}" font-size="12" fill="#5f6368" text-anchor="end">{tick}%</text>')
+    count=len(bars)
+    for i,(name,sub,value) in enumerate(bars):
+        middle=90+710*(i+.5)/count
+        bw=105 if count<=3 else 100
+        left=middle-bw/2
+        if value is None:
+            # Outline indicates an unmeasured result, NOT a zero-height bar.
+            out.append(f'<rect x="{left:.2f}" y="100" width="{bw}" height="260" fill="none" stroke="#9aa0a6" stroke-dasharray="5 5"/>')
+            out.append(f'<text x="{middle:.2f}" y="230" font-size="14" fill="#5f6368" text-anchor="middle">N/A</text>')
+        else:
+            top=360-260*value
+            out.append(f'<rect x="{left:.2f}" y="{top:.2f}" width="{bw}" height="{260*value:.2f}" fill="#4285f4"/>')
+            out.append(f'<text x="{middle:.2f}" y="{top-10:.2f}" font-size="15" fill="#202124" text-anchor="middle">{value*100:.2f}%</text>')
+        out.append(f'<text x="{middle:.2f}" y="389" font-size="14" fill="#202124" text-anchor="middle">{escape(name)}</text>')
+        out.append(f'<text x="{middle:.2f}" y="410" font-size="12" fill="#5f6368" text-anchor="middle">{escape(sub)}</text>')
+    out.append('<text x="425" y="447" font-size="12" fill="#5f6368" text-anchor="middle">'+escape(footer)+'</text>')
+    out.append('</g></svg>')
+    return ''.join(out)
+
+holdout_n=printing.get("heldout_characters")
+font_count=printing.get("heldout_font_count")
+if print_value is not None:
+    footer=f"Synthetic test: {holdout_n} characters, {font_count} held-out fonts. Real camera: unmeasured."
+else:
+    footer="Printed model evaluation pending. Real-camera accuracy has not been measured."
+(OUT/"camera-print-benchmarks.svg").write_text(vertical_chart(
+    "Camera Recognition", "Printed characters | synthetic-font test vs. live-camera test",
+    [("Print CNN V1","held-out fonts",print_value),
+     ("Camera OCR","real photos",camera_value)],
+    footer
+), encoding="utf-8")
+
+(OUT/"ai-systems.svg").write_text(vertical_chart(
+    "INK AI Systems", "Model benchmarks | different tests, not directly comparable",
+    [("Recognizer V3","unseen writers",hand_value),
+     ("Completer V2","error reduction",completion_value),
+     ("Print CNN V1","held-out fonts",print_value),
+     ("Camera OCR","real photos",camera_value)],
+    "Different datasets and metrics. N/A means not measured, not 0%."
+), encoding="utf-8")
+print("Updated INK AI vertical benchmark charts using verified model reports")
