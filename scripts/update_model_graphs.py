@@ -80,7 +80,7 @@ def graph(title, subtitle, rows, first_name, second_name,
     for j, row in enumerate(rows):
         y = start + j * row_height
         active_now = row["active"]
-        stroke_color = "#2563eb" if active_now else "#94a3b8"
+        out.append(f'<g data-model="{escape(row["name"])}" data-active="{str(active_now).lower()}" data-weight="{escape(row["weights"])}">')
         if active_now:
             out.append(rect(26, y-8, 1435, 58, "#eff6ff", "#93c5fd", 6))
         else:
@@ -108,6 +108,7 @@ def graph(title, subtitle, rows, first_name, second_name,
                         "700" if active_now else "400"))
         if row.get("extra"):
             out.append(text(1238, y+37, row["extra"], 11, "#64748b"))
+        out.append("</g>")
     bottom = start + len(rows)*row_height + 15
     for i, note in enumerate(notes):
         out.append(text(36, bottom+i*23, note, 12, "#475569"))
@@ -116,7 +117,6 @@ def graph(title, subtitle, rows, first_name, second_name,
 
 
 manifest = load("docs/current-models.json")
-selected_cnn = nested(manifest, "recognizer", "weights")  # Strings are handled below.
 selected_cnn = manifest.get("recognizer", {}).get("weights")
 selected_gru = manifest.get("completer", {}).get("weights")
 if not selected_cnn or not selected_gru:
@@ -133,7 +133,7 @@ def cnn_row(version, uji, emnist, note, status):
     path = f"models/ink-cnn-v{version}.json"
     return {"name": f"CNN V{version}", "first": pct(uji),
             "second": pct(emnist), "subtitle": note,
-            "active": selected_cnn == path, "status": status}
+            "active": selected_cnn == path, "status": status, "weights": path}
 
 
 recognition = [
@@ -183,7 +183,7 @@ lift5 = load("models/recurrent-lift-v5-metrics.json")
 
 
 def gru_row(name, weight, error, lift, status, subtitle="", legacy=None, extra=""):
-    return {"name": name, "active": selected_gru == weight,
+    return {"name": name, "active": selected_gru == weight, "weights": weight,
             "first": error, "second": pct(lift),
             "status": status, "subtitle": subtitle,
             "legacy": legacy, "extra": extra}
