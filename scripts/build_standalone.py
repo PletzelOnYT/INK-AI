@@ -46,7 +46,11 @@ def accepted_model(version):
     report=ROOT/f"models/stroke-prefix-domain-{version}-metrics.json"
     if not (candidate.is_file() and report.is_file()):return False
     metrics=json.loads(report.read_text(encoding="utf-8"))
-    return metrics.get("eligible") is True and metrics.get("deployable") is True
+    return (metrics.get("eligible") is True and
+            metrics.get("deployable") is True and
+            metrics.get("browser_integration_passed") is True and
+            metrics.get("candidate",{}).get("independent",{})
+              .get("prefix_frame_position_error") is not None)
 # A new candidate can only become the downloaded default after both
 # writer-disjoint quality checks and real offline Chrome integration pass.
 natural_file=ROOT/"models/ink-stroke-natural-v4.json"
@@ -105,8 +109,13 @@ if v5_weights.is_file() and v5_metrics.is_file():
     valid=(report.get("eligible") is True and
            report.get("independent_pen_v3",{}).get("overall",0)>=.77 and
            report.get("best",{}).get("emnist",{}).get("overall",0)>=.82)
-    if valid and (report.get("browser_integration_passed") is True or
-                  os.environ.get("INK_RECOGNIZER_PREVIEW_V5")=="1"):
+    v3_report=json.loads((ROOT/"models/recognition-v3-metrics.json").read_text())
+    better_than_active=(report.get("independent_pen_v3",{}).get("overall",0)>
+                        v3_report.get("independent_pen_v3",{}).get("overall",1))
+    if valid and better_than_active and (
+        report.get("deployable") is True and
+        report.get("browser_integration_passed") is True or
+        os.environ.get("INK_RECOGNIZER_PREVIEW_V5")=="1"):
         recognition_path="models/ink-cnn-v5.json"
 print("Bundled recognizer:",recognition_path)
 # Produce a machine-readable record of what this downloadable HTML actually uses.
