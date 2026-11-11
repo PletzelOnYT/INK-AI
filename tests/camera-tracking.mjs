@@ -39,7 +39,9 @@ assert.equal(state.text,"Chromebook","Recurring frames must not append duplicate
 state=t.update([{text:"Laptop",confidence:.47,box:{x0:135,y0:120,x1:230,y1:146},polygon,angle:0}],4100);
 assert.equal(state.text,"Chromebook","Weak one-frame reading is not committed");
 state=t.update([{text:"Laptop",confidence:.48,box:{x0:136,y0:121,x1:231,y1:147},polygon,angle:0}],4260);
-assert.equal(state.text,"Chromebook Laptop","A second matching reading confirms a word");
+assert.equal(state.text,"Chromebook","Weak guesses must stay unconfirmed despite repetition");
+state=t.update([{text:"Laptop",confidence:.75,box:{x0:136,y0:121,x1:231,y1:147},polygon,angle:0}],4380);
+assert.equal(state.text,"Chromebook Laptop","A high-confidence reading must be confirmed with previous frames");
 t.reset();
 assert.equal(t.snapshot(4300).text,"","Camera shutdown must clear its session");
 
