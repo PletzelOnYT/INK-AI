@@ -13781,7 +13781,7 @@ async function scan(id){
   }
   paint(regions,frame);
   if(regions.length&&!tracker.snapshot().text)
-   show("Verifying printed characters…");
+   show("Printed text found ("+geometry.length+" lines). Checking letters…");
   const images=selected.flatMap(item=>item.line.letters.map(
     box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
@@ -13791,7 +13791,8 @@ async function scan(id){
   window.__inkCameraWords=state.words;
   window.__inkCameraText=state.text;
   if(state.text)show(state.text,false);
-  else if(regions.length)show("Scanning for reliable words…");
+  else if(regions.length)show("Printed text located, but word recognition is uncertain. Hold steady or move closer.");
+  else if(geometry.length)show("Found "+geometry.length+" possible text lines. Bring the document closer.");
   else show("Point your camera at clearly printed text.");
   paint(regions,frame);
   stats.scans++;stats.lastScanMs=Math.round(performance.now()-t0);
