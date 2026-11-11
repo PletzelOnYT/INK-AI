@@ -12687,10 +12687,10 @@ async function load(){
    try{
     const candidate=JSON.parse(embedded.textContent);
     if(candidate.format==="ink-cnn-int8-v1"&&
-       candidate.training?.finetuned_from==="models/ink-cnn-v2.json"&&
-       candidate.labels?.length===102&&candidate.input?.join(",")==="1,32,32"){
+       ["models/ink-cnn-v2.json","models/ink-cnn-v3.json"].includes(candidate.training?.finetuned_from)&&
+       candidate.labels?.length===102&&candidate.input?.join(",")==="1,32,32"&&candidate.layers?.length===5){
       model=candidate;
-      version=3;
+      version=candidate.training.finetuned_from==="models/ink-cnn-v3.json"?5:3;
     }
    }catch(_){/* Use the existing fallback on old or damaged files. */}
   }
