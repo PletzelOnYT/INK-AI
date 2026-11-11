@@ -49,4 +49,27 @@ function shortLabelMask(){
 const shortLines=detector.findTextLines(shortLabelMask(),width,height,true);
 assert.ok(shortLines.some(line=>line.letters.length===2),
  "Short uppercase abbreviations should be detected in high-contrast mode");
+// Small printed rows on off-white paper: RGB contrast is weak after
+// downsampling, but dark ink must still survive the dedicated page mask.
+const paperW=360,paperH=170,paper=new Uint8ClampedArray(paperW*paperH*4);
+for(let i=0;i<paperW*paperH;i++){
+ const j=i*4;paper[j]=223;paper[j+1]=222;paper[j+2]=218;paper[j+3]=255;
+}
+for(let row=0;row<3;row++)for(let glyph=0;glyph<11;glyph++){
+ const x0=38+glyph*14,y0=38+row*24+Math.round(glyph*.09);
+ for(let yy=y0;yy<y0+11;yy++)for(let xx=x0;xx<x0+7;xx++){
+  if(xx!==x0&&xx!==x0+6&&yy!==y0&&yy!==y0+10)continue;
+  const k=(yy*paperW+xx)*4;
+  paper[k]=paper[k+1]=paper[k+2]=70;
+ }
+}
+const paperMasks=detector.makeMasks({data:paper},paperW,paperH);
+assert.ok(paperMasks.length>=5,"Bright-paper detector must be included");
+const pageLines=detector.findTextLines(paperMasks[4],paperW,paperH);
+assert.ok(pageLines.length>=3,
+ "Three small rows of ink on off-white paper should be detected");
+const blankPage=new Uint8ClampedArray(paperW*paperH*4);
+for(let i=0;i<paperW*paperH;i++){const k=i*4;blankPage[k]=223;blankPage[k+1]=222;blankPage[k+2]=218;blankPage[k+3]=255}
+const blankLines=detector.detect({data:blankPage},paperW,paperH);
+assert.equal(blankLines.length,0,"Blank paper must not produce fake words");
 console.log("PASS: printed-character grouping and no-text rejection");
