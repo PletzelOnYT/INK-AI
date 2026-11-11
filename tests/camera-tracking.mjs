@@ -6,11 +6,27 @@ const win={};
 vm.runInNewContext(source,{window:win,Date,Math,Number,Map,Set});
 const core=win.InkCameraCore;
 assert.ok(core?.createTracker&&core?.projectBox&&core?.anglesForPass);
+assert.equal(core.looksLikeWord("Jmz5",.99),false,"Screenshot false positive must be rejected");
+assert.equal(core.looksLikeWord("JmzS",.94),false,"Letter-like gibberish must be rejected");
+assert.equal(core.looksLikeWord("Chromebook",.84),true,"Valid printed labels must remain eligible");
+assert.equal(core.looksLikeWord("HELLO",.81),true);
+const printedLetters=Array.from({length:10},(_,i)=>({
+ x0:10+i*19,x1:22+i*19,y0:36+(i%3),y1:65+(i%2)
+}));
+assert.equal(core.looksLikeTextLine(printedLetters),true,"A regular printed text row should pass");
+const doorEdges=Array.from({length:10},(_,i)=>({
+ x0:5+i*34,x1:6+i*34,y0:8+i*3,y1:110+i*3
+}));
+assert.equal(core.looksLikeTextLine(doorEdges),false,"Door seams and cabinet edges must not be text");
+assert.equal(core.looksLikeTextLine(printedLetters.slice(0,2)),false,
+ "Two random marks must not be called a text line");
 const box={x0:120,y0:75,x1:310,y1:110};
 const polygon=[{x:120,y:75},{x:310,y:75},{x:310,y:110},{x:120,y:110}];
 const t=core.createTracker();
 let state=t.update([{text:"Chromebook",confidence:.90,box,polygon,angle:40}],1000);
-assert.equal(state.text,"Chromebook","Strong words must be shown on the first scan");
+assert.equal(state.text,"","Unconfirmed words must not instantly enter the transcript");
+state=t.update([{text:"Chromebook",confidence:.90,box,polygon,angle:40}],1120);
+assert.equal(state.text,"Chromebook","A word must survive two separate camera frames");
 assert.equal(state.words.length,1);
 assert.equal(state.activeAngle,40);
 state=t.update([],1300);
