@@ -51,150 +51,91 @@ def format_score(value, kind):
     return f"{value:.2f}%" if kind == "percent" else f"{value:.4f}"
 
 
-def graph(title, subtitle, rows, first_name, second_name,
-          first_max, second_max, first_kind, second_kind, notes, target):
-    """Small, legible SVG milestone charts for GitHub's README width.
+def podium(title, rows, metric, target):
+    """Minimal top-three benchmark podium; rank measured results only.
 
-    Accurate measured values are preserved; extreme trajectory outliers use
-    an explicit broken axis rather than flattening all normal candidates.
+    Recognizer: independent UJI writer accuracy (%).
+    Completer: decrease in trajectory error relative to Prefix V1 (%).
+    These are benchmark rankings, NOT claims about deployability.
     """
-    if sum(bool(row["active"]) for row in rows) != 1:
-        raise ValueError("One and only one deployed model must be marked blue")
-    width, height = 900, 488
-    left, right = 82, 860
-    xcoords = [left + (right-left)*i/(len(rows)-1) for i in range(len(rows))]
-    blue, gray, ink, grid = "#2563eb", "#94a3b8", "#142137", "#e5e7eb"
+    if sum(bool(r["active"]) for r in rows) != 1:
+        raise ValueError("Exactly one actually deployed model must exist")
+    results = []
+    if metric == "accuracy":
+        for row in rows:
+            if row["first"] is not None:
+                results.append((row, row["first"]))
+    elif metric == "trajectory_improvement":
+        baseline = next(
+            (r["first"] for r in rows if r["name"] == "Prefix V1"), None)
+        if baseline is None or baseline <= 0:
+            raise ValueError("The measured Prefix V1 baseline is required")
+        for row in rows:
+            # Sequence V1/V2 have a different metric. Do not manufacture %.
+            if row["first"] is not None:
+                results.append((row, 100*(baseline-row["first"])/baseline))
+    else:
+        raise ValueError("Unsupported benchmark " + metric)
+    ordered = sorted(results, key=lambda e: (-e[1], e[0]["name"]))[:3]
+    if len(ordered) != 3:
+        raise ValueError("At least three comparable measured models required")
+    width, height = 900, 394
     out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
-        f'height="{height}" viewBox="0 0 {width} {height}" '
-        f'role="img" aria-label="{escape(title)}">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+        f'role="img" aria-label="{escape(title)} — top three measured versions">',
         rect(0, 0, width, height, "#ffffff"),
+        '<defs>',
+        '<linearGradient id="ink-gold" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0" stop-color="#FCE7A5"/>'
+        '<stop offset="1" stop-color="#EAB84A"/></linearGradient>',
+        '<linearGradient id="ink-silver" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0" stop-color="#E9EDF2"/>'
+        '<stop offset="1" stop-color="#B6C0CE"/></linearGradient>',
+        '<linearGradient id="ink-bronze" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0" stop-color="#EDC3A1"/>'
+        '<stop offset="1" stop-color="#CA8961"/></linearGradient>',
+        '</defs>',
         '<g font-family="Arial,Helvetica,sans-serif">',
-        '<circle cx="26" cy="25" r="6" fill="#2563eb"/>',
-        text(41, 31, "In use", 13, blue, "700"),
+        '<line x1="52" y1="362" x2="848" y2="362" '
+        'stroke="#D9DEE7" stroke-width="2"/>',
     ]
-    short = {
-        "Sequence": "Seq", "Prefix": "Pre", "Domain": "Dom",
-        "PenLift": "Pen", "Natural": "Nat", "Lift": "Lift",
+    placement = {
+        1: (336, 100, 228, 260, "ink-gold", "#9A6D12"),
+        2: (77, 154, 228, 206, "ink-silver", "#6F7C8D"),
+        3: (595, 194, 228, 166, "ink-bronze", "#965935"),
     }
-    for panel, (field, label, high, kind, header, ytop, ybottom) in enumerate((
-        ("first", first_name, first_max, first_kind, 70, 110, 218),
-        ("second", second_name, second_max, second_kind, 282, 321, 427),
-    )):
-        out.append(text(24, header, label, 19, ink, "700"))
-        scored = [r[field] for r in rows if r[field] is not None]
-        broken = (kind == "error" and len(scored) > 3 and
-                  max(scored) > 1.75 * sorted(scored)[len(scored)//2])
-        if broken:
-            ordinary = [v for v in scored if v < 0.5]
-            if not ordinary:
-                broken = False
-        if broken:
-            # V5's 0.967+ outlier is placed in a separately scaled TOP band.
-            # The zigzag on the axis makes the scale discontinuity explicit.
-            lo = max(0, math.floor((min(ordinary)-.012)*100)/100)
-            middle = math.ceil((max(ordinary)+.02)*100)/100
-            far = math.ceil((max(scored)+.04)*100)/100
-            lower_top, upper_bottom = ytop+38, ytop+25
-            def position(value):
-                if value <= middle:
-                    return ybottom-(value-lo)/(middle-lo)*(ybottom-lower_top)
-                if value > .5:
-                    return upper_bottom-(value-.5)/(far-.5)*(upper_bottom-ytop)
-                raise ValueError("Unexpected score falls into deliberate axis break")
-            ticks = [(lo,ybottom),(round((lo+middle)/2,4),
-                     position((lo+middle)/2)),(middle,lower_top),
-                     (far,ytop)]
-            # Two short diagonal cuts alongside the y-axis indicate a break.
-            x=left-11
-            out.append(f'<path d="M {x-5} {lower_top-6} l 5 -7 l 5 7 '
-                       f'm 0 -4 l 5 -7" fill="none" stroke="#64748b" '
-                       f'stroke-width="1.8"/>')
-        else:
-            if scored:
-                lo,far=min(scored),max(scored)
-                if kind=="percent":
-                    lo=max(0,math.floor((lo-1.5)/5)*5)
-                    far=min(100,math.ceil((far+1.5)/5)*5)
-                else:
-                    margin=max(.012,(far-lo)*.12)
-                    lo=max(0,math.floor((lo-margin)*100)/100)
-                    far=math.ceil((far+margin)*100)/100
-                if far<=lo:
-                    far=lo+(10 if kind=="percent" else .1)
-            else:
-                lo,far=0,high
-            def position(value):
-                return ybottom-(value-lo)/(far-lo)*(ybottom-ytop)
-            ticks=[(lo,ybottom),((lo+far)/2,position((lo+far)/2)),(far,ytop)]
-        for value,y in ticks:
-            out.append(f'<line x1="{left-5:.1f}" y1="{y:.1f}" '
-                       f'x2="{right+6:.1f}" y2="{y:.1f}" '
-                       f'stroke="{grid}" stroke-width="1"/>')
-            out.append(text(left-11, y+4, format_score(value,kind),
-                            11, "#667085", anchor="end"))
-        coordinates=[]
-        for i,row in enumerate(rows):
-            value=row[field]
-            coordinates.append(None if value is None else (xcoords[i],position(value)))
-        for i in range(len(coordinates)-1):
-            p,q=coordinates[i],coordinates[i+1]
-            if not p or not q:
-                continue
-            # Do not draw a falsely continuous slope across a broken axis.
-            if broken and ((rows[i][field] > .5) != (rows[i+1][field] > .5)):
-                continue
-            out.append(f'<path d="M {p[0]:.1f} {p[1]:.1f} '
-                       f'L {q[0]:.1f} {q[1]:.1f}" '
-                       f'fill="none" stroke="#cbd5e1" '
-                       f'stroke-width="2.5" stroke-dasharray="5 4"/>')
-        for i,row in enumerate(rows):
-            x=xcoords[i]
-            value=row[field]
-            active=row["active"]
-            out.append(f'<g data-model="{escape(row["name"])}" '
-                       f'data-active="{str(active).lower()}" '
-                       f'data-weight="{escape(row["weights"])}" '
-                       f'data-metric="{field}">')
-            legacy = row.get("legacy")
-            desc = format_score(value,kind) if value is not None else (legacy or "not measured")
-            out.append(f'<title>{escape(row["name"])}: {escape(desc)}'
-                       f' · {escape(row["status"])}</title>')
-            if value is None:
-                if legacy and panel==0:
-                    # Legacy sequence NLL is visible on hover, not on an
-                    # inapplicable trajectory graph.
-                    out.append(text(x,ybottom-13,"—",17,gray,anchor="middle"))
-                else:
-                    out.append(text(x,ybottom-13,"—",17,gray,anchor="middle"))
-            else:
-                y=position(value)
-                if not ytop-.01<=y<=ybottom+.01:
-                    raise ValueError(f"Out-of-bounds score for {row['name']}: {value}")
-                if active:
-                    out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="12" '
-                               'fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>')
-                out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" '
-                           f'r="{7.5 if active else 6}" '
-                           f'fill="{blue if active else "#ffffff"}" '
-                           f'stroke="{blue if active else gray}" stroke-width="2.5"/>')
-                ty=y-15
-                if ty < ytop-2:
-                    ty=y+25
-                out.append(text(x,ty,format_score(value,kind),
-                                13 if active else 11.5,
-                                blue if active else ink,
-                                "700" if active else "500","middle"))
-            name=row["name"]
-            chunks=name.split()
-            short_name=(short.get(chunks[0],chunks[0])+chunks[1]
-                        if len(chunks)==2 and len(rows)>7 else name)
-            out.append(text(x,ybottom+26,short_name,13,
-                            blue if active else ink,
-                            "700" if active else "500","middle"))
-            out.append("</g>")
+    for rank, (row, score) in enumerate(ordered, 1):
+        x, y, w, h, shade, trim = placement[rank]
+        cx = x + w/2
+        active = "true" if row["active"] else "false"
+        out.append(
+            f'<g data-model="{escape(row["name"])}" '
+            f'data-weight="{escape(row["weights"])}" '
+            f'data-rank="{rank}" data-active="{active}" '
+            f'data-score="{score:.6f}" data-status="{escape(row["status"])}">')
+        out.append(
+            f'<title>{escape(row["name"])}: {score:.2f}% · '
+            f'{escape(row["status"])}'
+            f'{" · CURRENT MODEL" if row["active"] else ""}</title>')
+        out.append(rect(x, y, w, h, f"url(#{shade})", radius=14))
+        out.append(
+            f'<rect x="{x+3:.0f}" y="{y+3:.0f}" width="{w-6:.0f}" '
+            f'height="{h-6:.0f}" rx="11" fill="none" '
+            f'stroke="{trim}" stroke-opacity="0.40" stroke-width="1.5"/>')
+        out.append(f'<circle cx="{cx:.0f}" cy="{y+16:.0f}" r="25" '
+                   f'fill="#FFFFFF" stroke="{trim}" stroke-width="3"/>')
+        out.append(text(cx, y+26, str(rank), 25, trim, "700", "middle"))
+        out.append(text(cx, y+91, row["name"], 25, "#1A2432", "700", "middle"))
+        out.append(text(cx, y+139, f"{score:.2f}%", 35, "#1A2432", "700",
+                        "middle"))
+        if row["active"]:
+            # A small blue underline denotes the shipped checkpoint without
+            # adding another label to the simple three-name podium.
+            out.append(rect(cx-26, y+154, 52, 6, "#2563EB", radius=3))
+        out.append("</g>")
     out.append("</g></svg>")
-    DOCS.joinpath(target).write_text("".join(out),encoding="utf-8")
+    DOCS.joinpath(target).write_text("".join(out), encoding="utf-8")
 
 manifest = load("docs/current-models.json")
 selected_cnn = manifest.get("recognizer", {}).get("weights")
@@ -244,14 +185,8 @@ for path in sorted(MODELS.glob("recognition-v*-metrics.json")):
     recognition.append(cnn_row(num, result, emnist, "Experimental candidate",
                                "VALIDATED" if m.get("deployable") and m.get("browser_integration_passed")
                                else "NOT RELEASED"))
-graph(
-    "Recognizer",
-    "",
-    recognition, "Handwriting accuracy", "EMNIST accuracy",
-    100, 100, "percent", "percent",
-    ["V1 was not scored on the UJI writer split. V4 evidence is preserved from its experiment branch.",
-     "A higher standalone accuracy does not authorize deployment without the required browser tests."],
-    "recognition-vertical-bars.svg")
+podium("Recognizer", recognition, "accuracy",
+       "recognition-vertical-bars.svg")
 
 
 seq = load("models/stroke-sequence-v2-metrics.json")
@@ -345,13 +280,6 @@ measured_lifts = [x["second"] for x in completer if x["second"] is not None]
 lift_scale = max(15, 5 * math.ceil(max(measured_lifts, default=0) / 5))
 measured_errors = [x["first"] for x in completer if x["first"] is not None]
 error_scale = max(1.1, math.ceil(max(measured_errors, default=0)*10)/10)
-graph(
-    "Completer",
-    "",
-    completer, "Trajectory error ↓", "Pen-lift F1 ↑",
-    error_scale, lift_scale, "error", "percent",
-    ["Sequence V1/V2: only independent legacy sequence NLL is comparable within that pair.",
-     "Error and pen-lift F1 are different metrics. A low error alone cannot pass the release gate.",
-     "V7 has no published score until training, unseen-writer, and browser acceptance finish."],
-    "completion-vertical-bars.svg")
-print("PASS: generated two complete version-history SVGs; blue exactly matches deployed-model manifest")
+podium("Completer", completer, "trajectory_improvement",
+       "completion-vertical-bars.svg")
+print("PASS: generated two three-model medal podiums from measured benchmarks")
