@@ -1,0 +1,51 @@
+name: Train and publish INK printed-text CNN
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_print_cnn.py"
+      - "scripts/update_model_graphs.py"
+      - ".github/workflows/train-print-cnn.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: print-training
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python tools for independent first-party CNN training
+        run: python3 -m pip install --quiet torch numpy pillow
+      - name: Train and evaluate on held-out font families
+        run: python3 src/train_print_cnn.py --epochs 5 --samples 24000
+      - name: Reject incomplete or misleading benchmark output
+        run: |
+          python3 - <<'PY'
+          import json
+          m=json.load(open("models/print-cnn-v1-metrics.json"))
+          p=json.load(open("models/ink-print-cnn-v1.json"))
+          assert m["trained_from_scratch"]
+          assert m["heldout_font_count"]>=2 and m["heldout_characters"]>=500
+          assert 0<=m["heldout_accuracy"]<=1
+          assert p["training"]["heldout_accuracy"]==m["heldout_accuracy"]
+          assert m["real_camera_word_accuracy"] is None
+          PY
+      - name: Refresh graphs and regenerate repository root HTML
+        run: |
+          python3 scripts/update_model_graphs.py
+          python3 scripts/build_standalone.py
+          cp dist/ink-ai-standalone.html index.html
+      - name: Commit tested model, exact measurements, updated graphs and HTML
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/ink-print-cnn-v1.json models/print-cnn-v1-metrics.json docs/camera-print-benchmarks.svg docs/ai-systems.svg index.html
+          if ! git diff --cached --quiet; then
+            git commit -m "Train printed-text CNN and publish measured accuracy graphs and standalone HTML"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
