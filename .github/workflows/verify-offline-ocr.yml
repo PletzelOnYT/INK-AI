@@ -33,6 +33,7 @@ jobs:
           cp dist/ink-ai-standalone.html index.html
       - name: Read real printed labels in Chrome with network disabled
         run: |
+          set -euo pipefail
           python3 -m pip install --quiet selenium
           node tests/camera-text-evidence.mjs 2>&1 | tee /tmp/ink-ocr-test-browser.log
           python3 tests/camera-bundled-ocr-browser.py 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
@@ -46,7 +47,8 @@ jobs:
           {
             echo "# Real Chrome offline OCR acceptance"
             echo
-            if grep -q "PASS: GitHub index.html" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
+            if grep -q "PASS: text edges" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
+               grep -q "PASS: GitHub index.html" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
                grep -q "PASS: offline OCR preserves" /tmp/ink-ocr-test-browser.log 2>/dev/null; then
               echo "**PASS:** local standalone HTML preserved genuine print on colored and angled labels while suppressing smooth-wall and shoulder false positives."
             else
