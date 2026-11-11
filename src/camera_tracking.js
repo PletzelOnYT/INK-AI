@@ -93,6 +93,31 @@ function looksLikeWord(text,confidence){
   return confidence>=.95;
  return false;
 }
+// Text-region highlights are tracked separately from neural transcription.
+// Geometry must be present on successive scans; a missed frame does not flicker.
+function createRegionTracker(){
+ let regions=[];
+ function update(boxes,now=Date.now()){
+  const seen=new Set();
+  for(const incoming of boxes||[]){
+   if(!incoming?.box||!incoming?.polygon)continue;
+   const b=incoming.box;
+   let prior=regions.find(r=>near(r.box,b)&&
+     Math.abs((r.box.x1-r.box.x0)-(b.x1-b.x0))<
+       Math.max(26,(b.x1-b.x0)*.45)&&
+     Math.abs((r.box.y1-r.box.y0)-(b.y1-b.y0))<
+       Math.max(15,(b.y1-b.y0)*.45));
+   if(!prior){prior={box:b,polygon:incoming.polygon,hits:0,lastSeen:0};regions.push(prior)}
+   if(seen.has(prior))continue;
+   seen.add(prior);prior.box=b;prior.polygon=incoming.polygon;
+   prior.lastSeen=now;prior.hits=Math.min(8,prior.hits+1);
+  }
+  regions=regions.filter(r=>now-r.lastSeen<1500);
+  return regions.filter(r=>r.hits>=2).map(r=>({...r}));
+ }
+ return {update,snapshot:(now=Date.now())=>regions.filter(r=>r.hits>=2&&now-r.lastSeen<1500).map(r=>({...r})),
+ reset:()=>{regions=[]}};
+}
 function createTracker(){
  let tracks=[],captured=[],nextId=0,lastAngle=0,lastAngleAt=0;
  function update(detections,now=Date.now()){
@@ -172,7 +197,7 @@ function anglesForPass(pass,preferred){
  const values=Number.isFinite(preferred)?[preferred,0,...pair]:[0,...pair];
  return [...new Set(values.map(n=>Math.round(n)))].slice(0,4);
 }
-const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord};
+const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord,createRegionTracker};
 if(typeof window!=="undefined")window.InkCameraCore=api;
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })();
