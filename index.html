@@ -24292,6 +24292,8 @@ sceneCanvas.width=24;sceneCanvas.height=14;
 const sceneContext=sceneCanvas.getContext("2d",{willReadFrequently:true});
 const cache=new Map();
 let lineRuntime=null,lineInit=null,offlineClient=null,offlineFailures=0;
+const motion=window.InkCameraMotion?.create?.()||null;
+let latestOCRState=null,motionRAF=0,lastMotionPaint=0;
 window.__inkCameraLineReady=false;
 async function loadNativeLineOCR(){
  if(lineInit||!window.InkLineRuntime)return lineInit;
@@ -24339,6 +24341,39 @@ function show(text,muted=true){
  output.dataset.muted=String(muted);
 }
 function clearMarks(){hg.clearRect(0,0,overlay.width,overlay.height)}
+// Track only OCR-verified rectangles between slow neural inference calls.
+function shiftVerifiedState(state,dx,dy){
+ if(!state?.words)return state;
+ return {...state,words:state.words.map(word=>{
+  const box=word.box?{x0:word.box.x0+dx,y0:word.box.y0+dy,
+   x1:word.box.x1+dx,y1:word.box.y1+dy}:undefined;
+  const points=Array.isArray(word.points)?word.points.map(p=>
+   ({x:p.x+dx,y:p.y+dy})):undefined;
+  return {...word,...(box?{box}:{}),...(points?{points}:{})};
+ })};
+}
+function motionTick(now){
+ motionRAF=0;
+ if(!active)return;
+ if(!frozen&&!document.hidden&&offlineClient&&latestOCRState&&motion&&
+    video.readyState>=2&&now-lastMotionPaint>=85){
+  lastMotionPaint=now;
+  try{
+   const position=motion.update(video,now);
+   window.__inkCameraMotionStats={...position,at:now};
+   if(position.valid)
+    offlineClient.paint(overlay,video,board,
+      shiftVerifiedState(latestOCRState,position.dx,position.dy));
+   else offlineClient.paint(overlay,video,board,
+      {...latestOCRState,words:[]});
+  }catch(_){/* OCR continues if an optional tracking sample fails. */}
+ }
+ motionRAF=requestAnimationFrame(motionTick);
+}
+function startMotionLoop(){
+ if(motionRAF||typeof requestAnimationFrame!=="function")return;
+ motionRAF=requestAnimationFrame(motionTick);
+}
 function cancelCameraSchedule(){
  clearTimeout(timer);timer=0;
  if(frameCallback&&typeof video.cancelVideoFrameCallback==="function")
@@ -24369,6 +24404,8 @@ function toggleFreeze(){
 }
 
 function stop(){
+ if(motionRAF&&typeof cancelAnimationFrame==="function")cancelAnimationFrame(motionRAF);
+ motionRAF=0;lastMotionPaint=0;latestOCRState=null;motion?.reset();
  active=false;epoch++;freezeRevision++;
  cancelCameraSchedule();
  if(stream)stream.getTracks().forEach(t=>t.stop());
@@ -24382,6 +24419,7 @@ function stop(){
  tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
  if(lineRuntime){lineRuntime.terminate();lineRuntime=null}
  if(offlineClient){offlineClient.reset();offlineClient=null}
+ latestOCRState=null;motion?.reset();
  offlineFailures=0;window.__inkCameraEngine="ink-print-cnn-rotated";
  lineInit=null;window.__inkCameraLineReady=false;
  captureWidth=800;usedDocumentUpscale=false;
@@ -24750,6 +24788,9 @@ async function scan(id){
   if(video.readyState<2||!video.videoWidth){schedule(id,70);return}
   reading=true;
   const started=performance.now();
+  // Reference pixels are sampled before OCR, not from a newer webcam frame.
+  let sourceFrame=null;
+  try{sourceFrame=motion?.capture(video)||null}catch(_){}
   try{
    const payload=await offlineClient.recognize(video);
    if(!active||id!==epoch||frozen||document.hidden||revision!==freezeRevision)return;
@@ -24757,6 +24798,10 @@ async function scan(id){
     const current=offlineClient.track(payload,Date.now());
     window.__inkCameraText=current.text;
     window.__inkCameraWords=current.words;
+    latestOCRState=current;
+    if(motion&&sourceFrame)
+     motion.setReference(sourceFrame,current.words,
+      video.videoWidth,video.videoHeight);
     offlineClient.paint(overlay,video,board,current);
     if(current.text)show(current.text,false);
     else show("Point the camera at printed or handwritten text.");
@@ -24969,6 +25014,7 @@ async function start(){
    show("Point the camera at clear text.");
    loadNativeLineOCR();
   }
+  startMotionLoop();
   schedule(id,20);
  }catch(error){
   if(!active||id!==epoch)return;
