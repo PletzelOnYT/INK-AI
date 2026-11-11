@@ -7,6 +7,7 @@ on:
       - "src/index.shell.html"
       - "src/app.js"
       - "src/camera_ocr.js"
+      - "src/camera_vision_bridge.js"
       - "src/camera_line_runtime.js"
       - "models/ink-native-line-ctc-v1.json"
       - "src/camera_text_detector.js"
