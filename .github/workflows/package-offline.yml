@@ -43,8 +43,3 @@ jobs:
             git commit -m "Build updated standalone index.html"
             git push origin HEAD:main
           fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ink-ai-standalone
-          path: dist/ink-ai-standalone.html
-          if-no-files-found: error
