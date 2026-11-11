@@ -12974,7 +12974,7 @@ if(typeof module!=="undefined"&&module.exports)module.exports=api;
    components.sort((a,b)=>a.x0-b.x0);
    const heights=components.map(c=>c.height),medH=median(heights);
    const span=components[components.length-1].x1-components[0].x0+1;
-   if(span<(components.length<4?1.4:3.6)*medH)continue;
+   if(span<(components.length<4?1.15:3.6)*medH)continue;
    const cx=components.reduce((a,c)=>a+c.cx,0)/components.length;
    const cy=components.reduce((a,c)=>a+c.cy,0)/components.length;
    let numerator=0,denominator=0;
