@@ -8,6 +8,7 @@ on:
       - "scripts/build_offline_ocr.mjs"
       - "scripts/build_standalone.py"
       - "tests/camera-bundled-ocr-browser.py"
+      - "tests/camera-ocr-colors-angles-browser.py"
       - ".github/workflows/verify-offline-ocr.yml"
       - "index.html"
   workflow_dispatch:
@@ -32,6 +33,7 @@ jobs:
         run: |
           python3 -m pip install --quiet selenium
           python3 tests/camera-bundled-ocr-browser.py 2>&1 | tee /tmp/ink-ocr-test-browser.log
+          python3 tests/camera-ocr-colors-angles-browser.py 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
       - name: Record actual tested result instead of inventing metrics
         if: always()
         run: |
@@ -41,8 +43,9 @@ jobs:
           {
             echo "# Real Chrome offline OCR acceptance"
             echo
-            if grep -q "PASS: GitHub index.html" /tmp/ink-ocr-test-browser.log 2>/dev/null; then
-              echo "**PASS:** local standalone HTML read a generated label while completely offline."
+            if grep -q "PASS: GitHub index.html" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
+               grep -q "PASS: offline OCR handles" /tmp/ink-ocr-test-browser.log 2>/dev/null; then
+              echo "**PASS:** local standalone HTML recognized text on generated label, color and tilted fixtures while completely offline."
             else
               echo "**NOT PASSED:** build or browser OCR needs repair. Do not claim production accuracy."
             fi
