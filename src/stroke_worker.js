@@ -268,7 +268,7 @@ function trajectorySupport(prefix,paths,label,penUps){
  if(crossing&&(penUps<1||paths.length<2||
     paths.every(path=>path.length<3)))
   return {ok:false,why:"missing-cross-stroke",rank:-10};
- const allowedStraight=/^[ilI1|\\/\\-=]$/.test(label)||
+ const allowedStraight=["i","l","I","1","|","/","\\","-","="].includes(label)||
     /^[hbnm]$/.test(label);
  if(!allowedStraight&&straightness>.991&&longRun>.16)
   return {ok:false,why:"unhelpful-straight-ray",rank:-10};
