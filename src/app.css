@@ -28,3 +28,7 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 .board.camera-active{background:#080808}
 .board.camera-active #pad,.board.camera-active #ghost{display:none}
 .board.camera-active #cameraVideo{display:block}
+
+/* Recognized words receive transparent white highlighting above the live feed. */
+#cameraHighlights{display:none;position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none}
+.board.camera-active #cameraHighlights{display:block}
