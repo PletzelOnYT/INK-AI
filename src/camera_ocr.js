@@ -39,66 +39,102 @@ function runs(values,minimum=1,gap=0){
  return spans;
 }
 function extract(){
- const w=Math.min(800,video.videoWidth);
+ const w=Math.min(960,video.videoWidth);
  const h=Math.max(1,Math.round(w*video.videoHeight/video.videoWidth));
  c.width=w;c.height=h;g.drawImage(video,0,0,w,h);
  const image=g.getImageData(0,0,w,h),p=image.data;
- const grey=new Uint8Array(w*h),integral=new Uint32Array((w+1)*(h+1));
+ const stride=w+1,N=(w+1)*(h+1);
+ const red=new Uint32Array(N),green=new Uint32Array(N),blue=new Uint32Array(N);
  for(let y=0;y<h;y++){
-  let sum=0;
+  let r=0,g=0,b=0;
   for(let x=0;x<w;x++){
-   const k=(y*w+x)*4;
-   const value=Math.round(p[k]*.299+p[k+1]*.587+p[k+2]*.114);
-   grey[y*w+x]=value;sum+=value;
-   integral[(y+1)*(w+1)+x+1]=integral[y*(w+1)+x+1]+sum;
+   const j=(y*w+x)*4;
+   r+=p[j];g+=p[j+1];b+=p[j+2];
+   const i=(y+1)*stride+x+1,prev=y*stride+x+1;
+   red[i]=red[prev]+r;green[i]=green[prev]+g;blue[i]=blue[prev]+b;
   }
  }
- // Local adaptive threshold handles uneven lighting more safely than a
- // single global cutoff. Explicitly avoid bright reflections/dark scenery.
- const mask=new Uint8Array(w*h);
- const radius=13;
- const sumBox=(x0,y0,x1,y1)=>integral[(y1+1)*(w+1)+x1+1]
- -integral[y0*(w+1)+x1+1]-integral[(y1+1)*(w+1)+x0]+integral[y0*(w+1)+x0];
- const row=new Uint16Array(h);
+ function area(t,x0,y0,x1,y1){
+  return t[(y1+1)*stride+x1+1]-t[y0*stride+x1+1]-
+         t[(y1+1)*stride+x0]+t[y0*stride+x0];
+ }
+ const dark=new Uint8Array(w*h),light=new Uint8Array(w*h),color=new Uint8Array(w*h);
+ const radius=11;
  for(let y=0;y<h;y++){
   const y0=Math.max(0,y-radius),y1=Math.min(h-1,y+radius);
   for(let x=0;x<w;x++){
    const x0=Math.max(0,x-radius),x1=Math.min(w-1,x+radius);
-   const avg=sumBox(x0,y0,x1,y1)/((x1-x0+1)*(y1-y0+1));
-   const v=grey[y*w+x];
-   if(v<Math.min(193,avg-22)&&avg>72){mask[y*w+x]=1;row[y]++}
+   const size=(x1-x0+1)*(y1-y0+1);
+   const pr=area(red,x0,y0,x1,y1)/size;
+   const pg=area(green,x0,y0,x1,y1)/size;
+   const pb=area(blue,x0,y0,x1,y1)/size;
+   const j=(y*w+x)*4,dr=p[j]-pr,dg=p[j+1]-pg,db=p[j+2]-pb;
+   const luminance=.299*dr+.587*dg+.114*db;
+   const chroma=Math.max(Math.abs(dr),Math.abs(dg),Math.abs(db));
+   const index=y*w+x;
+   // Dark-on-light, light-on-dark, and colored-on-colored are evaluated
+   // separately so opposing text polarities do not cancel each other.
+   if(luminance<-24&&chroma>30)dark[index]=1;
+   else if(luminance>24&&chroma>30)light[index]=1;
+   else if(Math.abs(luminance)<=24&&chroma>49)color[index]=1;
   }
  }
- const lineRuns=runs(row,Math.max(3,Math.round(w*.004)),3);
- const lines=[];
- for(const [top,bottom] of lineRuns){
-  const lh=bottom-top+1;
-  if(lh<11||lh>Math.min(h*.21,115))continue;
-  const cols=new Uint16Array(w);
-  for(let y=top;y<=bottom;y++)for(let x=0;x<w;x++)cols[x]+=mask[y*w+x];
-  const spans=runs(cols,Math.max(2,Math.round(lh*.09)),1);
-  const letters=[];
-  for(const [left,right] of spans){
-   let minY=bottom,maxY=top,ink=0;
-   for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
-    if(mask[y*w+x]){ink++;minY=Math.min(minY,y);maxY=Math.max(maxY,y)}
+ function findLines(mask){
+  const rows=new Uint16Array(h);
+  for(let i=0;i<mask.length;i++)if(mask[i])rows[Math.floor(i/w)]++;
+  const bands=runs(rows,Math.max(3,Math.round(w*.0025)),2);
+  const lines=[];
+  for(const [top,bottom] of bands){
+   const lh=bottom-top+1;
+   if(lh<8||lh>Math.min(h*.16,108))continue;
+   const cols=new Uint16Array(w);
+   for(let y=top;y<=bottom;y++)for(let x=0;x<w;x++)cols[x]+=mask[y*w+x];
+   const spans=runs(cols,Math.max(2,Math.round(lh*.075)),1);
+   const letters=[];
+   for(const [left,right] of spans){
+    let minY=bottom,maxY=top,ink=0;
+    for(let y=top;y<=bottom;y++)for(let x=left;x<=right;x++){
+     if(mask[y*w+x]){ink++;minY=Math.min(minY,y);maxY=Math.max(maxY,y)}
+    }
+    const bw=right-left+1,bh=maxY-minY+1;
+    if(bw<2||bh<7||bw>Math.max(30,lh*1.5)||bh>108||
+       ink<Math.max(8,bw*bh*.05))continue;
+    if(ink/(bw*bh)>.8)continue;
+    letters.push({x0:left,y0:minY,x1:right,y1:maxY,mask});
    }
-   const bw=right-left+1,bh=maxY-minY+1;
-   if(bw<3||bh<8||bw>lh*1.5||bh>100||ink<Math.max(12,bw*bh*.04))continue;
-   if(ink/(bw*bh)>.82)continue;
-   letters.push({x0:left,y0:minY,x1:right,y1:maxY});
+   if(letters.length<2||letters.length>40)continue;
+   const heights=letters.map(t=>t.y1-t.y0+1).sort((a,b)=>a-b);
+   const median=heights[Math.floor(heights.length/2)];
+   const consistent=letters.filter(t=>{
+    const size=t.y1-t.y0+1;
+    return size>=median*.45&&size<=median*1.9;
+   }).length;
+   if(consistent<Math.max(2,Math.ceil(letters.length*.66)))continue;
+   // Score the alignment and relative letter-size consistency, not whether
+   // the object is a particular word/brand.
+   const score=consistent/letters.length+Math.min(1,consistent/7);
+   lines.push({letters,top,bottom,score});
   }
-  if(!letters.length)continue;
-  // Reject busy/irregular shapes rather than invent words from the scene.
-  if(letters.length>40)continue;
-  const heights=letters.map(t=>t.y1-t.y0+1).sort((a,b)=>a-b);
-  const mid=heights[Math.floor(heights.length/2)];
-  const plausible=letters.filter(t=>(t.y1-t.y0+1)>=mid*.42);
-  if(plausible.length<2)continue;
-  if(plausible.length>=4&&plausible.length/letters.length<.65)continue;
-  lines.push({letters,top,bottom});
+  return lines;
  }
- return {image,mask,w,h,lines};
+ const lines=[...findLines(dark),...findLines(light),...findLines(color)]
+    .sort((a,b)=>b.score-a.score);
+ const picked=[];
+ for(const line of lines){
+  if(picked.length>=8)break;
+  const candidate={x0:Math.min(...line.letters.map(l=>l.x0)),
+    x1:Math.max(...line.letters.map(l=>l.x1)),y0:line.top,y1:line.bottom};
+  if(picked.some(other=>{
+    const a=other.region;
+    const dx=Math.max(0,Math.min(candidate.x1,a.x1)-Math.max(candidate.x0,a.x0));
+    const dy=Math.max(0,Math.min(candidate.y1,a.y1)-Math.max(candidate.y0,a.y0));
+    return dx*dy>Math.min((candidate.x1-candidate.x0)*(candidate.y1-candidate.y0),
+      (a.x1-a.x0)*(a.y1-a.y0))*.45;
+  }))continue;
+  picked.push({...line,region:candidate});
+ }
+ picked.sort((a,b)=>a.top-b.top);
+ return {image,w,h,lines:picked};
 }
 function characterImage(item,frame){
  const {x0,y0,x1,y1}=item,w=frame.w,h=frame.h,iw=x1-x0+1,ih=y1-y0+1;
@@ -109,7 +145,7 @@ function characterImage(item,frame){
  for(let y=0;y<dh;y++)for(let x=0;x<dw;x++){
   const sx=Math.min(w-1,x0+Math.floor((x+.5)*iw/dw));
   const sy=Math.min(h-1,y0+Math.floor((y+.5)*ih/dh));
-  values[(y+oy)*32+x+ox]=frame.mask[sy*w+sx];
+  values[(y+oy)*32+x+ox]=(item.mask?item.mask[sy*w+sx]:0);
  }
  return values;
 }
@@ -144,7 +180,8 @@ function arrange(frame,predictions){
    const top=result?.top?.[0],second=result?.top?.[1];
    if(!top||!/[a-zA-Z0-9]/.test(top.char)||top.char.length!==1)continue;
    // CNN was trained for handwriting, not scenes. Require strong separation.
-   if(top.confidence<.67||top.confidence-(second?.confidence||0)<.35)continue;
+   if(top.confidence<(window.__inkPrintReady?.36:.67)||
+      top.confidence-(second?.confidence||0)<(window.__inkPrintReady?.12:.35))continue;
    accepted.push({text:top.char,box});
   }
   if(!accepted.length)continue;
