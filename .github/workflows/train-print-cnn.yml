@@ -4,14 +4,13 @@ on:
     branches: [main]
     paths:
       - "src/train_print_cnn.py"
-      - "scripts/update_model_graphs.py"
       - ".github/workflows/train-print-cnn.yml"
   workflow_dispatch:
 permissions:
   contents: write
 concurrency:
   group: print-training
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   train:
     runs-on: ubuntu-latest
@@ -34,11 +33,20 @@ jobs:
           assert p["training"]["heldout_accuracy"]==m["heldout_accuracy"]
           assert m["real_camera_word_accuracy"] is None
           PY
-      - name: Refresh graphs and regenerate repository root HTML
+      - name: Publish against current repository main
         run: |
+          cp models/ink-print-cnn-v1.json /tmp/ink-print-cnn-v1.json
+          cp models/print-cnn-v1-metrics.json /tmp/print-cnn-v1-metrics.json
+          git fetch origin main
+          git reset --hard origin/main
+          cp /tmp/ink-print-cnn-v1.json models/ink-print-cnn-v1.json
+          cp /tmp/print-cnn-v1-metrics.json models/print-cnn-v1-metrics.json
           python3 scripts/update_model_graphs.py
           python3 scripts/build_standalone.py
           cp dist/ink-ai-standalone.html index.html
+          node --check src/camera_ocr.js
+          node tests/camera-local-ocr.mjs
+          node tests/print-camera-graphs.mjs
       - name: Commit tested model, exact measurements, updated graphs and HTML
         run: |
           git config user.name "github-actions[bot]"
@@ -46,6 +54,5 @@ jobs:
           git add models/ink-print-cnn-v1.json models/print-cnn-v1-metrics.json docs/camera-print-benchmarks.svg docs/ai-systems.svg index.html
           if ! git diff --cached --quiet; then
             git commit -m "Train printed-text CNN and publish measured accuracy graphs and standalone HTML"
-            git pull --rebase origin main
             git push origin HEAD:main
           fi
