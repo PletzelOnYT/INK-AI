@@ -97,7 +97,7 @@ jobs:
         run: |
           cp dist/ink-ai-standalone.html index.html
           rm -f docs/offline-ocr-build-error.md
-          git add index.html docs/recognition-vertical-bars.svg docs/completion-vertical-bars.svg
+          git add index.html docs/recognition-vertical-bars.svg docs/completion-vertical-bars.svg docs/current-models.json
           git add -u docs/offline-ocr-build-error.md 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
