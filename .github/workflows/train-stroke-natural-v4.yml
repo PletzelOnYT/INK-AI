@@ -1,0 +1,72 @@
+name: Train V4 natural handwriting on independent pen writers
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_stroke_natural_v4.py"
+      - "tests/natural-v4-release-gate.py"
+      - ".github/workflows/train-stroke-natural-v4.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-natural-stroke-v4
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 140
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Verify real training and held-out metric contracts
+        run: |
+          python -m py_compile src/train_stroke_natural_v4.py
+          python tests/natural-v4-release-gate.py
+          python tests/prefix-domain-v2-unit.py
+      - name: Fine-tune the deployed GRU on real handwritten natural motion
+        run: python -u src/train_stroke_natural_v4.py --epochs 8 --samples-per-epoch 24000 --batch 96 --tail-steps 24
+      - name: Independently check held-out handwriting gains
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("models/stroke-natural-v4-metrics.json").read_text())
+          assert r["real_independent_glyphs"]>1000 and r["seen"]>40000
+          if r["eligible"]:
+              m=json.loads(Path("models/ink-stroke-natural-v4.json").read_text())
+              assert m["training"]["natural_motion_v4"]
+              assert m["training"]["fine_tuned_own_model"]=="models/ink-stroke-prefix-domain-v2.json"
+              assert r["gain"]>=.035 and r["hard_gain"]>=.05
+              print("QUALITY-CLEARED candidate, still not deployed")
+          else:
+              assert not Path("models/ink-stroke-natural-v4.json").exists()
+              print("REJECT V4: keep validated V2 offline model")
+          PY
+      - name: Publish genuine training evidence and only approved experimental weights
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/stroke-natural-v4-metrics.json
+          if test -s models/ink-stroke-natural-v4.json; then git add models/ink-stroke-natural-v4.json; fi
+          git commit -m "Measure natural-motion GRU on unseen writers"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: natural-motion-v4-training-evidence
+          path: |
+            models/stroke-natural-v4-metrics.json
+            models/ink-stroke-natural-v4.json
+          if-no-files-found: ignore
