@@ -73,6 +73,7 @@ jobs:
           node --check src/camera_document_layout.js
           node --check src/camera_motion_tracker.js
           node tests/camera-motion-tracker.mjs
+          node tests/camera-native-focus.mjs
           node --check src/camera_offline_bridge.js
           node --check src/camera_handwriting.js
           node tests/camera-handwriting.mjs
