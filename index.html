@@ -16,9 +16,6 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 .tool[aria-pressed="true"]{background:#fff;color:#0c0c0c}
 .tool svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .tool:focus-visible{outline:2px solid white;outline-offset:2px}
-.completion-model-choice{max-width:178px;min-height:38px;margin-left:7px;padding:0 9px;border:1px solid #505050;border-radius:9px;background:#202020;color:#eee;font:inherit;font-size:13px;cursor:pointer}
-.completion-model-choice:focus-visible{outline:2px solid #fff;outline-offset:2px}
-@media(max-width:520px){.completion-model-choice{max-width:112px;font-size:11px;margin-left:3px;padding:0 3px}.tool{width:43px}}
 #pad[data-tool="eraser"]{cursor:cell}
 
 /* The prediction layer is never part of the saved/recognized ink. */
@@ -80,10 +77,6 @@ The handwriting and stroke-completion models remain separate first-party INK AI 
     <button id="eraser" class="tool" type="button" aria-label="Eraser" title="Eraser" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.8 13.3-7.4 7.4H7.1l-3.6-3.6a2 2 0 0 1 0-2.8L14.2 3.6a2 2 0 0 1 2.8 0l3.8 3.8a2 2 0 0 1 0 2.8Z"/><path d="m9.5 8.3 7.2 7.2M13.4 20.7H21"/></svg></button>
     <button id="assist" class="tool" type="button" aria-label="Experimental neural stroke completion" title="AI completes handwritten letters, numbers and symbols · press G to accept" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/><path d="m19 17 .8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z"/></svg></button>
     <button id="camera" class="tool" type="button" aria-label="Camera text reader" title="Read text with webcam" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h-4l-2 3H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-4l-2-3Z"/><circle cx="12" cy="14" r="3.5"/></svg></button>
-    <select id="completionMode" class="completion-model-choice" aria-label="AI completion model" title="Choose the validated Completer or try Lift V5">
-      <option value="auto">Best tested</option>
-      <option value="lift-v5">Lift V5 (experimental)</option>
-    </select>
   </div>
   <div class="board">
     <canvas id="pad" width="1200" height="550" data-tool="pen" aria-label="Write or draw here"></canvas>
@@ -11062,20 +11055,6 @@ const STROKE_NATURAL_V4_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-A
 const STROKE_LIFT_V5_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-lift-aware-v5.json";
 const STROKE_PENLIFT_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-penlift-v3.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
-const completionModeSelect=document.getElementById("completionMode");
-const experimentalLiftTag=document.getElementById("inkStrokeExperimentalV5");
-let glyphModelLoadToken=0;
-let completionChoice="auto";
-try{
- const storedChoice=localStorage.getItem("inkAI-completion-choice");
- if(storedChoice==="lift-v5"&&experimentalLiftTag)completionChoice="lift-v5";
-}catch(_){/* Local files may disable storage. */}
-if(completionModeSelect){
- const expOption=completionModeSelect.querySelector('option[value="lift-v5"]');
- if(expOption)expOption.disabled=!experimentalLiftTag;
- completionModeSelect.value=completionChoice;
-}
-window.__inkCompletionModelChoice=completionChoice;
 let nextCompletionGroup=0,lastAcceptedFeedback=null;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
@@ -11408,7 +11387,6 @@ function createGlyphWorker(){
 }
 async function loadGlyphModel(){
  if(glyphReady||glyphLoading)return;
- const loadToken=glyphModelLoadToken;
  glyphLoading=true;
  assistButton.title="Loading trained pen-trajectory model…";
  try{
@@ -11424,19 +11402,8 @@ async function loadGlyphModel(){
      "models/ink-stroke-prefix-v1.json",STROKE_PREFIX_URL,
      "models/ink-stroke-sequence-v1.json",STROKE_URL];
   let model=null,lastError=null;
-  if(completionChoice==="lift-v5"&&experimentalLiftTag){
-   try{
-    const research=JSON.parse(experimentalLiftTag.textContent);
-    if(research.format!=="ink-online-stroke-mdn-v1"||
-       research.training?.recurrent_lift_v5!==true||
-       research.training?.fine_tuned_own_model!=="models/ink-stroke-prefix-domain-v2.json"||
-       research.parameter_count>=1000000)
-      throw Error("Lift V5 research model identity mismatch");
-    model=research;
-   }catch(err){lastError=err}
-  }
   const embedded=document.getElementById("inkStrokeModel");
-  if(embedded&&!model){
+  if(embedded){
    try{
     const saved=JSON.parse(embedded.textContent);
     if(saved.format==="ink-online-stroke-mdn-v1"&&
@@ -11502,7 +11469,6 @@ async function loadGlyphModel(){
    }catch(err){lastError=err;model=null}
   }
   if(!model)throw lastError||Error("No generative weights found");
-  if(loadToken!==glyphModelLoadToken)return;
   createGlyphWorker();
   glyphWorker.postMessage({cmd:"init",model});
   window.__inkLastGlyphError="";
@@ -11514,33 +11480,8 @@ async function loadGlyphModel(){
    clearTimeout(glyphRetry);
    glyphRetry=setTimeout(()=>{if(assistEnabled&&!glyphReady)loadGlyphModel()},30000);
   }
- }finally{if(loadToken===glyphModelLoadToken)glyphLoading=false}
+ }finally{glyphLoading=false}
 }
-completionModeSelect?.addEventListener("change",()=>{
- const chosen=completionModeSelect.value;
- if(chosen==="lift-v5"&&!experimentalLiftTag){
-  completionModeSelect.value="auto";
-  return;
- }
- if(chosen===completionChoice)return;
- completionChoice=chosen;
- window.__inkCompletionModelChoice=chosen;
- try{localStorage.setItem("inkAI-completion-choice",chosen)}catch(_){}
- ++glyphModelLoadToken;
- ++glyphEpoch;
- ++glyphSerial;
- clearTimeout(glyphTimer);
- clearTimeout(glyphRetry);
- glyphBusy=false;glyphReady=false;glyphLoading=false;
- window.__inkGlyphReady=false;
- window.__inkAssistInFlight=false;
- window.__inkFallbackReady=false;
- glyphCachedOptions=[];
- glyphClassMemory.clear();
- clearGhost();
- if(glyphWorker){glyphWorker.terminate();glyphWorker=null}
- loadGlyphModel();
-});
 function stableCharacterOptions(incoming){
  // Partial glyphs are inherently ambiguous. Keep a short exponentially
  // decaying memory of the CNN class probabilities across successive pen
