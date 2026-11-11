@@ -63,6 +63,21 @@ context.window.__inkCameraRecognizeHandwriting=async images=>
    {char:"N",confidence:.25}]}));
 const weak=await api.recognize(imageCanvas,width,height);
 assert.equal(weak.lines.length,0,"Low evidence must never invent handwriting");
+
+context.window.__inkPrintReady=true;
+let printCalls=0;
+context.window.__inkCameraRecognize=async images=>{
+ printCalls++;
+ return "WORD".split("").map(char=>({top:[
+  {char,confidence:.98},{char:"X",confidence:.01}]}));
+};
+const assisted=await api.recognize(imageCanvas,width,height);
+assert.equal(assisted.lines[0].words[0].text,"WORD");
+assert.equal(assisted.lines[0].words[0].recognitionEngine,
+ "ink-print-cnn-fallback");
+assert.equal(assisted.printAssistedGlyphs,4);
+assert.equal(printCalls,1,"Printed CNN is only called after handwriting abstains");
+
 context.window.InkCameraDetector.detect=()=>[];
 const blank=await api.recognize(imageCanvas,width,height);
 assert.equal(blank.lines.length,0);
