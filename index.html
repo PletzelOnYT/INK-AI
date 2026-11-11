@@ -12749,6 +12749,55 @@ function decodePrintedWord(predictions,words){
  return {text:titled?best.text[0].toUpperCase()+best.text.slice(1):best.text,
    confidence:best.confidence,lexicon:true,changes:best.changes};
 }
+// Accumulate original CNN probabilities across nearby camera frames. This
+// is an actual probabilistic sequence estimator, not a dictionary guess.
+// An uncertain glyph may become legible after several different views.
+function createGlyphEvidenceTracker(){
+ let regions=[],nextId=0;
+ function fuse(frames,length){
+  const predictions=[];
+  for(let i=0;i<length;i++){
+   const votes=new Map();
+   for(const f of frames){
+    for(const choice of f.predictions[i]?.top||[]){
+     if(!/^[A-Za-z0-9]$/.test(choice.char)||
+        !Number.isFinite(choice.confidence))continue;
+     const old=votes.get(choice.char)||0;
+     votes.set(choice.char,old+choice.confidence/frames.length);
+    }
+   }
+   predictions.push({top:[...votes].map(([char,confidence])=>({char,confidence}))
+     .sort((a,b)=>b.confidence-a.confidence).slice(0,5)});
+  }
+  return predictions;
+ }
+ function update(items,now=Date.now()){
+  const visited=new Set();
+  for(const item of items||[]){
+   if(!item?.box||!item?.polygon||!Array.isArray(item.predictions))continue;
+   const n=item.predictions.length;
+   if(n<3||n>24)continue;
+   let region=regions.find(t=>t.length===n&&near(t.box,item.box)&&!visited.has(t));
+   if(!region){
+    region={uid:++nextId,length:n,box:item.box,polygon:item.polygon,
+      angle:item.angle||0,lastSeen:0,frames:[]};
+    regions.push(region);
+   }
+   visited.add(region);
+   region.box=item.box;region.polygon=item.polygon;
+   region.angle=item.angle||0;region.lastSeen=now;
+   region.frames=region.frames.filter(f=>now-f.when<=2600);
+   region.frames.push({when:now,predictions:item.predictions});
+   if(region.frames.length>6)region.frames.shift();
+  }
+  regions=regions.filter(t=>now-t.lastSeen<=3000);
+  return regions.filter(t=>t.frames.length>=2&&now-t.lastSeen<2500)
+   .map(t=>({uid:t.uid,box:t.box,polygon:t.polygon,angle:t.angle,
+     frames:t.frames.length,predictions:fuse(t.frames,t.length)}));
+ }
+ function reset(){regions=[];nextId=0}
+ return {update,reset};
+}
 // Track current on-screen words by position and temporal voting. Never
 // append old guesses to an unlimited transcript after a page disappears.
 function createTracker(){
@@ -12855,7 +12904,7 @@ function anglesForPass(pass,preferred){
  const values=Number.isFinite(preferred)?[preferred,0,...pair]:[0,...pair];
  return [...new Set(values.map(n=>Math.round(n)))].slice(0,4);
 }
-const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord,createRegionTracker,decodePrintedWord,createSceneMonitor};
+const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord,createRegionTracker,decodePrintedWord,createSceneMonitor,createGlyphEvidenceTracker};
 if(typeof window!=="undefined")window.InkCameraCore=api;
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })();
