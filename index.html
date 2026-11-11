@@ -10312,6 +10312,69 @@ function continuationQuality(prefix,paths,label,penUps,stopReached){
  return {score,reason:horizontallyFlat?"flat-tail":"ok",
     end:[endX,endY],length,down,flat:horizontallyFlat};
 }
+// Neural-output verification. This measures the actual vectors returned by
+// the GRU; it does not draw a substitute glyph or trace a font. The previous
+// critic gave a nearly identical score to a straight 4-point ray and a useful
+// round stroke, so sampling frequently selected the ray for higher likelihood.
+function trajectorySupport(prefix,paths,label,penUps){
+ const curved=/^[acegoqsACGJOQSU]$/.test(label);
+ const crossing=/^[xXtTfF+]$/.test(label);
+ let length=0,points=0,turn=0,largestTurn=0;
+ let longRun=0,straightness=0,validRuns=0,broken=0;
+ for(const path of paths){
+  if(path.length<2){broken++;continue}
+  let run=0,previous=null;
+  for(let j=1;j<path.length;j++){
+   const dx=path[j][0]-path[j-1][0],
+     dy=path[j][1]-path[j-1][1],step=Math.hypot(dx,dy);
+   if(!Number.isFinite(step)||step>.108)return {ok:false,why:"jump",rank:-10};
+   run+=step;
+   if(previous&&step>.005){
+    const [a,b]=previous,den=Math.hypot(a,b)*step;
+    if(den>1e-8){
+     const angle=Math.atan2(Math.abs(a*dy-b*dx),a*dx+b*dy);
+     if(angle>.075){turn+=Math.min(Math.PI,angle);largestTurn=Math.max(largestTurn,angle)}
+    }
+   }
+   if(step>.005)previous=[dx,dy];
+  }
+  length+=run;points+=path.length;
+  if(run>=.065){
+   const direct=Math.hypot(path.at(-1)[0]-path[0][0],
+     path.at(-1)[1]-path[0][1]);
+   longRun=Math.max(longRun,run);
+   straightness=Math.max(straightness,direct/run);
+   validRuns++;
+  }
+ }
+ if(!validRuns||length<.065||points<3)
+  return {ok:false,why:"tiny-tail",rank:-10};
+ if(broken>1)return {ok:false,why:"fragments",rank:-10};
+ // A round letter cannot be completed by the MDN's default near-straight
+ // ray. Require a measurable arc with enough learned pen coordinates.
+ if(curved&&(points<6||longRun<.12||straightness>.945||
+    turn<.65||largestTurn>2.55))
+  return {ok:false,why:"straight-or-jittery-curve",rank:-10,
+    straightness,turn,points};
+ // The first stroke of x/t is not "completed" by making it longer.
+ // An actual second crossing stroke requires a learned pen lift and more
+ // than one real drawn segment; do not pretend the GRU made that stroke.
+ if(crossing&&(penUps<1||paths.length<2||
+    paths.every(path=>path.length<3)))
+  return {ok:false,why:"missing-cross-stroke",rank:-10};
+ const allowedStraight=/^[ilI1|\\/\\-=]$/.test(label)||
+    /^[hbnm]$/.test(label);
+ if(!allowedStraight&&straightness>.991&&longRun>.16)
+  return {ok:false,why:"unhelpful-straight-ray",rank:-10};
+ // Penalize shapes with strong accidental directional jitter even if they
+ // accidentally bend enough to evade the straightness check.
+ if(largestTurn>2.65&&turn>6)
+  return {ok:false,why:"jitter",rank:-10};
+ const rank=curved?Math.min(.9,(1-straightness)*1.6+
+   Math.min(.45,turn*.08)):Math.min(.12,(1-straightness)*.4);
+ return {ok:true,why:"neural-trajectory",rank,length,points,
+   straightness,turn,largestTurn};
+}
 // A handwritten prefix is the same for every sampled trajectory of a label.
  // Run the expensive GRU prefix only ONCE per label, then copy the learned
  // hidden states to independently sample each continuation. No templates.
@@ -10476,18 +10539,22 @@ function generateCandidates(m,isFallback=false){
      // Geometry acceptance and neural probability are independent gates.
      // A high likelihood must not rescue a physically invalid continuation.
      if(result.quality.score<-.9)continue;
+     const support=trajectorySupport(prefix,result.paths,choice.char,result.penUps);
+     if(!support.ok)continue;
      const consistency=Math.max(-6,Math.min(9,result.rolloutLogLikelihood));
+     // Neural likelihood is not a shape-quality metric. The old .18
+     // multiplier consistently preferred high-probability straight rays.
      const value=result.quality.score+
-       .18*consistency+
-       Math.min(1.8,result.prefixScore*.04)+
-       .17*Math.log((choice.confidence||0)+.03);
+       support.rank+.04*consistency+
+       Math.min(.5,result.prefixScore*.018)+
+       .12*Math.log(Math.max(.01,(choice.confidence||0)+.03));
      if(value<-.9)continue;
      const candidate={
        label:choice.char,paths:result.paths,
        penUps:result.penUps,confidence:choice.confidence||0,
        score:value,reason:result.quality.reason,
        quality:result.quality.score,variant:attempt,
-       rolloutLogLikelihood:result.rolloutLogLikelihood,
+       support,rolloutLogLikelihood:result.rolloutLogLikelihood,
        truncated:result.truncated
      };
      candidates.push(candidate);
