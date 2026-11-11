@@ -38,17 +38,22 @@
    return {...payload,words:payload.lines.flatMap(line=>line.words||[])};
   const lines=[];
   let rejected=0,accepted=0;
+  const diagnostic=[];
+  const report=(w,reason,score=0)=>{
+   if(window.__inkDebugOCR===true&&diagnostic.length<32)
+    diagnostic.push({text:w.text,confidence:w.confidence,reason,score});
+  };
   for(const line of payload.lines){
    if(!Array.isArray(line?.words)||!line.words.length)continue;
    const supported=[];
    for(const word of line.words){
     if(!Evidence.plausibleWord(word,line.words.length,width,height)){
-     rejected++;continue;
+     rejected++;report(word,"geometry");continue;
     }
     const confidence=Number(word.confidence);
-    if(!Number.isFinite(confidence)||confidence<.32){rejected++;continue}
+    if(!Number.isFinite(confidence)||confidence<.32){rejected++;report(word,"confidence");continue}
     const metrics=Evidence.evidence(context,word.box,width,height,word.points);
-    if(!metrics.ok||metrics.score<.43){rejected++;continue}
+    if(!metrics.ok||metrics.score<.43){rejected++;report(word,metrics.reason,metrics.score);continue}
     supported.push({...word,visualQuality:metrics.score});
     accepted++;
    }
@@ -63,6 +68,7 @@
    lines.push({...line,text,words:supported,visualQuality:quality,confidence});
   }
   window.__inkCameraEvidence={accepted,rejected};
+  if(window.__inkDebugOCR===true)window.__inkCameraRejectedWords=diagnostic;
   return {...payload,lines,words:lines.flatMap(line=>line.words)};
  }
  const px=box=>(box.x0+box.x1)/2;
