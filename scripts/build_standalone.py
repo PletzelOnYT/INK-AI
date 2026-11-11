@@ -69,6 +69,19 @@ if lift_weights.is_file() and lift_report.is_file():
         lift_metrics.get("browser_integration_passed") is True or
         os.environ.get("INK_STROKE_PREVIEW_LIFT_V5")=="1"):
         stroke_path="models/ink-stroke-lift-aware-v5.json"
+# V6 remains an experiment until both the held-out writer benchmark and
+# real browser trajectory integration are recorded as passing. A failed
+# training job must NEVER silently replace the model users already have.
+v6_file=ROOT/"models/ink-stroke-prefix-domain-v6.json"
+v6_report=ROOT/"models/stroke-prefix-domain-v6-metrics.json"
+if v6_file.is_file():
+    candidate_report=json.loads(v6_report.read_text()) if v6_report.is_file() else {}
+    if (candidate_report.get("eligible") is True and
+        candidate_report.get("deployable") is True and
+        candidate_report.get("browser_integration_passed") is True):
+        stroke_path="models/ink-stroke-prefix-domain-v6.json"
+    elif os.environ.get("INK_STROKE_PREVIEW_V6")=="1":
+        stroke_path="models/ink-stroke-prefix-domain-v6.json"
 print("Bundled GRU:",stroke_path)
 models=[
  ("inkRecognitionModel","application/json",
