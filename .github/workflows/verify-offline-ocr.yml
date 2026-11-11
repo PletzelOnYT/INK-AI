@@ -10,6 +10,7 @@ on:
       - "scripts/build_standalone.py"
       - "tests/camera-bundled-ocr-browser.py"
       - "tests/camera-ocr-colors-angles-browser.py"
+      - "tests/camera-text-evidence.mjs"
       - ".github/workflows/verify-offline-ocr.yml"
       - "index.html"
   workflow_dispatch:
@@ -47,7 +48,7 @@ jobs:
             echo
             if grep -q "PASS: GitHub index.html" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
                grep -q "PASS: offline OCR preserves" /tmp/ink-ocr-test-browser.log 2>/dev/null; then
-              echo "**PASS:** local standalone HTML recognized text on generated label, color and tilted fixtures while completely offline."
+              echo "**PASS:** local standalone HTML preserved genuine print on colored and angled labels while suppressing smooth-wall and shoulder false positives."
             else
               echo "**NOT PASSED:** build or browser OCR needs repair. Do not claim production accuracy."
             fi
