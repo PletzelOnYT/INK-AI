@@ -1,35 +1,51 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 const get=name=>JSON.parse(fs.readFileSync("models/"+name,"utf8"));
+const manifest=JSON.parse(fs.readFileSync("docs/current-models.json","utf8"));
 const v3=get("recognition-v3-metrics.json");
-const p=get("stroke-prefix-metrics.json");
-const d=get("stroke-prefix-domain-v2-metrics.json");
 const v5=get("recognition-v5-metrics.json");
-const v6=get("stroke-prefix-domain-v6-metrics.json");
+const v4=get("recognition-v4-evaluation-summary.json");
+const v2=get("stroke-prefix-domain-v2-metrics.json");
+const seq=get("stroke-sequence-v2-metrics.json");
+const pen=get("penlift-v3-metrics.json");
+const lift=get("recurrent-lift-v5-metrics.json");
 const readme=fs.readFileSync("README.md","utf8");
 const recog=fs.readFileSync("docs/recognition-vertical-bars.svg","utf8");
 const comp=fs.readFileSync("docs/completion-vertical-bars.svg","utf8");
 function pct(v){return (100*v).toFixed(2)+"%"}
-for(const [file,svg] of [
- ["recognition-vertical-bars.svg",recog],
- ["completion-vertical-bars.svg",comp]
-]){
+function err(v){return v.toFixed(4)}
+for(const [file,svg] of [["recognition-vertical-bars.svg",recog],["completion-vertical-bars.svg",comp]]){
  assert.ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'));
  assert.ok(svg.trimEnd().endsWith("</svg>"));
  assert.ok(!/<script|onload=|<foreignObject/i.test(svg));
  assert.ok(readme.includes("./docs/"+file));
- assert.ok(svg.includes('fill="#fff"'),"Chart must be white");
+ assert.ok(svg.includes('fill="#ffffff"'),"Chart must have white background");
+ assert.equal((svg.match(/data-active="true"/g)||[]).length,1,"Exactly one deployed model must be blue");
 }
-for(const x of [v3.baseline_v2.pen_independent.overall,v3.independent_pen_v3.overall])
- assert.ok(recog.includes(pct(x)),"Recognizer bar is not a measured UJI value");
-assert.ok(recog.includes(pct(v5.independent_pen_v3.overall)),"Missing V5 independent-writer score");
-for(const x of [d.baseline.independent.prefix_frame_position_error,d.candidate.independent.prefix_frame_position_error,v6.candidate.independent.prefix_frame_position_error])
- assert.ok(comp.includes(x.toFixed(3)),"Completer version history must include measured trajectory errors");
-assert.ok(comp.includes("Domain V7") && comp.includes("Lift V5"),"Missing experiment versions");
-assert.equal((recog.match(/<rect x=/g)||[]).length,4,"Four scored recognizer versions");
-assert.ok((comp.match(/<rect x=/g)||[]).length>=5,"Model history must chart measured completer variants");
+const liveCnn=manifest.recognizer.weights,liveGru=manifest.completer.weights;
+assert.ok(recog.includes('data-active="true" data-weight="'+liveCnn+'"'),"CNN blue must match actual HTML manifest");
+assert.ok(comp.includes('data-active="true" data-weight="'+liveGru+'"'),"GRU blue must match actual HTML manifest");
+assert.ok(recog.includes('fill="#2563eb"'),"Deployed CNN must be highlighted blue");
+assert.ok(comp.includes('fill="#2563eb"'),"Deployed GRU must be highlighted blue");
+for(const version of [1,2,3,4,5])
+ assert.ok(recog.includes('data-model="CNN V'+version+'"'),"Missing CNN version "+version);
+for(const s of [pct(v3.baseline_v2.pen_independent.overall),pct(v3.independent_pen_v3.overall),pct(v4.independent_uji_v4.overall),pct(v5.independent_pen_v3.overall)])
+ assert.ok(recog.includes(s),"Missing measured independent-writer accuracy "+s);
+assert.ok(recog.includes("84.96%"),"CNN V1 should have its actual EMNIST score");
+for(const name of ["Sequence V1","Sequence V2","Prefix V1","Domain V2","PenLift V3",
+                   "Domain V3","Domain V4","Natural V4","Lift V5","Domain V6","Domain V7"]){
+ assert.ok(comp.includes('data-model="'+name+'"'),"Missing completer experiment "+name);
+}
+assert.ok(comp.includes(err(v2.candidate.independent.prefix_frame_position_error)));
+assert.ok(comp.includes(err(pen.candidate.prefix_position.prefix_frame_position_error)));
+assert.ok(comp.includes(err(lift.candidate.position.prefix_frame_position_error)));
+assert.ok(comp.includes(pct(pen.candidate.independent.pen_lift_f1)));
+assert.ok(comp.includes(pct(lift.candidate.independent.pen_lift_f1)));
+assert.ok(comp.includes("Legacy NLL "+seq.baseline_v1.independent.nll.toFixed(3)),"Missing legacy V1 NLL");
+assert.ok(comp.includes("Legacy NLL "+seq.v2.independent.nll.toFixed(3)),"Missing legacy V2 NLL");
+assert.ok(comp.includes('data-model="Domain V7"'),"V7 still appears with pending status even without metrics");
 assert.ok(readme.includes("a real CNN, not nearest-template matching"));
 assert.ok(readme.includes("a real generative GRU, not a font or curve lookup"));
 assert.ok(readme.includes("**not** perfect-font replacements"));
 assert.ok(readme.includes("whole-character suggestion acceptance/correctness rate"));
-console.log("PASS: README graphs show measured model versions, with unverified versions explicitly labeled");
+console.log("PASS: every model with scores shown, exactly one blue active checkpoint per chart, all measured metrics match checked-in records");
