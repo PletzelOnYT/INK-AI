@@ -10438,8 +10438,13 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps,prepared=
    const visible=[...paths,active];
    const check=continuationQuality(prefix,visible,label,penUps,false);
    if(check.length>=.055&&check.score>-.9){
+    // Inspect each actual neural prefix before the MDN wanders into a
+    // straight ray or an uncontrolled squiggle. Keep the strongest natural
+    // neural segment; never draw or interpolate geometry for it.
+    const shape=trajectorySupport(prefix,visible,label,penUps);
+    if(!shape.ok)continue;
     const evidence=logCount?logSum/logCount:0;
-    const selection=check.score+.06*Math.min(check.length,.5);
+    const selection=check.score+shape.rank+.06*Math.min(check.length,.5);
     if(!bestEarly||selection>bestEarly.selection){
      bestEarly={paths:visible.map(p=>p.map(q=>q.slice())),
        moves,penUps,quality:check,
@@ -10533,7 +10538,7 @@ function generateCandidates(m,isFallback=false){
    // every glyph. This fallback is used only when the primary failed.
    const curvedPreferred=/^[acegoqsACGJOQSU]$/.test(m.preferred||"");
    const perLabel=isFallback&&curvedPreferred?
-      Math.max(basePerLabel,live?4:7):basePerLabel;
+      Math.max(basePerLabel,live?3:4):basePerLabel;
    let previewSent=false;
    for(let j=0;j<options.length;j++){
     const choice=options[j];
