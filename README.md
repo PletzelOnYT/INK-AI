@@ -84,6 +84,8 @@ The source app loads local model files and runs inference entirely in browser wo
 
 **Camera OCR — embedded Tesseract LSTM + INK AI neural models.** The offline camera reader uses bundled Tesseract.js/Tesseract WASM with a pretrained English LSTM text-recognition model. INK AI also includes its own printed-character CNN, text-region verifier, and CNN–BiGRU–CTC line reader for fallback and experimental recognition. OCR is **real trained machine learning**, not just comparing image shapes. It works without sending camera frames to a server. Small, distant, very blurry or steeply perspective-distorted text may remain unreadable because the camera must capture enough actual detail.
 
+The camera OCR keeps normal scans responsive at 1280px, then uses brief 1920px detail scans when recognition is weak (if the webcam supports that resolution). The offline neural reader can also retry a magnified center crop, RGB-aware contrast enhancement for colored ink or faint pencil, and bounded perspective corrections for text viewed from an angle. Isolated clock digits require stronger visual evidence and repeated reads before display. These are recovery techniques, not magic super-resolution: tiny, out-of-focus, occluded, or strongly skewed text may still be unreadable.
+
 The [deployed-model manifest](./docs/current-models.json) records the exact recognizer and completion weights bundled into the downloadable HTML.
 
 ### Training data and honest evaluation
