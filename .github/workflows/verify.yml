@@ -85,6 +85,7 @@ jobs:
           node tests/completer-input-regression.mjs
           node tests/completer-fast-quality.mjs
           node tests/completer-no-straight-rays.mjs
+          node tests/completer-anti-regression.mjs
           node tests/completer-v7-runtime.mjs
           node tests/completer-v6-runtime.mjs
           node tests/completer-prefix-cache.mjs
@@ -119,6 +120,7 @@ jobs:
           node tests/completer-input-regression.mjs
           node tests/completer-fast-quality.mjs
           node tests/completer-no-straight-rays.mjs
+          node tests/completer-anti-regression.mjs
           node tests/completer-v7-runtime.mjs
           node tests/completer-v6-runtime.mjs
           node tests/completer-prefix-cache.mjs
