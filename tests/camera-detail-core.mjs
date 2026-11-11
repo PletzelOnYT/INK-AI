@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,
- isCompactNumericRead} from "../src/camera_detail_core.mjs";
+ isCompactNumericRead,perspectiveQuad,quadMapper,rectifyPerspectiveRGBA} from "../src/camera_detail_core.mjs";
 
 assert.deepEqual(detailSize(1920,1080),{width:1920,height:1080});
 assert.deepEqual(detailSize(3840,2160),{width:1920,height:1080});
@@ -31,6 +31,20 @@ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
  if(x>22&&x<49&&(y===14||y===15||x===25||x===46))r=g=b=155;
  rgba[k]=r;rgba[k+1]=g;rgba[k+2]=b;rgba[k+3]=255;
 }
+const quad=perspectiveQuad(w,h,"yaw",1);
+assert.equal(quad.length,4);
+const perspective=quadMapper(quad);
+const topLeft=perspective(0,0),bottomRight=perspective(1,1);
+assert.ok(Math.abs(topLeft.x-quad[0].x)<1e-5);
+assert.ok(Math.abs(topLeft.y-quad[0].y)<1e-5);
+assert.ok(Math.abs(bottomRight.x-quad[2].x)<1e-5);
+assert.ok(Math.abs(bottomRight.y-quad[2].y)<1e-5);
+const warped=rectifyPerspectiveRGBA(rgba,w,h,quad);
+assert.equal(warped.length,rgba.length);
+const corrected=remapDetailLines(original,crop,1152,648,
+ perspectiveQuad(1152,648,"pitch",-1));
+assert.equal(corrected[0].words[0].points.length,4);
+assert.ok(corrected[0].box.x0>=crop.x && corrected[0].box.x1<=crop.x+crop.width);
 const gray=enhanceInkRGBA(rgba,w,h);
 assert.equal(gray.data.length,rgba.length);
 assert.ok(gray.hasDetail);
