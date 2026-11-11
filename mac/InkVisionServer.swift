@@ -10,7 +10,6 @@ import Darwin
 
 private let port: UInt16 = 17861
 private let token = ProcessInfo.processInfo.environment["INK_VISION_TOKEN"] ?? ""
-private let originAllowlist = ["null", "http://localhost", "http://127.0.0.1"]
 private let workLimit = DispatchSemaphore(value: 1)
 
 private func json(_ value: Any) -> Data {
@@ -54,7 +53,7 @@ private func ocr(_ cgImage: CGImage, fast: Bool) throws -> [String: Any] {
         guard !line.isEmpty, candidate.confidence >= 0.28 else { continue }
         var words: [[String: Any]] = []
         for match in matcher.matches(in: candidate.string,
-                                     range: NSRange(candidate.string.startIndex...,
+                                     range: NSRange(candidate.string.startIndex..<candidate.string.endIndex,
                                                     in: candidate.string)) {
             guard let range = Range(match.range, in: candidate.string) else { continue }
             let word = String(candidate.string[range])
