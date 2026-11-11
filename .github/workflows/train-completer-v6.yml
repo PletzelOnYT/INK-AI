@@ -53,6 +53,8 @@ jobs:
             assert Path("models/ink-stroke-prefix-domain-v6.json").is_file()
             assert m["candidate"]["independent"]["pen_lift_f1"]>=.12
             assert m["focus"]["gain"]>=.025
+            assert m["candidate"]["stop"]["precision"]>=.12
+            assert m["candidate"]["stop"]["recall"]>=.15
           else:
             assert not Path("models/ink-stroke-prefix-domain-v6.json").exists()
             print("V6 rejected by unseen human writers; retaining V2",flush=True)
