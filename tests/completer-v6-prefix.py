@@ -28,7 +28,10 @@ def main():
     script=Path("src/train_completer_v6.py").read_text()
     for token in ('"deployable":False','new_final["pen_lift_f1"]>=.12',
                   'new_final["pen_lift_precision"]>=.10',
-                  '"requires_browser_integration":True'):
+                  '"requires_browser_integration":True',
+                  'ending=(length==idx)',
+                  'stop_valid=(length>=idx).float()',
+                  'stop_gate=(new_stop["precision"]>=.12'):
         assert token in script,token
     print("PASS: trainable V6 centered causal prefix, unseen-writer gates and safe deployment")
 
