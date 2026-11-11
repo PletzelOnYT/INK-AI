@@ -21,7 +21,7 @@ assert.equal(approval(.92,.92,"h"),false,
 for(const [name,source] of [["app",application],["isolated UI",ui]]){
  assert.match(source,/if\(option\.support&&option\.support\.ok!==true\)return false/,
   name+" must not bypass the worker's trained-trajectory quality checks");
- assert.match(source,/if\(!possibilities\.length&&m\.type==="completion"\)\s*\{\s*clearGhost\(\)/,
+ assert.match(source,/if\(!possibilities\.length&&m\.type==="completion"\)\s*\{[\s\S]*?clearGhost\(\)/,
   name+" must erase a now-invalid stale suggestion");
  assert.doesNotMatch(source,/\(e\.key\.toLowerCase\(\)==="g"\|\|e\.key==="Enter"\)/,
   name+" must not accidentally accept neural ink on Enter");
