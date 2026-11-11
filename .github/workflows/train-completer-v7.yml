@@ -116,6 +116,9 @@ jobs:
           python3 scripts/update_model_graphs.py
           git add docs/recognition-vertical-bars.svg docs/completion-vertical-bars.svg
           git add models/stroke-prefix-domain-v7-metrics.json
+          if python3 -c 'import json; m=json.load(open("models/stroke-prefix-domain-v7-metrics.json")); exit(0 if m.get("deployable") and m.get("browser_integration_passed") else 1)'; then
+            git add index.html
+          fi
           if test -s models/ink-stroke-prefix-domain-v7.json; then
             git add models/ink-stroke-prefix-domain-v7.json
           fi
