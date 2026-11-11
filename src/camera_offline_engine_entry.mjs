@@ -4,7 +4,7 @@
 // INK AI's handwriting recognizer and completer remain first-party systems.
 import tesseract from "tesseract.js";
 import {estimateTextAngle,rotatedSize,unrotateLines,rotationQueue} from "./camera_orientation_core.mjs";
-import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead,perspectiveQuad,rectifyPerspectiveRGBA} from "./camera_detail_core.mjs";
+import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead,perspectiveQuad,rectifyPerspectiveRGBA,findDarkDisplayRGBA} from "./camera_detail_core.mjs";
 import englishList from "../data/english-words.txt";
 const vocabulary=new Set(englishList.trim().split(/\s+/));
 import {set} from "idb-keyval";
@@ -151,6 +151,9 @@ async function create(){
    probeCanvas.width=260;probeCanvas.height=146;
    const detailCanvas=document.createElement("canvas");
    const detailContext=detailCanvas.getContext("2d",{willReadFrequently:true,alpha:false});
+   const displayPreview=document.createElement("canvas");
+   displayPreview.width=160;displayPreview.height=90;
+   const displayContext=displayPreview.getContext("2d",{willReadFrequently:true});
    const probeContext=probeCanvas.getContext("2d",{willReadFrequently:true});
    let previousAngle=null,previousStreak=0,attemptCursor=0,scanNumber=0;
    function candidateStrength(lines){
@@ -251,7 +254,19 @@ async function create(){
    // Crops only the CENTER of the camera view and maps all OCR geometry back.
    // It never creates artificial letter shapes or sends frames over the network.
    async function detailRead(image,width,height,mode="center-detail"){
-    const crop=centerDetailCrop(width,height);
+    let crop=centerDetailCrop(width,height);
+    let darkDisplay=false;
+    if(mode==="center-detail"){
+     displayContext.drawImage(image,0,0,160,90);
+     const sample=displayContext.getImageData(0,0,160,90).data;
+     const region=findDarkDisplayRGBA(sample,160,90);
+     if(region){
+      crop={x:Math.round(region.x*width/160),y:Math.round(region.y*height/90),
+       width:Math.round(region.width*width/160),
+       height:Math.round(region.height*height/90)};
+      darkDisplay=true;
+     }
+    }
     const output=detailSize(crop.width*1.7,crop.height*1.7,1920);
     detailCanvas.width=output.width;detailCanvas.height=output.height;
     detailContext.fillStyle="#fff";
@@ -260,6 +275,13 @@ async function create(){
     detailContext.imageSmoothingQuality="high";
     detailContext.drawImage(image,crop.x,crop.y,crop.width,crop.height,
       0,0,output.width,output.height);
+    if(darkDisplay){
+     // White digits on a dark display become dark ink on light paper.
+     detailContext.globalCompositeOperation="difference";
+     detailContext.fillStyle="#ffffff";
+     detailContext.fillRect(0,0,output.width,output.height);
+     detailContext.globalCompositeOperation="source-over";
+    }
     let quad=null;
     if(mode==="rgb"){
      const original=detailContext.getImageData(0,0,output.width,output.height);
@@ -279,11 +301,19 @@ async function create(){
        output.height,quad));
      detailContext.putImageData(bitmap,0,0);
     }
-    const scan=await worker.recognize(detailCanvas,{}, {blocks:true});
+    if(darkDisplay)await worker.setParameters({
+      tessedit_pageseg_mode:String(tesseract.PSM.SINGLE_LINE)});
+    let scan;
+    try{
+     scan=await worker.recognize(detailCanvas,{}, {blocks:true});
+    }finally{
+     if(darkDisplay)await worker.setParameters({
+       tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT)});
+    }
     const lines=remapDetailLines(extractWords(scan.data),crop,
       output.width,output.height,quad);
     return {lines,rotation:0,detailUpscaled:true,
-      enhancement:mode};
+      enhancement:darkDisplay?"clock-display":mode};
    }
    const engine={
     kind:"bundled-tesseract-wasm",
