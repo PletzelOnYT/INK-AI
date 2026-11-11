@@ -22,7 +22,8 @@ const detector={detect(){return [{
 }]}};
 const context={
  window:{InkCameraDetector:detector,__inkHandwritingReady:true},
- document:{createElement(){return {
+ document:{getElementById(id){return id==="inkEnglishWords"?{textContent:"example letter reader offline"}:null},
+ createElement(){return {
   width:0,height:0,
   getContext(){return {
    drawImage(){},
@@ -37,6 +38,15 @@ const context={
 vm.runInNewContext(source,context);
 const api=context.window.InkCameraHandwriting;
 assert.ok(api,"Camera handwriting adapter must be registered");
+assert.equal(api.refineCaseAndConfusions("handWrItIng",[]),"handwriting");
+const alternatives="exampIe".split("").map(char=>({top:[
+ {char,confidence:.77},{char:"l",confidence:.20}]}));
+assert.equal(api.refineCaseAndConfusions("exampIe",alternatives),"example");
+assert.equal(api.refineCaseAndConfusions("WELCOME",[]),"WELCOME",
+ "Real capitalized words must be preserved");
+assert.equal(api.refineCaseAndConfusions("handwrt",[]),"handwrt",
+ "Missing characters may not be invented");
+
 const a=api.normalizeGlyph(letters[0],width,height);
 assert.equal(a.length,1024);
 assert.ok(Math.max(...a)>.8,"Visible ink must survive normalization");
