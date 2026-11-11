@@ -49,4 +49,20 @@ assert.ok(a.text.includes("Notre Dame Academv"),
  "Real stable updates are accepted after repeated evidence");
 a=push([],13000);
 assert.equal(a.text,"","OCR history must expire after a bounded period");
+
+const angleTracker=window.InkOfflineCamera.createTracker();
+const word={text:"Chromebook",confidence:.73,
+ box:{x0:143,y0:28,x1:650,y1:368}};
+const instant=angleTracker.update({width:960,height:500,
+ lines:[{text:"Chromebook",confidence:.58,visualQuality:.92,
+  box:word.box,words:[word]}]},1000);
+assert.equal(instant.text,"Chromebook",
+ "A visually verified long tilted word should appear immediately");
+const noiseTracker=window.InkOfflineCamera.createTracker();
+const weak=noiseTracker.update({width:960,height:500,
+ lines:[{text:"Imaginary",confidence:.48,visualQuality:.65,
+  box:word.box,words:[{...word,text:"Imaginary",confidence:.52}]}]},1000);
+assert.equal(weak.text,"",
+ "Unsupported single-word guesses still require repeat evidence");
+
 console.log("PASS: independent flyer rows, partial words, single-frame mistakes and crop omissions no longer make OCR text or boxes flash");
