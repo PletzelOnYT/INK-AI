@@ -1,0 +1,18 @@
+{
+  "name": "ink-ai-offline-ocr-build",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Build fully bundled, browser-only OCR for the standalone INK AI HTML",
+  "scripts": {
+    "build:ocr": "node scripts/build_offline_ocr.mjs"
+  },
+  "dependencies": {
+    "tesseract.js": "6.0.0",
+    "tesseract.js-core": "6.0.0",
+    "idb-keyval": "6.2.1",
+    "wasm-feature-detect": "1.8.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}
