@@ -127,6 +127,7 @@ jobs:
           node tests/recognition-v2-metrics.mjs
           node tests/recognition-v3-metrics.mjs
           node tests/readme-benchmark-evidence.mjs
+          node tests/model-versions-release.mjs
           node tests/word-case-loop-unit.mjs
           node --check src/word_case_refinement.js
           node tests/lowercase-refinement-unit.mjs
