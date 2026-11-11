@@ -25,7 +25,7 @@
     }
     const confidence=Number(word.confidence);
     if(!Number.isFinite(confidence)||confidence<.32){rejected++;continue}
-    const metrics=Evidence.evidence(context,word.box,width,height);
+    const metrics=Evidence.evidence(context,word.box,width,height,word.points);
     if(!metrics.ok||metrics.score<.43){rejected++;continue}
     supported.push({...word,visualQuality:metrics.score});
     accepted++;
