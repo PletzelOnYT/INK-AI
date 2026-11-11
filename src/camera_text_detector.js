@@ -6,7 +6,7 @@
   const sorted=[...values].sort((a,b)=>a-b);
   return sorted[Math.floor(sorted.length/2)];
  };
- function findTextLines(mask,width,height){
+ function findTextLines(mask,width,height,allowShort=false){
   const n=mask.length,visited=new Uint8Array(n),queue=new Int32Array(n);
   const comps=[];
   for(let origin=0;origin<n;origin++){
@@ -61,11 +61,11 @@
   }
   const lines=[];
   for(const components of groups.values()){
-   if(components.length<4||components.length>44)continue;
+   if(components.length<(allowShort?2:4)||components.length>44)continue;
    components.sort((a,b)=>a.x0-b.x0);
    const heights=components.map(c=>c.height),medH=median(heights);
    const span=components[components.length-1].x1-components[0].x0+1;
-   if(span<3.6*medH)continue;
+   if(span<(components.length<4?1.4:3.6)*medH)continue;
    const cx=components.reduce((a,c)=>a+c.cx,0)/components.length;
    const cy=components.reduce((a,c)=>a+c.cy,0)/components.length;
    let numerator=0,denominator=0;
@@ -101,7 +101,7 @@
    }
   }
   const area=(arr,x0,y0,x1,y1)=>arr[(y1+1)*stride+x1+1]-arr[y0*stride+x1+1]-arr[(y1+1)*stride+x0]+arr[y0*stride+x0];
-  const masks=[new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h)];
+  const masks=[new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h),new Uint8Array(w*h)];
   const radius=8;
   for(let y=0;y<h;y++){
    const y0=Math.max(0,y-radius),y1=Math.min(h-1,y+radius);
@@ -116,6 +116,11 @@
     if(luminosity<-14&&contrast>17)masks[0][idx]=1;
     else if(luminosity>14&&contrast>17)masks[1][idx]=1;
     else if(Math.abs(luminosity)<=14&&contrast>31)masks[2][idx]=1;
+    // Strong white lettering on dark surfaces (e.g. glossy garment tags):
+    // a narrow high-contrast mask separates compact uppercase strokes that
+    // the broader local adaptive mask may merge into one component.
+    const pixelLum=.299*p[j]+.587*p[j+1]+.114*p[j+2];
+    if(pixelLum>165&&luminosity>36&&contrast>42)masks[3][idx]=1;
    }
   }
   return masks;
@@ -123,7 +128,8 @@
  function detect(image,w,h){
   const masks=makeMasks(image,w,h);
   const lines=[];
-  for(const mask of masks)lines.push(...findTextLines(mask,w,h));
+  for(let i=0;i<masks.length;i++)
+   lines.push(...findTextLines(masks[i],w,h,i===3));
   return lines;
  }
  const api={detect,makeMasks,findTextLines};
