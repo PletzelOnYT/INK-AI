@@ -23,6 +23,7 @@ const cache=new Map();
 let lineRuntime=null,lineInit=null,offlineClient=null,offlineFailures=0;
 const motion=window.InkCameraMotion?.create?.()||null;
 let latestOCRState=null,motionRAF=0,lastMotionPaint=0;
+let motionUncertainSince=0,hardSceneFrames=0,lastGoodMotion=null;
 window.__inkCameraLineReady=false;
 async function loadNativeLineOCR(){
  if(lineInit||!window.InkLineRuntime)return lineInit;
@@ -90,11 +91,30 @@ function motionTick(now){
   try{
    const position=motion.update(video,now);
    window.__inkCameraMotionStats={...position,at:now};
-   if(position.valid)
+   if(position.valid){
+    motionUncertainSince=0;hardSceneFrames=0;lastGoodMotion=position;
     offlineClient.paint(overlay,video,board,
       shiftVerifiedState(latestOCRState,position.dx,position.dy));
-   else offlineClient.paint(overlay,video,board,
-      {...latestOCRState,words:[]});
+   }else{
+    // Never erase all highlight boxes because a SINGLE optical-flow
+    // comparison failed. Lighting/exposure changes often cause that.
+    if(!motionUncertainSince)motionUncertainSince=now;
+    hardSceneFrames=position.sceneChanged?hardSceneFrames+1:0;
+    if(hardSceneFrames>=3){
+     latestOCRState=null;motion?.reset();
+     offlineClient.clearTranscript?.();
+     window.__inkCameraText="";window.__inkCameraWords=[];
+     show("Scanning the new scene…",true);
+     clearMarks();hardSceneFrames=0;motionUncertainSince=0;
+     lastGoodMotion=null;
+    }else if(now-motionUncertainSince>2400){
+     // Unverified locations expire only after a grace period; the OCR
+     // transcript can persist until fresh recognition proves replacement.
+     clearMarks();
+    }
+    // Until then, keep the LAST painted, verified box instead of
+    // alternating between a visible and an empty overlay each 85 ms.
+   }
   }catch(_){/* OCR continues if an optional tracking sample fails. */}
  }
  motionRAF=requestAnimationFrame(motionTick);
@@ -135,6 +155,7 @@ function toggleFreeze(){
 function stop(){
  if(motionRAF&&typeof cancelAnimationFrame==="function")cancelAnimationFrame(motionRAF);
  motionRAF=0;lastMotionPaint=0;latestOCRState=null;motion?.reset();
+ motionUncertainSince=0;hardSceneFrames=0;lastGoodMotion=null;
  active=false;epoch++;freezeRevision++;
  cancelCameraSchedule();
  if(stream)stream.getTracks().forEach(t=>t.stop());
@@ -528,6 +549,7 @@ async function scan(id){
     window.__inkCameraText=current.text;
     window.__inkCameraWords=current.words;
     latestOCRState=current;
+    motionUncertainSince=0;hardSceneFrames=0;
     if(motion&&sourceFrame)
      motion.setReference(sourceFrame,current.words,
       video.videoWidth,video.videoHeight);
