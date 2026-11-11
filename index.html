@@ -12558,6 +12558,54 @@ function withinOneEdit(a,b){
  }
  return edits+(a.length-i)+(b.length-j)<=1;
 }
+function median(values){
+ if(!values.length)return 0;
+ const ordered=[...values].sort((a,b)=>a-b);
+ return ordered[Math.floor(ordered.length/2)];
+}
+// Reject shelf edges, door seams, reflections and isolated line fragments
+// before passing any crop to the printed-character model.
+function looksLikeTextLine(letters){
+ if(!Array.isArray(letters)||letters.length<4||letters.length>38)return false;
+ const a=[...letters].sort((p,q)=>p.x0-q.x0);
+ const heights=a.map(t=>t.y1-t.y0+1),widths=a.map(t=>t.x1-t.x0+1);
+ const h=median(heights),bottom=median(a.map(t=>t.y1));
+ if(h<9||h>92)return false;
+ const xSpan=a[a.length-1].x1-a[0].x0+1;
+ if(xSpan<3.2*h)return false;
+ let aligned=0,plausible=0,thin=0,wide=0;
+ for(let i=0;i<a.length;i++){
+  const hi=heights[i],wi=widths[i];
+  if(wi<.12*h)thin++;
+  if(wi>1.42*h)wide++;
+  if(hi>=.52*h&&hi<=1.8*h&&wi>=.10*h&&wi<=1.42*h)plausible++;
+  if(Math.abs(a[i].y1-bottom)<Math.max(5,h*.37))aligned++;
+ }
+ if(plausible/a.length<.78||aligned/a.length<.68||
+    thin/a.length>.28||wide/a.length>.20)return false;
+ const gaps=[];
+ for(let i=1;i<a.length;i++)gaps.push(Math.max(0,a[i].x0-a[i-1].x1-1));
+ if(median(gaps)>h*.56)return false;
+ return true;
+}
+// The CNN is a character classifier, not a text/no-text detector. Its
+// probability alone cannot establish that a cabinet edge is a letter.
+function looksLikeWord(text,confidence){
+ const word=String(text||"");
+ if(!Number.isFinite(confidence))return false;
+ if(/^[A-Za-z]{4,32}$/.test(word)){
+  // Common printed words contain vowels; this rejects most strings made
+  // from spurious geometric edges, including "JmzS".
+  const natural=/[aeiouy]/i.test(word);
+  return natural?confidence>=.65:confidence>=.96;
+ }
+ if(/^[A-Za-z]{3}$/.test(word))
+  return confidence>=.93&&/[aeiouy]/i.test(word);
+ if(/^[0-9]{4,12}$/.test(word))return confidence>=.91;
+ if(/^[A-Za-z0-9]{7,32}$/.test(word)&&/[A-Za-z]/.test(word)&&/[0-9]/.test(word))
+  return confidence>=.95;
+ return false;
+}
 function createTracker(){
  let tracks=[],captured=[],nextId=0,lastAngle=0,lastAngleAt=0;
  function update(detections,now=Date.now()){
@@ -12590,7 +12638,7 @@ function createTracker(){
    }
    // High-confidence words appear immediately; borderline words are
    // confirmed across two reads, with no arbitrary fixed delay.
-   if(track.confidence>=(id.length>=3?.65:.80)||track.hits>=2)
+   if(track.hits>=2&&track.confidence>=.65)
     track.confirmed=true;
    if(!track.confirmed)continue;
    lastAngle=track.angle;lastAngleAt=now;
@@ -12637,7 +12685,7 @@ function anglesForPass(pass,preferred){
  const values=Number.isFinite(preferred)?[preferred,0,...pair]:[0,...pair];
  return [...new Set(values.map(n=>Math.round(n)))].slice(0,4);
 }
-const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near};
+const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord};
 if(typeof window!=="undefined")window.InkCameraCore=api;
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })();
