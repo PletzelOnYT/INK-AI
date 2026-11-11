@@ -34,6 +34,14 @@ stroke_path=next((f"models/ink-stroke-prefix-domain-{v}.json"
                   for v in ("v4","v3") if accepted_model(v)),
                  "models/ink-stroke-prefix-domain-v2.json")
 if natural_allowed():stroke_path="models/ink-stroke-natural-v4.json"
+lift_weights=ROOT/"models/ink-stroke-lift-aware-v5.json"
+lift_report=ROOT/"models/recurrent-lift-v5-metrics.json"
+if lift_weights.is_file() and lift_report.is_file():
+    lift_metrics=json.loads(lift_report.read_text(encoding="utf-8"))
+    if lift_metrics.get("eligible") is True and (
+        lift_metrics.get("browser_integration_passed") is True or
+        os.environ.get("INK_STROKE_PREVIEW_LIFT_V5")=="1"):
+        stroke_path="models/ink-stroke-lift-aware-v5.json"
 print("Bundled GRU:",stroke_path)
 models=[
  ("inkRecognitionModel","application/json",
