@@ -35,4 +35,18 @@ function maskForCabinet(){
 }
 assert.equal(detector.findTextLines(maskForCabinet(),width,height).length,0,
  "Tall cabinet seams are not a text line");
+// Tight, high-contrast two-letter garment labels should be eligible even
+// when they are not ordinary dictionary words.
+function shortLabelMask(){
+ const mask=new Uint8Array(width*height);
+ for(const start of [30,51]){
+  for(let y=50;y<74;y++)for(let x=start;x<start+11;x++)
+   if(x===start||x===start+10||y===50||y===73)
+    mask[y*width+x]=1;
+ }
+ return mask;
+}
+const shortLines=detector.findTextLines(shortLabelMask(),width,height,true);
+assert.ok(shortLines.some(line=>line.letters.length===2),
+ "Short uppercase abbreviations should be detected in high-contrast mode");
 console.log("PASS: printed-character grouping and no-text rejection");
