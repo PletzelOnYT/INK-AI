@@ -314,6 +314,12 @@ function createGlyphWorker(){
      const possibilities=(m.alternatives||[]).filter(o=>
       o.paths?.some(p=>p.length>1)&&o.quality>-.91&&
       coherentRenderedContinuation(o,inFlightGhost));
+     if(!possibilities.length&&m.type==="completion"){
+      // Previous previews are obsolete if the newest real neural pass
+      // could not produce a useful continuation. Otherwise a straight
+      // ghost remains on-screen and can still be accepted with G.
+      clearGhost();
+     }
      if(!possibilities.length&&m.type==="completion"&&
         pointer===null&&glyphNoCandidateRetries<2){
       // Retry a different genuine neural sample only twice per gesture.
@@ -627,6 +633,9 @@ function toScreenPaths(paths,frame){
 }
 function coherentRenderedContinuation(option,pending){
  if(!pending?.frame||!option?.paths?.length)return false;
+ // The source GRU must have passed the learned-trajectory quality gate.
+ // Do not let a stale UI preview bypass straight-line rejection.
+ if(option.support&&option.support.ok!==true)return false;
  const paths=toScreenPaths(option.paths,pending.frame);
  if(!paths.length)return false;
  const points=paths.flat(),first=points[0],last=points.at(-1);
@@ -703,7 +712,7 @@ function acceptGhost(){
  const paths=ghostCandidate.paths;
  for(const points of paths)
   strokes.push({tool:"pen",type:"vector-completion",
-    width:window.__inkGhostStrokeWidth,points:points.map(p=>p.slice())});
+    width:12,points:points.map(p=>p.slice())});
  window.__inkAcceptedVectorCount+=paths.length;
  clearGhost();paint();schedule(70);
 }
@@ -711,7 +720,7 @@ window.addEventListener("keydown",e=>{
  if(e.key==="Tab"&&assistEnabled&&ghostOptions.length>1){
   e.preventDefault();setGhostChoice((ghostChoice+1)%ghostOptions.length);return;
  }
- if((e.key.toLowerCase()==="g"||e.key==="Enter")&&!e.ctrlKey&&!e.altKey&&
+ if(e.key.toLowerCase()==="g"&&!e.ctrlKey&&!e.altKey&&
     !e.metaKey&&!e.repeat&&
     !(e.target instanceof HTMLInputElement)&&
     !(e.target instanceof HTMLTextAreaElement))acceptGhost();
