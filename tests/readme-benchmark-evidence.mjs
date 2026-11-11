@@ -1,67 +1,70 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
-const get=name=>JSON.parse(fs.readFileSync("models/"+name,"utf8"));
-const manifest=JSON.parse(fs.readFileSync("docs/current-models.json","utf8"));
-const v3=get("recognition-v3-metrics.json");
-const v5=get("recognition-v5-metrics.json");
-const v4=get("recognition-v4-evaluation-summary.json");
-const v2=get("stroke-prefix-domain-v2-metrics.json");
-const seq=get("stroke-sequence-v2-metrics.json");
-const pen=get("penlift-v3-metrics.json");
-const lift=get("recurrent-lift-v5-metrics.json");
-const readme=fs.readFileSync("README.md","utf8");
-const recog=fs.readFileSync("docs/recognition-vertical-bars.svg","utf8");
-const comp=fs.readFileSync("docs/completion-vertical-bars.svg","utf8");
-function pct(v){return (100*v).toFixed(2)+"%"}
-function err(v){return v.toFixed(4)}
-for(const [file,svg] of [["recognition-vertical-bars.svg",recog],["completion-vertical-bars.svg",comp]]){
- assert.ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'));
+const read=p=>fs.readFileSync(p,"utf8");
+const model=p=>JSON.parse(read("models/"+p));
+const manifest=JSON.parse(read("docs/current-models.json"));
+const readme=read("README.md");
+const recog=read("docs/recognition-vertical-bars.svg");
+const comp=read("docs/completion-vertical-bars.svg");
+
+function podium(svg,file) {
+ assert.ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'),file+" must be SVG");
+ assert.ok(svg.includes('width="900" height="394"'),file+" must fit README");
  assert.ok(svg.trimEnd().endsWith("</svg>"));
  assert.ok(!/<script|onload=|<foreignObject/i.test(svg));
  assert.ok(readme.includes("./docs/"+file));
- assert.ok(svg.includes('fill="#ffffff"'),"Chart must have white background");
- assert.equal((svg.match(/data-active="true"/g)||[]).length,2,"Each metric panel must mark the same single deployed model");
- assert.ok(svg.includes("<path d="),"Version timeline must have connected milestone paths");
- assert.ok(svg.includes('width="900" height="488"'),"Graph must fit the GitHub README without horizontal overflow");
- assert.ok(!svg.includes('>Completer</text>')&&!svg.includes('>Recognizer</text>'),"README already labels these graphs; avoid duplicate titles");
- assert.ok(!svg.includes("Dotted line =")&&!svg.includes("Two DIFFERENT"),"Remove noisy annotations");
-
- assert.ok(svg.includes("data-metric=\"first\"") && svg.includes("data-metric=\"second\""),"Need two separate metric panels");
+ for(const shade of ["ink-gold","ink-silver","ink-bronze"])
+  assert.ok(svg.includes('id="'+shade+'"'),file+" missing "+shade);
+ const placements=[...svg.matchAll(/<g data-model="([^"]+)" data-weight="([^"]+)" data-rank="([123])" data-active="(true|false)" data-score="([^"]+)" data-status="([^"]+)">/g)];
+ assert.equal(placements.length,3,file+" must show exactly three ranked models");
+ assert.deepEqual(placements.map(p=>Number(p[3])),[1,2,3],file+" medals must be in rank order");
+ const scores=placements.map(p=>Number(p[5]));
+ assert.ok(scores.every(Number.isFinite)&&scores.every(x=>Number.isFinite(x)),"missing score");
+ assert.ok(scores[0]>=scores[1]&&scores[1]>=scores[2],"podium must be sorted highest first");
+ for(let i=0;i<3;i++){
+  const m=placements[i];
+  assert.ok(svg.includes(m[1]),"missing model name");
+  assert.ok(svg.includes(scores[i].toFixed(2)+"%"),"missing displayed score");
+ }
+ assert.ok(!svg.includes("Trajectory error ↓")&&!svg.includes("Pen-lift F1 ↑"),
+  "No old multi-panel graph legends");
+ return placements.map(m=>({name:m[1],weight:m[2],rank:+m[3],active:m[4]==="true",score:+m[5],status:m[6]}));
 }
-const liveCnn=manifest.recognizer.weights,liveGru=manifest.completer.weights;
-assert.ok(recog.includes('data-active="true" data-weight="'+liveCnn+'"'),"CNN blue must match actual HTML manifest");
-assert.ok(comp.includes('data-active="true" data-weight="'+liveGru+'"'),"GRU blue must match actual HTML manifest");
-assert.ok(recog.includes('fill="#2563eb"'),"Deployed CNN must be highlighted blue");
-assert.ok(comp.includes('fill="#2563eb"'),"Deployed GRU must be highlighted blue");
-for(const version of [1,2,3,4,5])
- assert.ok(recog.includes('data-model="CNN V'+version+'"'),"Missing CNN version "+version);
-for(const s of [pct(v3.baseline_v2.pen_independent.overall),pct(v3.independent_pen_v3.overall),pct(v4.independent_uji_v4.overall),pct(v5.independent_pen_v3.overall)])
- assert.ok(recog.includes(s),"Missing measured independent-writer accuracy "+s);
-assert.ok(recog.includes("84.96%"),"CNN V1 should have its actual EMNIST score");
-for(const name of ["Sequence V1","Sequence V2","Prefix V1","Domain V2","PenLift V3",
-                   "Domain V3","Domain V4","Natural V4","Lift V5","Domain V6","Domain V7"]){
- assert.ok(comp.includes('data-model="'+name+'"'),"Missing completer experiment "+name);
+const rankedR=podium(recog,"recognition-vertical-bars.svg");
+const rankedC=podium(comp,"completion-vertical-bars.svg");
+const v3=model("recognition-v3-metrics.json");
+const v4=model("recognition-v4-evaluation-summary.json");
+const v5=model("recognition-v5-metrics.json");
+const expectedR=[
+ ["CNN V5",v5.independent_pen_v3.overall*100],
+ ["CNN V3",v3.independent_pen_v3.overall*100],
+ ["CNN V4",v4.independent_uji_v4.overall*100],
+];
+expectedR.forEach(([name,score],i)=>{
+ assert.equal(rankedR[i].name,name,"recognizer ranking");
+ assert.ok(Math.abs(rankedR[i].score-score)<0.000001);
+});
+assert.equal(rankedR[0].weight,manifest.recognizer.weights,"shipped recognizer is gold");
+assert.ok(rankedR[0].active);
+const domain2=model("stroke-prefix-domain-v2-metrics.json");
+const domain3=model("stroke-prefix-domain-v3-metrics.json");
+const domain6=model("stroke-prefix-domain-v6-metrics.json");
+const domain7=model("stroke-prefix-domain-v7-metrics.json");
+const base=domain2.baseline.independent.prefix_frame_position_error;
+const rankedCandidates=[
+ ["Domain V2",domain2.candidate.independent.prefix_frame_position_error],
+ ["Domain V3",domain3.candidate.independent.prefix_frame_position_error],
+ ["Domain V6",domain6.candidate.independent.prefix_frame_position_error],
+ ["Domain V7",domain7.candidate.independent.prefix_frame_position_error],
+].map(([name,error])=>[name,100*(base-error)/base]).sort((a,b)=>b[1]-a[1]).slice(0,3);
+for(let i=0;i<3;i++){
+ assert.equal(rankedC[i].name,rankedCandidates[i][0],"completer score ranking");
+ assert.ok(Math.abs(rankedC[i].score-rankedCandidates[i][1])<0.000001);
 }
-assert.ok(comp.includes(err(v2.candidate.independent.prefix_frame_position_error)));
-assert.ok(comp.includes(err(pen.candidate.prefix_position.prefix_frame_position_error)));
-assert.ok(comp.includes(err(lift.candidate.position.prefix_frame_position_error)));
-assert.ok(comp.includes(pct(pen.candidate.independent.pen_lift_f1)));
-assert.ok(comp.includes(pct(lift.candidate.independent.pen_lift_f1)));
-assert.ok(comp.includes("NLL "+seq.baseline_v1.independent.nll.toFixed(3)),"Missing legacy V1 NLL");
-assert.ok(comp.includes("NLL "+seq.v2.independent.nll.toFixed(3)),"Missing legacy V2 NLL");
-assert.ok(comp.includes('data-model="Domain V7"'),"V7 still appears with pending status even without metrics");
-assert.ok(comp.includes('stroke-width="1.8"'),"Large rejected V5 outlier requires a visibly broken axis instead of compressing the other results");
-assert.ok(comp.includes('0.9673'),"V5 outlier value must stay visible and unchanged");
+assert.ok(!rankedC.some(m=>m.active),"Unreleased experimental Completers must not be labeled active");
+assert.equal(manifest.completer.weights,"models/ink-stroke-prefix-domain-v2.json");
+assert.ok(readme.includes("not a success rate")&&readme.includes("research"),
+ "README must explain that trajectory reduction is not overall quality or release approval");
 assert.ok(readme.includes("a real CNN, not nearest-template matching"));
 assert.ok(readme.includes("a real generative GRU, not a font or curve lookup"));
-assert.ok(readme.includes("**not** perfect-font replacements"));
-assert.ok(readme.includes("whole-character suggestion acceptance/correctness rate"));
-for(const [svg,live] of [[recog,liveCnn],[comp,liveGru]]){
- for(const metric of ["first","second"]){
-  const groups=[...svg.matchAll(/<g data-model="([^"]+)" data-active="true" data-weight="([^"]+)" data-metric="([^"]+)"/g)]
-   .filter(m=>m[3]===metric);
-  assert.equal(groups.length,1,"One active milestone per metric");
-  assert.equal(groups[0][2],live,"Blue node must match build manifest");
- }
-}
-console.log("PASS: connected milestone timeline, two distinct metrics, measured scores and one blue deployed model");
+console.log("PASS: two honest 3-model medal podiums, measured scores and release distinction");
