@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+const layout=fs.readFileSync(new URL("../src/camera_document_layout.js",import.meta.url),"utf8");
 const source=fs.readFileSync(new URL("../src/camera_offline_bridge.js",import.meta.url),"utf8");
 let polygonPoints=0;
 const canvas={width:0,height:0,getContext:()=>({
@@ -31,6 +32,7 @@ const engine={create:async()=>({
 })};
 const context={window:{InkOfflineOCR:engine,devicePixelRatio:1},
  document:doc,Math,Number,Map,Set,Date};
+vm.runInNewContext(layout,context);
 vm.runInNewContext(source,context);
 const api=context.window.InkOfflineCamera;
 assert.equal(typeof api.connect,"function");
@@ -48,6 +50,28 @@ assert.equal(client.track(empty,2700).text,"","Old document words must expire");
 client.reset();
 assert.equal(client.track(empty,3000).text,"");
 assert.equal(received,1);
+const reader=api.createTracker();
+const wrapped=reader.update({
+ width:1000,height:500,
+ lines:[
+  {text:"This is the first part of a paragraph that",
+   confidence:.95,visualQuality:.95,
+   blockIndex:0,paragraphIndex:0,lineIndex:0,
+   box:{x0:40,y0:20,x1:750,y1:45},
+   words:[{text:"This is the first part of a paragraph that",
+    confidence:.95,box:{x0:40,y0:20,x1:750,y1:45}}]},
+  {text:"continues on another printed line.",
+   confidence:.95,visualQuality:.95,
+   blockIndex:0,paragraphIndex:0,lineIndex:1,
+   box:{x0:40,y0:50,x1:680,y1:75},
+   words:[{text:"continues on another printed line.",
+    confidence:.95,box:{x0:40,y0:50,x1:680,y1:75}}]}
+ ]
+},4000);
+assert.equal(wrapped.text,
+ "This is the first part of a paragraph that continues on another printed line.",
+ "Camera transcript should use OCR paragraphs, not blindly print a newline per OCR line");
+
 const source2=fs.readFileSync(new URL("../src/camera_offline_engine_entry.mjs",import.meta.url),"utf8");
 assert.doesNotMatch(source2,/\bfetch\s*\(/,
  "In-browser bundled engine must NEVER fetch code, weights or data");
