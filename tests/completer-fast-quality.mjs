@@ -29,13 +29,18 @@ const h=[
   [463,503],[462,532],[462,559],[462,590]],
  [[464,493],[481,486],[504,479],[520,482],[540,499],[550,517]]
 ];
-const frame={x:400,y:319,size:317};
+function currentPrefixFrame(strokes){
+ const points=strokes.flat();
+ const l=Math.min(...points.map(p=>p[0])),r=Math.max(...points.map(p=>p[0]));
+ const t=Math.min(...points.map(p=>p[1])),b=Math.max(...points.map(p=>p[1]));
+ const size=Math.max(105,Math.min(290,Math.max(r-l,b-t)/.68));
+ return {x:(l+r-size)/2,y:(t+b-size)/2,size};
+}
 let elapsed=0,accepted=[];
-for(const [label,strokes,frameInput] of [
- ["h",h,frame],
- ["x",[[[480,355],[493,372],[505,391],[518,412]]],
-  {x:440,y:305,size:150}]
+for(const [label,strokes] of [
+ ["h",h],["x",[[[480,355],[493,372],[505,391],[518,412]]]]
 ]){
+ const frameInput=currentPrefixFrame(strokes);
  const prefix=encode(strokes,frameInput);
  messages.length=0;
  const start=performance.now();
