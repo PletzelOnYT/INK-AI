@@ -1,0 +1,12 @@
+{
+  "format": "ink-ai-deployed-models-v1",
+  "recognizer": {
+    "weights": "models/ink-cnn-v3.json",
+    "heldout_writer_accuracy": 0.764668
+  },
+  "completer": {
+    "weights": "models/ink-stroke-prefix-domain-v2.json",
+    "heldout_writer_trajectory_error": 0.333551
+  },
+  "note": "Only deployed models appear here; experimental and rejected checkpoints remain visible in model-history graphs."
+}
