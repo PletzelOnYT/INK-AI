@@ -39,9 +39,11 @@
   const lines=[];
   let rejected=0,accepted=0;
   const diagnostic=[];
-  const report=(w,reason,score=0)=>{
+  const report=(w,reason,score=0,detail=null)=>{
    if(window.__inkDebugOCR===true&&diagnostic.length<32)
-    diagnostic.push({text:w.text,confidence:w.confidence,reason,score});
+    diagnostic.push({text:w.text,confidence:w.confidence,reason,score,
+     contrast:detail?.contrast,edgeRate:detail?.edgeRate,
+     verticalStrokeRate:detail?.verticalStrokeRate,bands:detail?.bands});
   };
   for(const line of payload.lines){
    if(!Array.isArray(line?.words)||!line.words.length)continue;
@@ -53,7 +55,7 @@
     const confidence=Number(word.confidence);
     if(!Number.isFinite(confidence)||confidence<.32){rejected++;report(word,"confidence");continue}
     const metrics=Evidence.evidence(context,word.box,width,height,word.points);
-    if(!metrics.ok||metrics.score<.43){rejected++;report(word,metrics.reason,metrics.score);continue}
+    if(!metrics.ok||metrics.score<.43){rejected++;report(word,metrics.reason,metrics.score,metrics);continue}
     supported.push({...word,visualQuality:metrics.score});
     accepted++;
    }
