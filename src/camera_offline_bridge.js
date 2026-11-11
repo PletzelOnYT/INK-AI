@@ -34,7 +34,15 @@
      }
      visited.add(tracked);
      if(key===tracked.key)tracked.votes=Math.min(8,tracked.votes+1);
-     else tracked.votes=1;
+     else{
+      tracked.votes=1;
+      // Do not display yesterday's text over a new label or document
+      // while the new lower-confidence OCR read is being confirmed.
+      if(tracked.key&&!key.startsWith(tracked.key)&&
+         !tracked.key.startsWith(key)){
+       tracked.text="";tracked.words=[];
+      }
+     }
      // Correct high-confidence recognition appears on its FIRST frame.
      // Uncertain text requires two consistent results to avoid hallucination.
      const confidence=Number(line.confidence)||0;
