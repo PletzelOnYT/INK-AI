@@ -10,7 +10,7 @@
  * Costs O(<=120*48) sampled pixels per word and makes no network requests.
  */
 (()=>{
- function evidence(context,box,frameW,frameH){
+ function evidence(context,box,frameW,frameH,points=null){
   const bad={ok:false,score:0,contrast:0,edgeRate:0,reason:"no-text-pixels"};
   if(!box||!Number.isFinite(box.x0+box.y0+box.x1+box.y1))return bad;
   const x0=Math.max(0,Math.floor(box.x0)),y0=Math.max(0,Math.floor(box.y0));
@@ -20,12 +20,32 @@
   let bitmap;
   try{bitmap=context.getImageData(x0,y0,width,height)}
   catch(_){return bad}
-  const sw=Math.min(width,120),sh=Math.min(height,48),sample=new Float32Array(sw*sh);
-  const rgba=bitmap.data;
+  // OCR on a rotated frame returns a real four-corner quadrilateral.
+  // Sampling its large axis-aligned bounding box diluted thin, slanted
+  // letters with background and caused them to fail the visual-quality test.
+  // Rectify the *sample*, not the camera image, preserving fast OCR frames.
+  const polygon=Array.isArray(points)&&points.length===4&&
+    points.every(p=>Number.isFinite(p?.x)&&Number.isFinite(p?.y));
+  const corners=polygon?points:null;
+  const sourceW=polygon?Math.hypot(corners[1].x-corners[0].x,
+    corners[1].y-corners[0].y):width;
+  const sourceH=polygon?Math.hypot(corners[3].x-corners[0].x,
+    corners[3].y-corners[0].y):height;
+  const sw=Math.min(120,Math.max(3,Math.round(sourceW))),
+    sh=Math.min(48,Math.max(4,Math.round(sourceH)));
+  const sample=new Float32Array(sw*sh),rgba=bitmap.data;
   for(let y=0;y<sh;y++){
-   const py=Math.min(height-1,Math.floor((y+.5)*height/sh));
+   const v=(y+.5)/sh;
    for(let x=0;x<sw;x++){
-    const px=Math.min(width-1,Math.floor((x+.5)*width/sw));
+    const u=(x+.5)/sw;
+    const xx=polygon?(corners[0].x+
+      u*(corners[1].x-corners[0].x)+
+      v*(corners[3].x-corners[0].x)):(x0+u*width);
+    const yy=polygon?(corners[0].y+
+      u*(corners[1].y-corners[0].y)+
+      v*(corners[3].y-corners[0].y)):(y0+v*height);
+    const px=Math.max(0,Math.min(width-1,Math.round(xx-x0)));
+    const py=Math.max(0,Math.min(height-1,Math.round(yy-y0)));
     const k=(py*width+px)*4;
     sample[y*sw+x]=.299*rgba[k]+.587*rgba[k+1]+.114*rgba[k+2];
    }
@@ -84,10 +104,17 @@
   const chars=[...raw].filter(ch=>/[\p{L}\p{N}]/u.test(ch)).length;
   if(chars===0)return false;
   if(chars===1&&lineWords<=1)return false;
-  const b=word.box,w=b.x1-b.x0,h=b.y1-b.y0;
+  const b=word.box;
+  const corners=word.points;
+  const oriented=Array.isArray(corners)&&corners.length===4&&
+    corners.every(p=>Number.isFinite(p?.x)&&Number.isFinite(p?.y));
+  const w=oriented?Math.hypot(corners[1].x-corners[0].x,
+    corners[1].y-corners[0].y):b.x1-b.x0;
+  const h=oriented?Math.hypot(corners[3].x-corners[0].x,
+    corners[3].y-corners[0].y):b.y1-b.y0;
   if(!Number.isFinite(w+h)||w<2||h<3||h>frameH*.65)return false;
   const ratio=w/h/Math.max(1,chars);
-  return ratio>=.10&&ratio<=3.0&&w<=frameW*.99;
+  return ratio>=.10&&ratio<=3.0&&w<=Math.hypot(frameW,frameH)*.99;
  }
  // An early-frame check for truly uniform views can save a full WASM scan.
  // This never labels people; it solely detects whether the scene has ANY
