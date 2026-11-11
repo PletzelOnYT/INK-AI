@@ -170,9 +170,9 @@
     // Ordinary text stays at a responsive 1280px. Only repeated weak OCR
     // activates short native-1080p bursts, for small distant letters/digits.
     const highResPossible=video.videoWidth>=1600;
-    if(highResPossible&&detailFrames===0&&weakScans>=2&&
-       scan-lastDetailBurst>=8){
-     detailFrames=5;lastDetailBurst=scan;
+    if(highResPossible&&detailFrames===0&&weakScans>=4&&
+       scan-lastDetailBurst>=12){
+     detailFrames=3;lastDetailBurst=scan;
     }
     const highRes=highResPossible&&detailFrames>0;
     if(detailFrames>0)detailFrames--;
@@ -189,7 +189,7 @@
     const accepted=checkedPayload(result,width,height);
     if((accepted.words||[]).length){
      weakScans=0;
-     if(highRes)detailFrames=Math.max(detailFrames,4);
+     if(highRes)detailFrames=Math.max(detailFrames,3);
     }else weakScans=Math.min(12,weakScans+1);
     window.__inkCameraDetailRecovery={
       used:!!result.detailUpscaled,enhancement:result.enhancement||null,
