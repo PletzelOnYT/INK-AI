@@ -145,7 +145,7 @@ async function create(){
    const sideCanvas=document.createElement("canvas");
    const sideContext=sideCanvas.getContext("2d",{alpha:false});
    const probeCanvas=document.createElement("canvas");
-   probeCanvas.width=260;probeCanvas.height=170;
+   probeCanvas.width=260;probeCanvas.height=146;
    const probeContext=probeCanvas.getContext("2d",{willReadFrequently:true});
    let previousAngle=null,previousStreak=0,attemptCursor=0,scanNumber=0;
    function candidateStrength(lines){
@@ -171,11 +171,15 @@ async function create(){
    }
    function direction(image,width,height){
     // Only 260x170 pixels are read back; no full webcam bitmap is copied.
+    // Preserve the camera aspect ratio. Resizing 16:9 frames to a fixed
+    // 260x170 warped slopes and made 30° text look like 35° text.
+    const probeH=Math.max(48,Math.round(260*height/width));
+    if(probeCanvas.height!==probeH)probeCanvas.height=probeH;
     probeContext.fillStyle="#fff";
-    probeContext.fillRect(0,0,260,170);
-    probeContext.drawImage(image,0,0,260,170);
-    const rgba=probeContext.getImageData(0,0,260,170).data;
-    return estimateTextAngle(rgba,260,170);
+    probeContext.fillRect(0,0,260,probeH);
+    probeContext.drawImage(image,0,0,260,probeH);
+    const rgba=probeContext.getImageData(0,0,260,probeH).data;
+    return estimateTextAngle(rgba,260,probeH);
    }
    async function tiltedRead(image,width,height,angle){
     const size=rotatedSize(angle,width,height);
@@ -246,7 +250,9 @@ async function create(){
      }
      const consider=(next,source)=>{
       const strength=candidateStrength(next.lines);
-      if(strength.value>candidate.value+1.6&&
+      const requiredGain=(candidate.rotation===0&&
+        clearRead(candidate.lines))?4.5:1.6;
+      if(strength.value>candidate.value+requiredGain&&
          strength.meaningful>=1&&clearRead(next.lines)){
        candidate={...next,value:strength.value,source};
        return true;
