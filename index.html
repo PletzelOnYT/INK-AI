@@ -23714,7 +23714,8 @@ poison
   // In a real browser all OCR outputs must be supported by visible ink-like
   // edges, not only a language model's guess. Word boxes are evaluated
   // independently so a real label isn't hidden by a false adjacent token.
-  if(!Evidence?.evidence||!context.getImageData)return payload;
+  if(!Evidence?.evidence||!context.getImageData)
+   return {...payload,words:payload.lines.flatMap(line=>line.words||[])};
   const lines=[];
   let rejected=0,accepted=0;
   for(const line of payload.lines){
@@ -23884,7 +23885,7 @@ poison
     // Only the latest live frame is recognized by the bundled neural worker.
     const result=await engine.recognize(canvas,width,height);
     const accepted=checkedPayload(result,width,height);
-    if(accepted.words.length){
+    if((accepted.words||[]).length){
      weakScans=0;
      if(highRes)detailFrames=Math.max(detailFrames,4);
     }else weakScans=Math.min(12,weakScans+1);
