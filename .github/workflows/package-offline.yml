@@ -7,6 +7,7 @@ on:
       - "src/index.shell.html"
       - "src/app.js"
       - "src/camera_ocr.js"
+      - ".github/workflows/package-offline.yml"
       - "src/app.css"
       - "src/stroke_worker.js"
       - "scripts/build_standalone.py"
