@@ -63,15 +63,8 @@ The source app loads local model files and runs inference entirely in browser wo
 
 ![Completer results](./docs/completion-vertical-bars.svg)
 
-### Camera printed-text CNN
 
-![Printed text character accuracy and real camera testing status](./docs/camera-print-benchmarks.svg)
-
-### All INK AI systems
-
-![Measured system benchmarks](./docs/ai-systems.svg)
-
-**Graph update rule:** Any substantial new recognition, completion, camera, or other AI engine needs a corresponding benchmark entry and updated graphs in the same change. Rebuild with `python3 scripts/update_model_graphs.py`. Independent measurements are required: pending or unmeasured values must say "Not measured", never 0% or an invented success rate. Metrics must identify the dataset, test split, and metric meaning. Charts are generated automatically from versioned reports in `models/` whenever a new printed CNN is trained.
+**Graph update rule:** Keep the original Recognizer and Completer graphs only. Update their measured values when those existing models change, and do not add separate graphs for new systems.
 
 
 ### Training data and honest evaluation
@@ -101,8 +94,6 @@ The experimental V5 training focused on confusion between `1`, `I`, `l`, `i`, `j
 | [src/stroke_worker.js](./src/stroke_worker.js) | Neural stroke generation |
 | [src/train.py](./src/train.py) | Character recognition training |
 | [src/train_print_cnn.py](./src/train_print_cnn.py) | First-party printed-font CNN training, separate held-out families |
-| [scripts/update_model_graphs.py](./scripts/update_model_graphs.py) | Update system charts from measured benchmark JSON |
-| [docs/camera-print-benchmarks.svg](./docs/camera-print-benchmarks.svg) | Printed CNN evaluation and camera OCR measurement status |
 | [src/train_recognition_v3.py](./src/train_recognition_v3.py) | Released pen-adapted V3 CNN training |
 | [src/train_recognition_hardcases.py](./src/train_recognition_hardcases.py) | New confusing-character V5 training |
 | [V4 training experiment](https://github.com/PletzelOnYT/INK-AI/blob/feature/recognition-multidataset-v4/src/train_recognition_v4.py) | Experimental four-dataset recognizer training |
