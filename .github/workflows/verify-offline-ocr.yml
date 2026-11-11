@@ -25,7 +25,7 @@ on:
   workflow_dispatch:
 concurrency:
   group: ink-ocr-real-browser-check
-  cancel-in-progress: true
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:
