@@ -13224,7 +13224,7 @@ async function classify(images){
  }
  return output;
 }
-function decode(lines,predictions){
+function decode(lines,predictions,verified){
  const words=[];let offset=0;
  for(const {line,frame} of lines){
   const letters=line.letters;
@@ -13268,6 +13268,18 @@ function decode(lines,predictions){
     y1:Math.max(...segment.map(x=>x.box.y1))};
    const transformed=project(box,frame);
    if(!Core.visibility(transformed.points,base.width,base.height))continue;
+   if(window.__inkTextnessReady){
+    // The character CNN must not read a neighboring line/cabinet that was
+    // never accepted as text by the independently trained scene CNN.
+    const a=transformed.box,area=Math.max(1,(a.x1-a.x0)*(a.y1-a.y0));
+    const supported=verified.some(region=>{
+     const b=region.box;
+     const overlap=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0))*
+       Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
+     return overlap/area>=.48;
+    });
+    if(!supported)continue;
+   }
    words.push({text,confidence,box:transformed.box,
      polygon:transformed.points,angle:frame.view.angle});
   }
@@ -13399,7 +13411,7 @@ async function scan(id){
     box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
   if(!active||id!==epoch)return;
-  const found=decode(selected,predictions);
+  const found=decode(selected,predictions,verified);
   const state=tracker.update(found,Date.now());
   window.__inkCameraWords=state.words;
   window.__inkCameraText=state.text;
