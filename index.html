@@ -23790,7 +23790,7 @@ poison
   }
   return result;
  }
- function decodeLine(line,predictions,sourceWidth,sourceHeight,scaleX,scaleY){
+ function decodeLine(line,predictions,sourceWidth,sourceHeight,scaleX,scaleY,engine="ink-handwriting-cnn"){
   if(predictions.length!==line.letters.length)return [];
   const heights=line.letters.map(c=>c.y1-c.y0+1);
   const h=median(heights);
@@ -23832,13 +23832,13 @@ poison
    const projected={x0:box.x0*scaleX,y0:box.y0*scaleY,
     x1:box.x1*scaleX,y1:box.y1*scaleY};
    words.push({text,confidence,box:projected,
-    recognitionEngine:"ink-handwriting-cnn"});
+    recognitionEngine:engine});
   }
   if(!words.length)return [];
   const box=bounds(words.map(w=>({...w.box,x1:w.box.x1-1,y1:w.box.y1-1})));
   const confidence=words.reduce((sum,w)=>sum+w.confidence,0)/words.length;
   return [{text:words.map(w=>w.text).join(" "),words,box,confidence,
-   recognitionEngine:"ink-handwriting-cnn"}];
+   recognitionEngine:engine}];
  }
  async function recognize(canvas,width,height){
   if(!window.__inkHandwritingReady||
@@ -23859,16 +23859,40 @@ poison
   const predictions=await window.__inkCameraRecognizeHandwriting(images);
   if(predictions.length!==images.length)throw Error("Handwriting batch mismatch");
   let index=0;
-  const translated=[];
+  const translated=[],unread=[];
   const scaleX=width/scanWidth,scaleY=height/scanHeight;
   for(const line of lines){
    const count=line.letters.length;
-   translated.push(...decodeLine(line,predictions.slice(index,index+count),
-    width,height,scaleX,scaleY));
+   const values=decodeLine(line,predictions.slice(index,index+count),
+    width,height,scaleX,scaleY);
+   if(values.length)translated.push(...values);
+   else unread.push({line,start:index,count});
    index+=count;
   }
+  // Camera rasterization and pen trajectories have different statistics.
+  // When the handwriting-trained model abstains, let the already-loaded
+  // printed CNN challenge only those missing glyphs, not every live frame.
+  // It is a second trained neural model, never procedural text replacement.
+  let printAssistedGlyphs=0;
+  if(unread.length&&window.__inkPrintReady&&
+     typeof window.__inkCameraRecognize==="function"){
+   const unresolved=unread.flatMap(x=>images.slice(x.start,x.start+x.count));
+   try{
+    const rescue=await window.__inkCameraRecognize(unresolved);
+    if(rescue.length===unresolved.length){
+     let at=0;
+     for(const item of unread){
+      const values=decodeLine(item.line,rescue.slice(at,at+item.count),
+       width,height,scaleX,scaleY,"ink-print-cnn-fallback");
+      translated.push(...values);
+      if(values.length)printAssistedGlyphs+=item.count;
+      at+=item.count;
+     }
+    }
+   }catch(_){/* Keep confirmed handwriting reads if print model fails. */}
+  }
   return {lines:translated,attempted:true,regions:lines.length,
-   glyphs:images.length};
+   glyphs:images.length,printAssistedGlyphs};
  }
  window.InkCameraHandwriting={recognize,decodeLine,normalizeGlyph,candidates};
 })();
