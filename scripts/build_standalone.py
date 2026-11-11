@@ -109,6 +109,25 @@ if v5_weights.is_file() and v5_metrics.is_file():
                   os.environ.get("INK_RECOGNIZER_PREVIEW_V5")=="1"):
         recognition_path="models/ink-cnn-v5.json"
 print("Bundled recognizer:",recognition_path)
+# Produce a machine-readable record of what this downloadable HTML actually uses.
+# The graphs include candidates, but this manifest identifies deployed weights.
+def checkpoint_record(name):
+    p=ROOT/"models"/name
+    return json.loads(p.read_text()) if p.is_file() else {}
+cnn_version="v5" if recognition_path.endswith("v5.json") else "v3"
+cnn_report=checkpoint_record(f"recognition-{cnn_version}-metrics.json")
+cnn_measured=(cnn_report.get("independent_pen_v3",{}) if cnn_version=="v5"
+              else cnn_report.get("independent_pen_v3",{})).get("overall")
+gru_version="v7" if stroke_path.endswith("prefix-domain-v7.json") else "v2" if stroke_path.endswith("prefix-domain-v2.json") else "other"
+gru_report=checkpoint_record(f"stroke-prefix-domain-{gru_version}-metrics.json") if gru_version!="other" else {}
+gru_error=gru_report.get("candidate",{}).get("independent",{}).get("prefix_frame_position_error")
+manifest={"format":"ink-ai-deployed-models-v1",
+          "recognizer":{"weights":recognition_path,"heldout_writer_accuracy":cnn_measured},
+          "completer":{"weights":stroke_path,"heldout_writer_trajectory_error":gru_error},
+          "note":"Only deployed models appear here; experimental and rejected checkpoints remain visible in model-history graphs."}
+model_manifest=ROOT/"docs/current-models.json"
+model_manifest.parent.mkdir(exist_ok=True)
+model_manifest.write_text(json.dumps(manifest,indent=2)+"\\n",encoding="utf-8")
 models=[
  ("inkRecognitionModel","application/json",
   recognition_path),
