@@ -86,7 +86,13 @@
    const w=Math.max(2,(b.x1-b.x0)*sx),h=Math.max(2,(b.y1-b.y0)*sy);
    if(x+w<0||y+h<0||x>width||y>height)continue;
    context.beginPath();
-   if(context.roundRect)context.roundRect(x-2,y-1,w+4,h+2,3);
+   const polygon=word.points;
+   if(Array.isArray(polygon)&&polygon.length===4){
+    context.moveTo(ox+polygon[0].x*sx,oy+polygon[0].y*sy);
+    for(let i=1;i<4;i++)
+     context.lineTo(ox+polygon[i].x*sx,oy+polygon[i].y*sy);
+    context.closePath();
+   }else if(context.roundRect)context.roundRect(x-2,y-1,w+4,h+2,3);
    else context.rect(x-2,y-1,w+4,h+2);
    context.fill();context.stroke();
   }
