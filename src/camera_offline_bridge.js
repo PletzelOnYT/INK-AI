@@ -187,10 +187,17 @@
     // Only the latest live frame is recognized by the bundled neural worker.
     const result=await engine.recognize(canvas,width,height);
     const accepted=checkedPayload(result,width,height);
-    if((accepted.words||[]).length){
-     weakScans=0;
-     if(highRes)detailFrames=Math.max(detailFrames,3);
-    }else weakScans=Math.min(12,weakScans+1);
+    // A fragment such as "112" is not a complete dial read. Keep trying
+    // full-detail OCR until independent digits or real words are verified.
+    const acceptedWords=accepted.words||[];
+    const dialCount=acceptedWords.filter(w=>w.clockDial).length;
+    const completeText=acceptedWords.some(w=>
+     /[A-Za-z]{4,}/.test(String(w.text||"")))||
+     acceptedWords.filter(w=>/^\d{1,2}$/.test(String(w.text||""))).length>=5;
+    if(completeText)weakScans=0;
+    else weakScans=Math.min(12,weakScans+1);
+    if(highRes&&(completeText||dialCount>=1))
+     detailFrames=Math.max(detailFrames,3);
     window.__inkCameraDetailRecovery={
       used:!!result.detailUpscaled,enhancement:result.enhancement||null,
       captureWidth:width,captureHeight:height,highResolution:highRes
