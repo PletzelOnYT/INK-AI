@@ -31,11 +31,13 @@ try:
         canvas.width=960;canvas.height=540;
         const g=canvas.getContext("2d");
         const modelRead=window.__inkCameraRecognizeHandwriting;
-        let modelCalls=0,modelGlyphs=0,rawSamples=[];
+        let modelCalls=0,modelGlyphs=0,rawSamples=[],printSamples=[];
         window.__inkCameraRecognizeHandwriting=async images=>{
           modelCalls++;modelGlyphs+=images.length;
           const output=await modelRead(images);
-          rawSamples.push(output.slice(0,12).map(x=>x.top?.slice(0,2)));
+          rawSamples.push(output.slice(0,18).map(x=>x.top?.slice(0,2)));
+          const print=await window.__inkCameraRecognize(images);
+          printSamples.push(print.slice(0,18).map(x=>x.top?.slice(0,2)));
           return output;
         };
         const results=[];
@@ -54,7 +56,7 @@ try:
           canvas,960,540);
         done({ok:true,modelCalls,modelGlyphs,results,
           blankLines:blank.lines.length,
-          version:window.__inkRecognitionVersion,rawSamples});
+          version:window.__inkRecognitionVersion,rawSamples,printSamples});
       })().catch(error=>done({ok:false,error:String(error.stack||error)}));
     """)
     assert result.get("ok"),result.get("error")
