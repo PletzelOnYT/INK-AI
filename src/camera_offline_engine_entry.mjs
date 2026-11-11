@@ -190,6 +190,16 @@ async function create(){
       (strength.best>=5.3||strength.meaningful>=2)) ||
       (isCompactNumericRead(lines)&&strength.value>=4.7);
    }
+   function looksUpsideDown(lines){
+    // Mixed-case, mid-token capitals and inserted digits are often
+    // upside-down OCR artifacts. Challenge their orientation, but keep the
+    // original read if no verified improvement is found.
+    return lines.some(line=>(line.words||[]).some(word=>{
+     const token=String(word.text||"").replace(/[^A-Za-z0-9]/g,"");
+     return token.length>=6&&(/[a-z][A-Z]/.test(token)||
+       /[A-Z][a-z][A-Z]/.test(token)||/[A-Za-z][0-9][A-Za-z]/.test(token));
+    }));
+   }
    function direction(image,width,height){
     // Only 260x170 pixels are read back; no full webcam bitmap is copied.
     // Preserve the camera aspect ratio. Resizing 16:9 frames to a fixed
@@ -350,7 +360,8 @@ async function create(){
      candidate={lines,rotation:0,source:"upright",value:strongest.value};
      // The image projection measures an angle without making assumptions
      // about individual letters or language-model guesses.
-     const needsChallenge=!clearRead(lines)||scanNumber%7===0;
+     const suspicious=looksUpsideDown(lines);
+     const needsChallenge=!clearRead(lines)||scanNumber%7===0||suspicious;
      if(needsChallenge){
       try{hint=direction(image,width,height)}catch(_){}
      }
@@ -358,7 +369,8 @@ async function create(){
        hint.confidence>=.24&&Math.abs(hint.angle)>=7;
      // A horizontal, high-confidence read is the fast path. A strong
      // projection indicating tilted text can challenge a suspicious OCR.
-     if(clearRead(lines)&&!(skewHint&&Math.abs(hint.angle)>=16)){
+     if(clearRead(lines)&&!suspicious&&
+        !(skewHint&&Math.abs(hint.angle)>=16)){
       previousAngle=null;previousStreak=0;attemptCursor=0;
       return {engine:engine.kind,width,height,deskewed:false,
        quarterTurn:0,rotationDegrees:0,attempts:0,angleSource:"upright",
@@ -369,7 +381,7 @@ async function create(){
      const consider=(next,source)=>{
       const strength=candidateStrength(next.lines);
       const requiredGain=(candidate.rotation===0&&
-        clearRead(candidate.lines))?4.5:1.6;
+        clearRead(candidate.lines))?(looksUpsideDown(candidate.lines)?.8:4.5):1.6;
       if(strength.value>candidate.value+requiredGain&&
          strength.meaningful>=1&&clearRead(next.lines)){
        candidate={...next,value:strength.value,source};
@@ -402,9 +414,14 @@ async function create(){
      // Projection-estimated rotations first; if the image has too much
      // clutter to identify a dominant line, use an exhaustive rotation
      // ladder spread over a few scans without stalling the live video.
-     const queue=rotationQueue(skewHint?hint.angle:null,previousAngle);
-     const goodAngle=skewHint?Math.round(-hint.angle/5)*5:null;
-     const options=goodAngle!==null?queue.slice(0,2):
+     const steep=Number.isFinite(hint?.angle)&&Math.abs(hint.angle)>=34;
+     const queue=rotationQueue(steep?hint.angle:
+       skewHint?hint.angle:null,previousAngle);
+     const goodAngle=(steep||skewHint)?Math.round(-hint.angle/5)*5:null;
+     // Rotate stronger perspectives through both signs. Blank rooms only
+     // receive a single trial per frame to preserve webcam responsiveness.
+     const options=suspicious&&!steep?[180]:
+       goodAngle!==null?queue.slice(0,3):
        [queue[attemptCursor%queue.length]];
      attemptCursor=(attemptCursor+options.length)%queue.length;
      for(const angle of options){
