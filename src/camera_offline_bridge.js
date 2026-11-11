@@ -263,7 +263,7 @@
   const engine=await window.InkOfflineOCR.create();
   const tracker=createTracker();
   let scan=0,handAttempts=0,handAccepted=0;
-  const nativeZones=["lower-right","lower-left","upper-right","upper-left"];
+  const nativeZones=["center","lower-right","lower-left","upper-right","upper-left"];
   function transformRegion(item,offsetX,offsetY,scaleX,scaleY){
    const project=point=>({x:offsetX+point.x*scaleX,
     y:offsetY+point.y*scaleY});
@@ -293,8 +293,10 @@
       (scan%3===0?1:0)+nativeZones.length*10)%nativeZones.length];
     const frac=nativeFocus?.66:1;
     const sw=Math.round(nativeW*frac),sh=Math.round(nativeH*frac);
-    const ox=nativeFocus&&zone.endsWith("right")?nativeW-sw:0;
-    const oy=nativeFocus&&zone.startsWith("lower")?nativeH-sh:0;
+    const ox=!nativeFocus?0:zone==="center"?
+     Math.round((nativeW-sw)/2):zone.endsWith("right")?nativeW-sw:0;
+    const oy=!nativeFocus?0:zone==="center"?
+     Math.round((nativeH-sh)/2):zone.startsWith("lower")?nativeH-sh:0;
     const width=Math.max(1,Math.min(regularWidth,sw));
     const height=Math.max(1,Math.round(sh*width/sw));
     if(canvas.width!==width||canvas.height!==height){
@@ -302,7 +304,8 @@
     }
     context.drawImage(video,ox,oy,sw,sh,0,0,width,height);
     const result=await engine.recognize(canvas,width,height,
-     nativeFocus?{fastRegion:true,documentMode:scan%4===0}:
+     nativeFocus?{fastRegion:true,documentMode:scan%4===0,
+      layoutRescue:zone==="center",clockProbe:zone==="center"}:
       // Below 1500px there is no spare native detail for a fast ROI.
       // Preserve the proven perspective and page-layout recovery there.
       {skipOptionalDetail:nativeW>=1500&&scan%12!==7});
