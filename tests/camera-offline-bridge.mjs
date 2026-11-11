@@ -47,9 +47,9 @@ assert.equal(tracked.words.length,2);
 client.paint({...canvas},cam,{clientWidth:1000,clientHeight:500},tracked);
 assert.equal(polygonPoints,4,"Angled word highlighter must follow all four rotated text corners");
 const empty={width:1000,height:500,lines:[]};
-assert.equal(client.track(empty,2700).text,"","Old document words must expire");
+assert.equal(client.track(empty,4300).text,"","Old document words must expire after bounded OCR latency");
 client.reset();
-assert.equal(client.track(empty,3000).text,"");
+assert.equal(client.track(empty,4600).text,"");
 assert.equal(received,1);
 // A repeatedly unreadable 1920px frame must trigger full native detail,
 // without imposing 1080p cost on clear normal scans.
@@ -58,7 +58,8 @@ client.reset();
 for(let i=0;i<9;i++)await client.recognize({videoWidth:1920,videoHeight:1080});
 assert.equal(capturedWidths[0],1000);
 assert.ok(capturedWidths.slice(1).includes(1280));
-assert.ok(capturedWidths.slice(1).includes(1920),"Small distant text needs high-res recovery");
+assert.ok(capturedWidths.slice(1).includes(1267),"Native-resolution focus must preserve distant glyph pixels without full 1080p OCR");
+assert.ok(capturedWidths.slice(1).every(w=>w<=1280),"Per-pass OCR width should remain bounded for speed");
 const reader=api.createTracker();
 const wrapped=reader.update({
  width:1000,height:500,
