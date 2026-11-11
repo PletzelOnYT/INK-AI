@@ -10,13 +10,13 @@ A small browser-based drawing app for writing letters, numbers, and symbols. Dra
 
 **[Download index.html](./index.html)** and open it directly in Chrome, including offline. It includes the interface, JavaScript, and trained model weights in one file. No installation, API key, or separate assets required.
 
-The source code is stored in GitHub: edit the [small HTML shell](./src/index.shell.html), [CSS](./src/app.css), and [JavaScript](./src/app.js). The full `index.html` is generated from these files and the trained models. GitHub excludes this generated file from the source-language percentages, but it remains available to download and run offline. To rebuild it, run `python3 scripts/build_standalone.py`; GitHub Actions also [packages the offline build](./actions/workflows/package-offline.yml).
+The source code is stored in GitHub: edit the [small HTML shell](./src/index.shell.html), [CSS](./src/app.css), and [JavaScript](./src/app.js). The full `index.html` is generated from these files and the trained models. GitHub excludes this generated file from the source-language percentages, but it remains available to download and run offline. To rebuild it, run `python3 scripts/build_standalone.py`; GitHub Actions also [regenerates the repository root `index.html`](./.github/workflows/package-offline.yml) when source changes. It is checked into GitHub, not only stored as an artifact.
 
 ## Features
 
 - **Live recognition** — identifies handwritten letters, numbers, punctuation, and common math symbols.
 - **Pen and eraser** — a simple canvas without extra menus.
-- **Camera text reader** — click the camera button to replace the whiteboard with a live webcam view and see recognized printed words and sentences below it. Uses INK AI's own in-browser CNN for camera character classification and its own video-text segmentation; camera access is permission-based. Text-like letter regions are marked by a translucent white highlighter, even when a word cannot be confidently transcribed.
+- **Camera text reader** — click the camera button to replace the whiteboard with a live webcam view and see recognized printed words and sentences below it. Uses INK AI's own in-browser CNN for camera character classification, preferring the dedicated printed-text CNN when trained and independently evaluated. Detection checks local RGB contrast for dark, light, and colored letters, including laptop labels such as "Chromebook". Text-like letter regions receive a transparent white highlight even if transcription is uncertain.
 - **Assist** — opt-in neural handwriting suggestions while drawing, controlled by the Assist button.
 - **Stroke continuations** — the assistant draws light-gray, semi-transparent extensions of your actual ink. It does not overlay printed letters.
 - **Multi-stroke characters** — handles separate strokes in characters like `+`, `=`, `:`, and `X`.
@@ -47,7 +47,9 @@ INK AI has two separate models:
 
 Assist uses multiple candidate trajectories and filters out implausible shapes. It can use a built-in English word-frequency list to choose between genuinely plausible letters in a word, while leaving strongly recognized strokes alone. It does not force a tail onto a lowercase h that already reaches its baseline. It also takes the full-character recognition result into account, so a partial-stroke prediction doesn't override a more reliable whole-character guess. If the newer completion model can't produce a usable continuation, it can fall back to the previous trained stroke model.
 
-Camera recognition uses the repository's own trained handwriting CNN and its own JavaScript segmentation code. There is no Tesseract, external OCR CDN, third-party OCR model, cloud processing, or image upload. The standalone HTML includes the model weights and camera code; camera permission is still required, and webcam availability depends on browser security rules. **Camera transcription is experimental**, especially for printed fonts: the underlying CNN is trained primarily on handwriting and has not been benchmarked on real camera images. The reader filters low-confidence characters and confirms repeated predictions across frames. The white see-through highlighter tracks text-like image regions independently, so highlighting does not imply that the letters have been correctly recognized.
+Camera recognition uses first-party RGB-contrast segmentation and two separate INK AI CNNs: the existing handwriting recognizer and an **independently trained printed-letter CNN**, automatically selected only when its checked-in checkpoint passes held-out-font evaluation. The printed CNN is trained from scratch on synthetic glyph renders from locally installed system fonts—not from anyone else's pretrained OCR model. The camera code has no external OCR CDN, remote OCR API, or video upload; the standalone file embeds the trained weights. Webcam permission and browser security rules still apply.
+
+**Camera OCR remains experimental.** Synthetic-font classification accuracy is not the same as whole-word recognition on a real laptop or under glare, blur, low contrast, or unusual camera angles. The model and word segmentation are not yet measured on a real webcam dataset. Any foreground/background color is supported *when the text has adequate visual contrast*; impossible-to-distinguish similar colors cannot be guaranteed. The translucent white highlights mark candidate text regions, not verified correct words.
 
 The source app loads local model files and runs inference entirely in browser workers. The packaged offline build embeds the same model data. Drawings stay in the canvas unless you accept a suggestion.
 
@@ -60,6 +62,16 @@ The source app loads local model files and runs inference entirely in browser wo
 ### Completer
 
 ![Completer results](./docs/completion-vertical-bars.svg)
+
+### Camera printed-text CNN
+
+![Printed text character accuracy and real camera testing status](./docs/camera-print-benchmarks.svg)
+
+### All INK AI systems
+
+![Measured system benchmarks](./docs/ai-systems.svg)
+
+**Graph update rule:** Any substantial new recognition, completion, camera, or other AI engine needs a corresponding benchmark entry and updated graphs in the same change. Rebuild with `python3 scripts/update_model_graphs.py`. Independent measurements are required: pending or unmeasured values must say "Not measured", never 0% or an invented success rate. Metrics must identify the dataset, test split, and metric meaning. Charts are generated automatically from versioned reports in `models/` whenever a new printed CNN is trained.
 
 
 ### Training data and honest evaluation
@@ -88,6 +100,9 @@ The experimental V5 training focused on confusion between `1`, `I`, `l`, `i`, `j
 | [src/stroke_assist_ui.js](./src/stroke_assist_ui.js) | Live gray neural pen suggestions, English context and drawing controls |
 | [src/stroke_worker.js](./src/stroke_worker.js) | Neural stroke generation |
 | [src/train.py](./src/train.py) | Character recognition training |
+| [src/train_print_cnn.py](./src/train_print_cnn.py) | First-party printed-font CNN training, separate held-out families |
+| [scripts/update_model_graphs.py](./scripts/update_model_graphs.py) | Update system charts from measured benchmark JSON |
+| [docs/camera-print-benchmarks.svg](./docs/camera-print-benchmarks.svg) | Printed CNN evaluation and camera OCR measurement status |
 | [src/train_recognition_v3.py](./src/train_recognition_v3.py) | Released pen-adapted V3 CNN training |
 | [src/train_recognition_hardcases.py](./src/train_recognition_hardcases.py) | New confusing-character V5 training |
 | [V4 training experiment](https://github.com/PletzelOnYT/INK-AI/blob/feature/recognition-multidataset-v4/src/train_recognition_v4.py) | Experimental four-dataset recognizer training |
