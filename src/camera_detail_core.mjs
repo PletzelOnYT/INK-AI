@@ -190,3 +190,163 @@ export function isCompactNumericRead(lines){
    (word.box?.y1-word.box?.y0)>=7;
  }));
 }
+
+
+
+// Find an analog clock by its curved dark rim and brighter dial. Geometry
+// proposes a region; it never guesses which characters are printed on it.
+export function findAnalogClockRGBA(data,width,height){
+ if(data.length!==width*height*4)throw Error("Clock preview dimensions mismatch");
+ if(width<80||height<70)return null;
+ const gray=new Uint8Array(width*height);
+ for(let i=0;i<gray.length;i++){
+  const p=i*4;
+  gray[i]=Math.round(.299*data[p]+.587*data[p+1]+.114*data[p+2]);
+ }
+ const directions=Array.from({length:24},(_,i)=>{
+  const a=2*Math.PI*i/24;return [Math.cos(a),Math.sin(a)];
+ });
+ const get=(x,y)=>gray[Math.round(y)*width+Math.round(x)];
+ let best=null;
+ const minR=Math.max(10,Math.round(width*.032));
+ const maxR=Math.min(Math.floor(Math.min(width,height)/3),Math.round(width*.15));
+ function score(cx,cy,r){
+  let support=0,contrast=0,innerSum=0,outerSum=0;
+  for(const [dx,dy] of directions){
+   const x=cx+dx*r,y=cy+dy*r;
+   const inner=get(cx+dx*r*.74,cy+dy*r*.74);
+   const outer=get(cx+dx*r*1.15,cy+dy*r*1.15);
+   const ring=Math.min(get(cx+dx*r*.92,cy+dy*r*.92),
+    get(cx+dx*r*.98,cy+dy*r*.98),get(x+dx*r*.045,y+dy*r*.045));
+   const delta=Math.min(inner,outer)-ring;
+   if(delta>17)support++;
+   contrast+=Math.max(0,Math.min(100,delta));
+   innerSum+=inner;outerSum+=outer;
+  }
+  const fraction=support/24;
+  if(fraction<.63||innerSum/24<145||outerSum/24<130)return null;
+  return {score:contrast/24*(fraction-.28),support:fraction};
+ }
+ for(let r=minR;r<=maxR;r+=2){
+  const margin=Math.ceil(r*1.2)+1;
+  for(let cy=margin;cy<height-margin;cy+=3)
+   for(let cx=margin;cx<width-margin;cx+=3){
+    const interior=(get(cx+r*.48,cy)+get(cx-r*.48,cy)+
+      get(cx,cy+r*.48)+get(cx,cy-r*.48))*.25;
+    if(interior<146)continue;
+    const metric=score(cx,cy,r);
+    if(metric?.score>Math.max(12,best?.score||0))
+     best={cx,cy,radius:r,score:metric.score,support:metric.support};
+   }
+ }
+ if(!best)return null;
+ // Subpixel-scale refinement matters when the original webcam is 1080p.
+ const old=best;
+ for(let r=Math.max(minR,old.radius-2);r<=Math.min(maxR,old.radius+2);r++){
+  for(let cy=old.cy-4;cy<=old.cy+4;cy++)
+   for(let cx=old.cx-4;cx<=old.cx+4;cx++){
+    if(cx-r*1.2<1||cy-r*1.2<1||
+       cx+r*1.2>=width-1||cy+r*1.2>=height-1)continue;
+    const metric=score(cx,cy,r);
+    if(metric?.score>best.score)
+     best={cx,cy,radius:r,score:metric.score,support:metric.support};
+   }
+ }
+ return best;
+}
+
+// Localize actual dark glyph components around a detected dial. These are
+// candidate bounding boxes only: the offline OCR must recognize the pixels.
+export function findDialGlyphRegionsRGBA(data,width,height,clock){
+ if(data.length!==width*height*4)throw Error("Clock glyph bitmap mismatch");
+ if(!clock||clock.radius<13)return [];
+ const {cx,cy,radius:r}=clock;
+ const ox=Math.max(0,Math.floor(cx-r*1.16));
+ const oy=Math.max(0,Math.floor(cy-r*1.16));
+ const right=Math.min(width,Math.ceil(cx+r*1.16));
+ const bottom=Math.min(height,Math.ceil(cy+r*1.16));
+ const w=right-ox,h=bottom-oy;
+ if(w<20||h<20||w*h>500000)return [];
+ const lum=new Uint8Array(w*h),visited=new Uint8Array(w*h);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  const p=((y+oy)*width+x+ox)*4;
+  lum[y*w+x]=Math.round(.299*data[p]+.587*data[p+1]+.114*data[p+2]);
+ }
+ const at=(x,y)=>lum[Math.max(0,Math.min(h-1,Math.round(y-oy)))*w+
+  Math.max(0,Math.min(w-1,Math.round(x-ox)))];
+ const face=(at(cx+r*.36,cy)+at(cx-r*.36,cy)+
+  at(cx,cy+r*.36)+at(cx,cy-r*.36))/4;
+ if(face<132)return [];
+ // Keep the threshold conservative: a too-generous threshold merges
+ // numeral 7/8 with the surrounding clock frame.
+ const threshold=Math.min(160,Math.max(92,face-62));
+ const queue=new Int32Array(w*h),glyphs=[];
+ for(let i=0;i<w*h;i++){
+  if(visited[i]||lum[i]>=threshold)continue;
+  visited[i]=1;queue[0]=i;
+  let head=0,tail=1,x0=w,y0=h,x1=0,y1=0;
+  while(head<tail){
+   const p=queue[head++],x=p%w,y=(p-x)/w;
+   x0=Math.min(x0,x);x1=Math.max(x1,x);
+   y0=Math.min(y0,y);y1=Math.max(y1,y);
+   for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    if(!dx&&!dy)continue;
+    const nx=x+dx,ny=y+dy;
+    if(nx<0||ny<0||nx>=w||ny>=h)continue;
+    const k=ny*w+nx;
+    if(visited[k]||lum[k]>=threshold)continue;
+    visited[k]=1;queue[tail++]=k;
+   }
+  }
+  const bw=x1-x0+1,bh=y1-y0+1,area=tail;
+  if(bw<r*.018||bh<r*.055||bw>r*.23||bh>r*.31||
+     area<Math.max(5,r*.065)||area>r*r*.065)continue;
+  const gx=ox+(x0+x1)/2,gy=oy+(y0+y1)/2;
+  const radial=Math.hypot(gx-cx,gy-cy)/r;
+  if(radial<.47||radial>1.13)continue;
+  glyphs.push({cx:gx,cy:gy,box:{x0:ox+x0,y0:oy+y0,
+   x1:ox+x1+1,y1:oy+y1+1}});
+ }
+ if(glyphs.length<7||glyphs.length>36)return [];
+ const xs=glyphs.map(g=>g.cx).sort((a,b)=>a-b);
+ const ys=glyphs.map(g=>g.cy).sort((a,b)=>a-b);
+ const estimatedX=(xs[0]+xs[xs.length-1])/2;
+ const estimatedY=(ys[0]+ys[ys.length-1])/2;
+ const centerX=Math.abs(estimatedX-cx)<r*.19?estimatedX:cx;
+ const centerY=Math.abs(estimatedY-cy)<r*.19?estimatedY:cy;
+ // Calibrate the clock's phase from actual printed components; mildly
+ // oblique clock faces can shift all nominal hour angles by 5-15 degrees.
+ let re=0,im=0;
+ for(const g of glyphs){
+  const angle=Math.atan2(g.cy-centerY,g.cx-centerX);
+  re+=Math.cos(12*angle);im+=Math.sin(12*angle);
+ }
+ const phase=Math.atan2(im,re)/12;
+ const groups=new Map();
+ for(const g of glyphs){
+  const angle=Math.atan2(g.cy-centerY,g.cx-centerX);
+  const slot=(angle-phase+Math.PI/2)/(Math.PI/6);
+  const nearest=Math.round(slot);
+  if(Math.abs(slot-nearest)*30>16)continue;
+  const hour=((nearest%12)+12)%12||12;
+  if(!groups.has(hour))groups.set(hour,[]);
+  groups.get(hour).push(g);
+ }
+ const result=[];
+ for(let hour=1;hour<=12;hour++){
+  const parts=groups.get(hour)||[];
+  if(!parts.length||parts.length>3)continue;
+  let x0=Math.min(...parts.map(p=>p.box.x0));
+  let y0=Math.min(...parts.map(p=>p.box.y0));
+  let x1=Math.max(...parts.map(p=>p.box.x1));
+  let y1=Math.max(...parts.map(p=>p.box.y1));
+  if(x1-x0>r*.44||y1-y0>r*.33)continue;
+  if(hour>=10&&parts.length<2)continue;
+  const px=Math.max(2,Math.round(r*.038));
+  const py=Math.max(2,Math.round(r*.045));
+  result.push({hour,box:{x0:Math.max(0,x0-px),
+   y0:Math.max(0,y0-py),x1:Math.min(width,x1+px),
+   y1:Math.min(height,y1+py)}});
+ }
+ return result;
+}
