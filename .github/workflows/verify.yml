@@ -51,7 +51,7 @@ jobs:
           application=Path("src/app.js").read_text().strip()
           camera=Path("src/camera_ocr.js").read_text().strip()
           tracking=Path("src/camera_tracking.js").read_text().strip()
-          expected=(Path("src/neural_preference_model.js").read_text()+"\n"+Path("src/app.js").read_text()+"\n"+Path("src/camera_tracking.js").read_text()+"\n"+Path("src/camera_ocr.js").read_text()).strip()
+          expected=(Path("src/neural_preference_model.js").read_text()+"\n"+Path("src/app.js").read_text()+"\n"+Path("src/camera_tracking.js").read_text()+"\n"+Path("src/camera_text_detector.js").read_text()+"\n"+Path("src/camera_ocr.js").read_text()).strip()
           assert main==expected, (
             "Downloaded index.html is out of sync with actual JS source")
           assert "function snapshot()" in standalone and "function restore(" in standalone
@@ -62,6 +62,8 @@ jobs:
           node --check src/stroke_worker.js
           node --check src/camera_ocr.js
           node --check src/camera_tracking.js
+          node --check src/camera_text_detector.js
+          node tests/camera-scene-detector.mjs
           node tests/camera-tracking.mjs
           node tests/camera-local-ocr.mjs
           node tests/completer-prefix-cache.mjs
