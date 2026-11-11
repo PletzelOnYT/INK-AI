@@ -12790,10 +12790,16 @@ function characterImage(item,frame){
  const scale=26/Math.max(iw,ih);
  const dw=Math.max(1,Math.round(iw*scale)),dh=Math.max(1,Math.round(ih*scale));
  const ox=Math.floor((32-dw)/2),oy=Math.floor((32-dh)/2);
+ // Bilinear subpixel sampling matches the antialiased font inputs on
+ // which the printed CNN was trained, instead of feeding jagged bitmaps.
  for(let y=0;y<dh;y++)for(let x=0;x<dw;x++){
-  const sx=Math.min(w-1,x0+Math.floor((x+.5)*iw/dw));
-  const sy=Math.min(h-1,y0+Math.floor((y+.5)*ih/dh));
-  values[(y+oy)*32+x+ox]=item.mask[sy*w+sx];
+  const sx=Math.min(w-1,Math.max(0,x0+(x+.5)*iw/dw-.5));
+  const sy=Math.min(h-1,Math.max(0,y0+(y+.5)*ih/dh-.5));
+  const ax=Math.floor(sx),bx=Math.min(w-1,ax+1),tx=sx-ax;
+  const ay=Math.floor(sy),by=Math.min(h-1,ay+1),ty=sy-ay;
+  const top=item.mask[ay*w+ax]*(1-tx)+item.mask[ay*w+bx]*tx;
+  const bottom=item.mask[by*w+ax]*(1-tx)+item.mask[by*w+bx]*tx;
+  values[(y+oy)*32+x+ox]=top*(1-ty)+bottom*ty;
  }
  return values;
 }
@@ -12965,7 +12971,7 @@ async function scan(id){
      y1:Math.max(...line.letters.map(l=>l.y1))};
     const projected=project(region,frame);
     if(!Core.visibility(projected.points,base.width,base.height))continue;
-    choices.push({frame,line,score:line.score+(angle===preferred?.1:0),
+    choices.push({frame,line,score:line.score+(angle===preferred ? 0.10 : 0),
      region:projected.box});
    }
   }
