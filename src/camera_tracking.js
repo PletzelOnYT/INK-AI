@@ -87,7 +87,7 @@ function looksLikeWord(text,confidence){
   return /[aeiouy]/i.test(word)&&confidence>=.70;
  }
  if(/^[A-Za-z]{3}$/.test(word))
-  return confidence>=.93&&/[aeiouy]/i.test(word);
+  return confidence>=.70&&/[aeiouy]/i.test(word);
  if(/^[0-9]{4,12}$/.test(word))return confidence>=.91;
  if(/^[A-Za-z0-9]{7,32}$/.test(word)&&/[A-Za-z]/.test(word)&&/[0-9]/.test(word))
   return confidence>=.95;
