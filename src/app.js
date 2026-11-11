@@ -199,20 +199,6 @@ const STROKE_NATURAL_V4_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-A
 const STROKE_LIFT_V5_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-lift-aware-v5.json";
 const STROKE_PENLIFT_V3_URL="https://raw.githubusercontent.com/PletzelOnYT/INK-AI/main/models/ink-stroke-penlift-v3.json";
 let glyphWorker=null,glyphReady=false,glyphLoading=false,glyphBusy=false;
-const completionModeSelect=document.getElementById("completionMode");
-const experimentalLiftTag=document.getElementById("inkStrokeExperimentalV5");
-let glyphModelLoadToken=0;
-let completionChoice="auto";
-try{
- const storedChoice=localStorage.getItem("inkAI-completion-choice");
- if(storedChoice==="lift-v5"&&experimentalLiftTag)completionChoice="lift-v5";
-}catch(_){/* Local files may disable storage. */}
-if(completionModeSelect){
- const expOption=completionModeSelect.querySelector('option[value="lift-v5"]');
- if(expOption)expOption.disabled=!experimentalLiftTag;
- completionModeSelect.value=completionChoice;
-}
-window.__inkCompletionModelChoice=completionChoice;
 let nextCompletionGroup=0,lastAcceptedFeedback=null;
 let glyphTimer=0,glyphRetry=0,glyphSerial=0,glyphEpoch=0,glyphDirty=false;
 let glyphRequestedAt=0,glyphLastPreviewAt=0,glyphStrokeSeed=0;
@@ -545,7 +531,6 @@ function createGlyphWorker(){
 }
 async function loadGlyphModel(){
  if(glyphReady||glyphLoading)return;
- const loadToken=glyphModelLoadToken;
  glyphLoading=true;
  assistButton.title="Loading trained pen-trajectory model…";
  try{
@@ -561,19 +546,8 @@ async function loadGlyphModel(){
      "models/ink-stroke-prefix-v1.json",STROKE_PREFIX_URL,
      "models/ink-stroke-sequence-v1.json",STROKE_URL];
   let model=null,lastError=null;
-  if(completionChoice==="lift-v5"&&experimentalLiftTag){
-   try{
-    const research=JSON.parse(experimentalLiftTag.textContent);
-    if(research.format!=="ink-online-stroke-mdn-v1"||
-       research.training?.recurrent_lift_v5!==true||
-       research.training?.fine_tuned_own_model!=="models/ink-stroke-prefix-domain-v2.json"||
-       research.parameter_count>=1000000)
-      throw Error("Lift V5 research model identity mismatch");
-    model=research;
-   }catch(err){lastError=err}
-  }
   const embedded=document.getElementById("inkStrokeModel");
-  if(embedded&&!model){
+  if(embedded){
    try{
     const saved=JSON.parse(embedded.textContent);
     if(saved.format==="ink-online-stroke-mdn-v1"&&
@@ -639,7 +613,6 @@ async function loadGlyphModel(){
    }catch(err){lastError=err;model=null}
   }
   if(!model)throw lastError||Error("No generative weights found");
-  if(loadToken!==glyphModelLoadToken)return;
   createGlyphWorker();
   glyphWorker.postMessage({cmd:"init",model});
   window.__inkLastGlyphError="";
@@ -651,33 +624,8 @@ async function loadGlyphModel(){
    clearTimeout(glyphRetry);
    glyphRetry=setTimeout(()=>{if(assistEnabled&&!glyphReady)loadGlyphModel()},30000);
   }
- }finally{if(loadToken===glyphModelLoadToken)glyphLoading=false}
+ }finally{glyphLoading=false}
 }
-completionModeSelect?.addEventListener("change",()=>{
- const chosen=completionModeSelect.value;
- if(chosen==="lift-v5"&&!experimentalLiftTag){
-  completionModeSelect.value="auto";
-  return;
- }
- if(chosen===completionChoice)return;
- completionChoice=chosen;
- window.__inkCompletionModelChoice=chosen;
- try{localStorage.setItem("inkAI-completion-choice",chosen)}catch(_){}
- ++glyphModelLoadToken;
- ++glyphEpoch;
- ++glyphSerial;
- clearTimeout(glyphTimer);
- clearTimeout(glyphRetry);
- glyphBusy=false;glyphReady=false;glyphLoading=false;
- window.__inkGlyphReady=false;
- window.__inkAssistInFlight=false;
- window.__inkFallbackReady=false;
- glyphCachedOptions=[];
- glyphClassMemory.clear();
- clearGhost();
- if(glyphWorker){glyphWorker.terminate();glyphWorker=null}
- loadGlyphModel();
-});
 function stableCharacterOptions(incoming){
  // Partial glyphs are inherently ambiguous. Keep a short exponentially
  // decaying memory of the CNN class probabilities across successive pen
