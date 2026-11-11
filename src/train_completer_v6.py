@@ -179,6 +179,30 @@ def validate_rollout(model, dataset, seed, count=640, cut_points=(8, 13, 21)):
             "eval_steps":nsteps,
             "cut_errors":per_cut}
 
+@torch.inference_mode()
+def stop_metrics(model,dataset,threshold=.56):
+    """Independent recorded human-glyph endpoint quality at browser threshold."""
+    model.eval()
+    loader=DataLoader(dataset,batch_size=96,num_workers=0)
+    tp=fp=fn=tn=0
+    for seq,labels,length in loader:
+        values=model(seq,labels)[:,:,5*MIXTURES+1]
+        tick=torch.arange(values.shape[1])[None,:]
+        valid=tick<length[:,None]
+        truth=(tick==length[:,None]-1)&valid
+        predicted=torch.sigmoid(values)>threshold
+        tp+=int((predicted&truth).sum())
+        fp+=int((predicted&(~truth)&valid).sum())
+        fn+=int(((~predicted)&truth).sum())
+        tn+=int(((~predicted)&(~truth)&valid).sum())
+    precision=tp/max(1,tp+fp)
+    recall=tp/max(1,tp+fn)
+    f1=2*precision*recall/max(1e-8,precision+recall)
+    return {"precision":round(precision,6),"recall":round(recall,6),
+            "f1":round(f1,6),"false_stop_rate":round(fp/max(1,fp+tn),6),
+            "true_stops":tp+fn,"predicted_stops":tp+fp}
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--data",default=".data/ujipenchars2")
@@ -277,7 +301,9 @@ def main():
                 "all_supported_classes":len(CHARS),
                 "training_presentations":seen,
                 "not_a_raster_generator":True})
+    base_stop=stop_metrics(base,final)
     best_model=load_published(args.output)
+    new_stop=stop_metrics(best_model,final)
     new_cal=validate_rollout(best_model,cal,seed=SEED+1400,count=640)
     new_final=validate_rollout(best_model,final,seed=SEED+1403,count=640)
     focus_candidate=validate_rollout(best_model,focus_final,seed=SEED+1603,
@@ -294,8 +320,10 @@ def main():
     cal_gain=(old_cal["prefix_frame_position_error"]-
               new_cal["prefix_frame_position_error"])/max(
               old_cal["prefix_frame_position_error"],1e-9)
+    stop_gate=(new_stop["precision"]>=.12 and
+        new_stop["recall"]>=.15 and new_stop["false_stop_rate"]<=.06)
     accepted=(gain>=.025 and cal_gain>=.012 and
-        focus_gain>=.025 and lift_gate and
+        focus_gain>=.025 and lift_gate and stop_gate and
         new_final["pen_lift_f1"]>=.12 and
         new_final["pen_lift_precision"]>=.10 and
         new_final["cut_errors"]["8"]<=old_final["cut_errors"]["8"]*1.01)
@@ -309,8 +337,10 @@ def main():
       "calibration_gain":round(cal_gain,6),
       "real_training_glyphs":len(train),"real_independent_glyphs":len(final),
       "synthetic_symbols":len(synthetic),"seen":seen,
-      "baseline":{"calibration":old_cal,"independent":old_final},
-      "candidate":{"calibration":new_cal,"independent":new_final},
+      "baseline":{"calibration":old_cal,"independent":old_final,
+                  "stop":base_stop},
+      "candidate":{"calibration":new_cal,"independent":new_final,
+                   "stop":new_stop},
       "gain":round(gain,6),"best":best,"epochs":history,
       "metric_description":"Free-running twelve-step displacement with centered prefix-only frames, independent unseen-writer lift F1, not whole-character accuracy.",
       "requires_browser_integration":True
