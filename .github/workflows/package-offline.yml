@@ -7,6 +7,12 @@ on:
       - "src/index.shell.html"
       - "src/app.js"
       - "src/camera_ocr.js"
+      - "src/train_print_cnn.py"
+      - "scripts/update_model_graphs.py"
+      - "models/ink-print-cnn-v1.json"
+      - "models/print-cnn-v1-metrics.json"
+      - "models/recognition-v3-metrics.json"
+      - "models/stroke-prefix-domain-v2-metrics.json"
       - ".github/workflows/package-offline.yml"
       - "src/app.css"
       - "src/stroke_worker.js"
@@ -32,14 +38,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 scripts/build_standalone.py
+      - run: |
+          python3 scripts/update_model_graphs.py
+          python3 scripts/build_standalone.py
       - name: Update downloadable index.html
         run: |
           cp dist/ink-ai-standalone.html index.html
-          if ! git diff --quiet -- index.html; then
+          git add index.html docs/ai-systems.svg docs/camera-print-benchmarks.svg
+          if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add index.html
-            git commit -m "Build updated standalone index.html"
+            git commit -m "Refresh INK AI benchmarks and root standalone HTML"
             git push origin HEAD:main
           fi
