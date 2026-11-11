@@ -13340,7 +13340,13 @@ var InkOfflineOCR=(()=>{var RI=Object.create;var _=Object.defineProperty;var NI=
    const width=(b.x1-b.x0)*sx,height=(b.y1-b.y0)*sy;
    if(width<=2||height<=3||x>w||y>h||x+width<0||y+height<0)continue;
    ctx.beginPath();
-   if(ctx.roundRect)ctx.roundRect(x-2,y-1,width+4,height+2,3);
+   const points=word.points;
+   if(Array.isArray(points)&&points.length===4){
+    ctx.moveTo(dx+points[0].x*sx,dy+points[0].y*sy);
+    for(let k=1;k<4;k++)
+     ctx.lineTo(dx+points[k].x*sx,dy+points[k].y*sy);
+    ctx.closePath();
+   }else if(ctx.roundRect)ctx.roundRect(x-2,y-1,width+4,height+2,3);
    else ctx.rect(x-2,y-1,width+4,height+2);
    ctx.fill();ctx.stroke();
   }
