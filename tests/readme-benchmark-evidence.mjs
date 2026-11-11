@@ -43,8 +43,8 @@ assert.ok(comp.includes(err(pen.candidate.prefix_position.prefix_frame_position_
 assert.ok(comp.includes(err(lift.candidate.position.prefix_frame_position_error)));
 assert.ok(comp.includes(pct(pen.candidate.independent.pen_lift_f1)));
 assert.ok(comp.includes(pct(lift.candidate.independent.pen_lift_f1)));
-assert.ok(comp.includes("Legacy NLL "+seq.baseline_v1.independent.nll.toFixed(3)),"Missing legacy V1 NLL");
-assert.ok(comp.includes("Legacy NLL "+seq.v2.independent.nll.toFixed(3)),"Missing legacy V2 NLL");
+assert.ok(comp.includes("NLL "+seq.baseline_v1.independent.nll.toFixed(3)),"Missing legacy V1 NLL");
+assert.ok(comp.includes("NLL "+seq.v2.independent.nll.toFixed(3)),"Missing legacy V2 NLL");
 assert.ok(comp.includes('data-model="Domain V7"'),"V7 still appears with pending status even without metrics");
 assert.ok(readme.includes("a real CNN, not nearest-template matching"));
 assert.ok(readme.includes("a real generative GRU, not a font or curve lookup"));
