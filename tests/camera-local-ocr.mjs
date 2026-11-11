@@ -25,7 +25,10 @@ assert.match(camera,/hg\.fill\(\);hg\.stroke\(\)/);
 assert.match(camera,/paint\(regions,frame\)/);
 assert.match(camera,/Detector\.detect\(image,w,h\)/);
 assert.match(camera,/regionTracker\.update\(verified,Date\.now\(\)\)/);
-assert.match(camera,/Core\.decodePrintedWord\(selected,dictionaryByLength\.get/);
+assert.match(camera,/Core\.decodePrintedWord\(selected,/);
+assert.match(camera,/dictionaryByLength\.get\(selected\.length\)/);
+assert.match(camera,/glyphTracker\.update\(candidates,now\)/);
+assert.match(read("src/camera_tracking.js"),/createGlyphEvidenceTracker\(/);
 assert.match(camera,/Core\.looksLikeWord\(text,confidence\)/);
 assert.match(camera,/tracker\.snapshot\(\)\.words\.filter/);
 assert.doesNotMatch(camera,/paint\(fresh,frame\);[\s\S]*const predictions=/,
