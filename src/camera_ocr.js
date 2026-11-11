@@ -351,6 +351,11 @@ async function scan(id){
   const regions=regionTracker.update(detectedWordRegions(geometry),Date.now());
   stats.detectedLines=geometry.length;
   stats.highlightedRegions=regions.length;
+  // Show verified text-region highlights immediately; slow CNN inference
+  // should never block the overlay from appearing on the live video.
+  paint(regions,frame);
+  if(regions.length&&!tracker.snapshot().text)
+   show("Printed text detected — reading characters…");
   const images=selected.flatMap(item=>item.line.letters.map(box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
   if(!active||id!==epoch)return;
