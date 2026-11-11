@@ -41,7 +41,7 @@ for i in $(seq 1 30); do
   fi
   sleep 0.15
 done
-URL="file://\${ROOT// /%20}/index.html#ink-vision-token=$TOKEN"
+URL="file://${ROOT// /%20}/index.html#ink-vision-token=$TOKEN"
 if [ -d "/Applications/Google Chrome.app" ]; then
   open -a "Google Chrome" "$URL"
 else
