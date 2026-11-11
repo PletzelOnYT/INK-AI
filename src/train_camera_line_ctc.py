@@ -55,7 +55,8 @@ def fonts():
 
 def words():
     raw = (ROOT / "data/english-words.txt").read_text(encoding="utf8").splitlines()
-    collection = [s.strip() for s in raw if s.strip().isalpha() and 2 <= len(s.strip()) <= 13]
+    collection = [s.strip() for s in raw if 2 <= len(s.strip()) <= 13
+                  and s.strip().isascii() and s.strip().isalpha()]
     collection.extend(["NY", "THREADS", "Chromebook", "Torrey", "Pines", "High",
       "School", "San", "Diego", "November", "RECEIVED", "FROM", "Printed"])
     return collection
