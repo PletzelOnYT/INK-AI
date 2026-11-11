@@ -20,6 +20,22 @@ const doorEdges=Array.from({length:10},(_,i)=>({
 assert.equal(core.looksLikeTextLine(doorEdges),false,"Door seams and cabinet edges must not be text");
 assert.equal(core.looksLikeTextLine(printedLetters.slice(0,2)),false,
  "Two random marks must not be called a text line");
+const candidateWord=(text,prob=.82)=>({top:[
+ {char:text,confidence:prob},{char:text==='a'?'o':'a',confidence:.06}
+]});
+const decoded=core.decodePrintedWord(
+ [..."Thank"].map(ch=>candidateWord(ch)),["thank","think","thing","thunk"]);
+assert.ok(decoded&&decoded.text==="Thank",
+ "The native CNN plus local vocabulary should recover an ordinary printed word");
+const highlights=core.createRegionTracker();
+const region={box:{x0:120,y0:75,x1:310,y1:110},
+ polygon:[{x:120,y:75},{x:310,y:75},{x:310,y:110},{x:120,y:110}]};
+assert.equal(highlights.update([region],1000).length,0,
+ "One random region should not be highlighted");
+assert.equal(highlights.update([region],1120).length,1,
+ "A stable printed region should highlight without waiting for exact character OCR");
+assert.equal(highlights.update([],2800).length,0,
+ "Lost regions should stop being highlighted");
 const box={x0:120,y0:75,x1:310,y1:110};
 const polygon=[{x:120,y:75},{x:310,y:75},{x:310,y:110},{x:120,y:110}];
 const t=core.createTracker();
