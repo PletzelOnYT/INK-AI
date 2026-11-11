@@ -629,8 +629,11 @@ async function start(){
  try{
   if(!navigator.mediaDevices?.getUserMedia)
    throw Error("Camera requires HTTPS or a supported local browser file.");
+  const preferNative=location.hash.includes("ink-vision-token=");
   const incoming=await navigator.mediaDevices.getUserMedia({audio:false,
-   video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
+   video:{facingMode:{ideal:"environment"},
+    width:{ideal:preferNative?1920:1280},
+    height:{ideal:preferNative?1080:720}}});
   if(!active||id!==epoch){incoming.getTracks().forEach(t=>t.stop());return}
   stream=incoming;video.srcObject=stream;await video.play();
   if(window.InkVisionBridge?.connect){
