@@ -127,7 +127,7 @@ manifest={"format":"ink-ai-deployed-models-v1",
           "note":"Only deployed models appear here; experimental and rejected checkpoints remain visible in model-history graphs."}
 model_manifest=ROOT/"docs/current-models.json"
 model_manifest.parent.mkdir(exist_ok=True)
-model_manifest.write_text(json.dumps(manifest,indent=2)+"\\n",encoding="utf-8")
+model_manifest.write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
 models=[
  ("inkRecognitionModel","application/json",
   recognition_path),
