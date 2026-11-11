@@ -123,8 +123,8 @@ def validate_rollout(model, dataset, seed, count=640, cut_points=(8, 13, 21)):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--data",default=".data/ujipenchars2")
-    ap.add_argument("--source",default="models/ink-stroke-natural-v4.json")
-    ap.add_argument("--output",default="models/ink-stroke-prefix-domain-v2.json")
+    ap.add_argument("--source",default="models/ink-stroke-prefix-domain-v2.json")
+    ap.add_argument("--output",default="models/ink-stroke-natural-v4.json")
     ap.add_argument("--epochs",type=int,default=8)
     ap.add_argument("--samples-per-epoch",type=int,default=24000)
     ap.add_argument("--batch",type=int,default=96)
