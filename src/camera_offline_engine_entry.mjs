@@ -329,14 +329,52 @@ async function create(){
    // A readable title is not evidence that the small fields elsewhere on
    // the document were seen. Scan 65%-width overlapping regions in turn.
    const focusZones=["lower-right","lower-left","upper-right","upper-left"];
-   let focusIndex=0;
+   let focusIndex=0,sceneSignature=null;
+   const focusHistory=new Map();
+   const sceneCanvas=document.createElement("canvas");
+   sceneCanvas.width=32;sceneCanvas.height=18;
+   const sceneContext=sceneCanvas.getContext("2d",{willReadFrequently:true});
+   function sceneMatches(image){
+    sceneContext.drawImage(image,0,0,32,18);
+    const rgba=sceneContext.getImageData(0,0,32,18).data;
+    const current=new Uint8Array(32*18);
+    for(let i=0;i<current.length;i++){
+     const p=i*4;
+     current[i]=Math.round(.299*rgba[p]+.587*rgba[p+1]+.114*rgba[p+2]);
+    }
+    if(!sceneSignature){sceneSignature=current;return true}
+    let sum=0,changed=0;
+    for(let i=0;i<current.length;i++){
+     const delta=Math.abs(current[i]-sceneSignature[i]);
+     sum+=delta;
+     if(delta>25)changed++;
+    }
+    const match=sum/current.length<12&&changed/current.length<.27;
+    if(!match){
+     focusHistory.clear();focusIndex=0;
+    }
+    sceneSignature=current;
+    return match;
+   }
    async function focusRead(image,width,height){
-    if(scanNumber%3!==2)return [];
-    const zone=focusZones[focusIndex%4];
-    const mode=Math.floor(focusIndex/4)%2?
-     "document-contrast":"document-focus";
-    focusIndex++;
-    return (await detailRead(image,width,height,mode,zone)).lines;
+    sceneMatches(image);
+    if(scanNumber%3===2){
+     const zone=focusZones[focusIndex%4];
+     const mode=Math.floor(focusIndex/4)%2?
+      "document-contrast":"document-focus";
+     focusIndex++;
+     const details=(await detailRead(image,width,height,mode,zone)).lines;
+     focusHistory.set(zone,{lines:details,scan:scanNumber});
+    }
+    // Keep only recognized pixels from a stable scene. The outside
+    // evidence gate still validates each stored word against the current
+    // camera frame. Clear after a bounded number of scans.
+    const all=[];
+    for(const [zone,entry] of focusHistory){
+     if(scanNumber-entry.scan>18){focusHistory.delete(zone);continue}
+     all.push(...entry.lines);
+    }
+    return all;
    }
    function mergeDetected(base,detail){
     if(!detail?.length)return base;
