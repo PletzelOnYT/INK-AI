@@ -24277,12 +24277,22 @@ poison
      const instant=confidence>=.82&&enoughInk&&
       (line.words.length>=2||chars>=4)&&
       (!hasPixels||quality>=.72);
+     // Tilted single words often have mediocre aggregate LINE confidence
+     // even when the model verified every character with visible ink.
+     // Avoid discarding them merely because a second OCR pass changes
+     // its rotation box. Keep single digits and short guesses conservative.
+     const strongestWord=line.words.reduce((n,w)=>Math.max(n,
+      Number(w.confidence)||0),0);
+     const trustedLongWord=line.words.length===1&&chars>=7&&
+      strongestWord>=.72&&confidence>=.53&&
+      hasPixels&&quality>=.88;
      const same=key===tracked.key;
      const compatible=relatedText(tracked.text,cleaned);
      if(key===tracked.candidate)tracked.votes=Math.min(8,tracked.votes+1);
      else{tracked.candidate=key;tracked.votes=1}
      const verified=tracked.votes>=2&&confidence>=.43&&enoughInk;
-     const accepted=(instant||verified||(!hasPixels&&confidence>=.88));
+     const accepted=(instant||trustedLongWord||verified||
+      (!hasPixels&&confidence>=.88));
      if(accepted){
       // Partial OCR on a later pass must not destroy a fuller earlier line
       // (e.g., "Open House" -> "House" -> "Open House").
