@@ -125,7 +125,8 @@ function decodePrintedWord(predictions,words){
  if(!predictions?.length||predictions.length>24)return null;
  const n=predictions.length;
  const raw=predictions.map(p=>p?.top?.[0]?.char||"").join("");
- if(!/^[A-Za-z]{3,24}$/.test(raw))return null;
+ if(!/^[A-Za-z0-9]{3,24}$/.test(raw))return null;
+ if((raw.match(/[0-9]/g)||[]).length>Math.min(2,Math.floor(n*.35)))return null;
  const possible=(words||[]).filter(word=>word.length===n);
  let best=null,runner=null;
  for(const word of possible){
@@ -142,12 +143,12 @@ function decodePrintedWord(predictions,words){
   if(!best||score>best.score){runner=best;best={text:word,score,misses}}
   else if(!runner||score>runner.score)runner={text:word,score,misses};
  }
- if(!best||best.score<.10)return null;
+ if(!best||best.score<(n<=3?.17:.10))return null;
  // A low-margin match is not evidence that an arbitrary image is a word.
  if(runner&&best.score<runner.score*1.10)return null;
  const titleCase=/^[A-Z]/.test(raw);
  const text=titleCase?best.text[0].toUpperCase()+best.text.slice(1):best.text;
- return {text,confidence:Math.min(.98,Math.max(.70,best.score*2.5)),lexicon:true};
+ return {text,confidence:Math.min(.98,Math.max(n<=3?.94:.70,best.score*2.8)),lexicon:true};
 }
 function createTracker(){
  let tracks=[],captured=[],nextId=0,lastAngle=0,lastAngleAt=0;
