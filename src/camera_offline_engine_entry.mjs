@@ -311,13 +311,19 @@ async function create(){
        output.height,quad));
      detailContext.putImageData(bitmap,0,0);
     }
-    if(darkDisplay)await worker.setParameters({
-      tessedit_pageseg_mode:String(tesseract.PSM.SINGLE_LINE)});
+    // Auto page segmentation recovers receipt dates and numbered table
+    // cells that sparse-text mode may omit, even with crisp printed text.
+    // Contrast and inverse-color variants keep sparse mode for free text.
+    const pageMode=darkDisplay?tesseract.PSM.SINGLE_LINE:
+      mode==="document-focus"?tesseract.PSM.AUTO:
+      tesseract.PSM.SPARSE_TEXT;
+    if(pageMode!==tesseract.PSM.SPARSE_TEXT)await worker.setParameters({
+      tessedit_pageseg_mode:String(pageMode)});
     let scan;
     try{
      scan=await worker.recognize(detailCanvas,{}, {blocks:true});
     }finally{
-     if(darkDisplay)await worker.setParameters({
+     if(pageMode!==tesseract.PSM.SPARSE_TEXT)await worker.setParameters({
        tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT)});
     }
     const lines=remapDetailLines(extractWords(scan.data),crop,
