@@ -109,6 +109,13 @@ try:
     assert "august" in receipt and "2026" in receipt, (
       "Receipt date was missed: "+repr(receipt))
     assert "receipt" in receipt, "Receipt heading regressed"
+    tiny=result["cases"][1]
+    assert "22567" in tiny["seen"][1], (
+      "Detailed region scan did not recover the small receipt number")
+    assert "august" in tiny["seen"][1].lower(), (
+      "Detailed region scan did not recover the small date")
+    assert "2026" in tiny["seen"][1], (
+      "Detailed scan failed to recover date digits")
     focus=result["cases"][1]["focus"]
     assert any(f and f["attempts"]>=1 for f in focus), (
       "Focused document recovery did not run")
