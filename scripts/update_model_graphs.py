@@ -21,7 +21,7 @@ def measured(value, scale=1):
     return round(float(value) * scale, 5) if isinstance(value, (int, float)) else None
 
 def chart(title, subtitle, items, maximum, unit, footer):
-    width, height, left, right, top, bottom = 1100, 490, 80, 1070, 108, 354
+    width, height, left, right, top, bottom = 1400, 490, 80, 1370, 108, 354
     def fmt(v):
         return f"{v:.2f}%" if unit == "percent" else f"{v:.3f}"
     def text(x, y, value, size=13, fill="#202124", anchor="middle"):
@@ -80,8 +80,13 @@ DOCS.joinpath("recognition-vertical-bars.svg").write_text(chart(
 
 v2 = record("stroke-prefix-domain-v2-metrics.json")
 v1score=v2.get("baseline",{}).get("independent",{}).get("prefix_frame_position_error")
-scores=[("Prefix V1","superseded",measured(v1score)),
-        ("Domain V2","released",measured(v2.get("candidate",{}).get("independent",{}).get("prefix_frame_position_error")))]
+scores=[
+    ("Sequence V1","superseded",None), # NLL, not the same trajectory-error metric
+    ("Sequence V2","rejected" if record("stroke-sequence-v2-metrics.json").get("eligible") is False else "unscored",None),
+    ("Prefix V1","superseded",measured(v1score)),
+    ("Domain V2","released",measured(v2.get("candidate",{}).get("independent",{}).get("prefix_frame_position_error"))),
+    ("PenLift V3","rejected" if record("penlift-v3-metrics.json").get("eligible") is False else "unscored",None),
+]
 for version in range(3,8):
     r=record(f"stroke-prefix-domain-v{version}-metrics.json")
     if version==5: # Independent V5 lift experiment used a different metric.
@@ -94,6 +99,9 @@ for version in range(3,8):
     value=r.get("candidate",{}).get("independent",{}).get("prefix_frame_position_error")
     status="released" if r.get("eligible") is True and r.get("deployable") is True and r.get("browser_integration_passed") is True else ("rejected" if r.get("eligible") is False else "pending")
     scores.append((f"Domain V{version}",status,measured(value)))
+natural=record("stroke-natural-v4-metrics.json")
+scores.append(("Natural V4","rejected" if natural.get("eligible") is False else "unscored",
+    measured(natural.get("candidate",{}).get("independent",{}).get("prefix_frame_position_error"))))
 for p in sorted(MODELS.glob("stroke-prefix-domain-v*-metrics.json")):
     m=re.fullmatch(r"stroke-prefix-domain-v(\d+)-metrics.json",p.name)
     if not m or int(m.group(1))<=7: continue
@@ -104,7 +112,7 @@ for p in sorted(MODELS.glob("stroke-prefix-domain-v*-metrics.json")):
 DOCS.joinpath("completion-vertical-bars.svg").write_text(chart(
     "Completer version history",
     "Held-out writer · free-running trajectory position error (lower is better)",
-    scores,.5,"error",
-    "V1–V2 improved 21.29% on the original benchmark. V5 uses distinct lift metrics; V7 requires validation."
+    sorted(scores, key=lambda e: (int(re.search(r"V(\\d+)",e[0]).group(1)), 0 if e[0].startswith("Sequence") else 1 if e[0].startswith("Prefix") else 2 if e[0].startswith("PenLift") else 3 if e[0].startswith("Domain") else 4)),.5,"error",
+    "Only comparable trajectory errors have bars; rejected models stay gray; V7 requires independent and browser validation."
 ),encoding="utf-8")
 print("Updated both model-history SVGs from available measured reports.")
