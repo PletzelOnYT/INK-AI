@@ -59,8 +59,8 @@ for(const [name,ctx] of [["smooth skin",skin],["painted wall",wall],["straight s
 }
 assert.equal(Q.plausibleWord({text:"NY",box},2,width,height),true);
 assert.equal(Q.plausibleWord({text:"THREADS",box},2,width,height),true);
-assert.equal(Q.plausibleWord({text:"I",box},1,width,height),false,
+assert.equal(Q.plausibleWord({text:"I",box:{x0:42,y0:20,x1:61,y1:64}},1,width,height),false,
  "An isolated one-character OCR guess is a common false positive");
-assert.equal(Q.plausibleWord({text:"I",box},4,width,height),true,
+assert.equal(Q.plausibleWord({text:"I",box:{x0:42,y0:20,x1:61,y1:64}},4,width,height),true,
  "A one-character word inside a real sentence is still valid");
 console.log("PASS: text edges on both polarities; smooth shoulders, walls, lone seams and lone letters rejected");
