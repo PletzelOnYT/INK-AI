@@ -86,7 +86,7 @@ function createTracker(){
     // Do not duplicate a tracked word every frame, but allow a repeated
     // word at a different text position to appear in a real sentence.
     const recent=captured.find(x=>x.id===track.id&&near(x.box,track.box)&&
-      now-x.when<1800);
+      now-x.when<30000);
     if(!recent){
      captured.push({uid:track.uid,id:track.id,text:track.text,
        box:{...track.box},when:now,confidence:track.confidence});
