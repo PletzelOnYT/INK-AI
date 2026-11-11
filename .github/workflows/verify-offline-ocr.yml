@@ -11,6 +11,7 @@ on:
       - "tests/camera-bundled-ocr-browser.py"
       - "tests/camera-ocr-colors-angles-browser.py"
       - "tests/camera-text-evidence.mjs"
+      - "tests/camera-false-positive-injection.mjs"
       - ".github/workflows/verify-offline-ocr.yml"
       - "index.html"
   workflow_dispatch:
@@ -36,6 +37,7 @@ jobs:
           set -euo pipefail
           python3 -m pip install --quiet selenium
           node tests/camera-text-evidence.mjs 2>&1 | tee /tmp/ink-ocr-test-browser.log
+          node tests/camera-false-positive-injection.mjs 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
           python3 tests/camera-bundled-ocr-browser.py 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
           python3 tests/camera-ocr-colors-angles-browser.py 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
       - name: Record actual tested result instead of inventing metrics
@@ -48,6 +50,7 @@ jobs:
             echo "# Real Chrome offline OCR acceptance"
             echo
             if grep -q "PASS: text edges" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
+               grep -q "PASS: confidently hallucinated" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
                grep -q "PASS: GitHub index.html" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
                grep -q "PASS: offline OCR preserves" /tmp/ink-ocr-test-browser.log 2>/dev/null; then
               echo "**PASS:** local standalone HTML preserved genuine print on colored and angled labels while suppressing smooth-wall and shoulder false positives."
