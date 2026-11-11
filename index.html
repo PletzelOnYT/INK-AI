@@ -10351,7 +10351,7 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps,prepared=
   if(!Number.isFinite(dx)||!Number.isFinite(dy))break;
   // Reject unphysical pen-down leaps without inventing a continuation line.
   const length=Math.hypot(dx,dy);
-  if(draw&&length>.12){dx*=.12/length;dy*=.12/length}
+  if(draw&&length>.095){dx*=.095/length;dy*=.095/length}
   if(!draw&&length>.8){dx*=.8/length;dy*=.8/length}
   // Measure how likely EACH proposed pen movement is under the learned
   // conditional trajectory distribution. Previously every random rollout
@@ -10391,7 +10391,8 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps,prepared=
  const avgLog=logCount?logSum/logCount:-18;
  // Prefer a sufficiently better learned stopping point to an overlong tail.
  // Keep the full rollout when its quality is comparable.
- const truncated=bestEarly&&bestEarly.selection>fullQuality.score+1.0;
+ const truncated=bestEarly&&bestEarly.quality.score>-.9&&
+  (fullQuality.score<-.9||bestEarly.selection>fullQuality.score+.32);
  const selected=truncated?bestEarly:null;
  // Never emit empty previews or arbitrary shapes disconnected from input.
  return {paths:selected?selected.paths:paths,
@@ -10454,12 +10455,15 @@ function generateCandidates(m,isFallback=false){
     throw Error("Insufficient genuine pen coordinates");
    const options=(m.options||[]).filter(o=>characters.includes(o.char))
      .sort((a,b)=>Number(b.char===m.preferred)-Number(a.char===m.preferred))
-     .slice(0,live?2:4);
+     .slice(0,live?2:3);
    const results=[];
    // Multiple independent genuine GRU rollouts. Select trajectories using
    // a class-conditioned structural critic, not the first random sample.
    // More samples when stationary; cap live work to maintain responsiveness.
-   const perLabel=live?(hiddenSize>=300?2:3):(hiddenSize>=300?6:12);
+   // The prior 12-rollout search delayed the live drawing by several seconds.
+   // Five scored genuine neural rollouts keep diverse candidates while
+   // dramatically reducing main suggestion latency. More options remain on Tab.
+   const perLabel=live?(hiddenSize>=300?2:3):(hiddenSize>=300?3:5);
    let previewSent=false;
    for(let j=0;j<options.length;j++){
     const choice=options[j];
