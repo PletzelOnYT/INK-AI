@@ -22,6 +22,10 @@ for(const [file,svg] of [["recognition-vertical-bars.svg",recog],["completion-ve
  assert.ok(svg.includes('fill="#ffffff"'),"Chart must have white background");
  assert.equal((svg.match(/data-active="true"/g)||[]).length,2,"Each metric panel must mark the same single deployed model");
  assert.ok(svg.includes("<path d="),"Version timeline must have connected milestone paths");
+ assert.ok(svg.includes('width="900" height="488"'),"Graph must fit the GitHub README without horizontal overflow");
+ assert.ok(!svg.includes('>Completer</text>')&&!svg.includes('>Recognizer</text>'),"README already labels these graphs; avoid duplicate titles");
+ assert.ok(!svg.includes("Dotted line =")&&!svg.includes("Two DIFFERENT"),"Remove noisy annotations");
+
  assert.ok(svg.includes("data-metric=\"first\"") && svg.includes("data-metric=\"second\""),"Need two separate metric panels");
 }
 const liveCnn=manifest.recognizer.weights,liveGru=manifest.completer.weights;
@@ -46,6 +50,8 @@ assert.ok(comp.includes(pct(lift.candidate.independent.pen_lift_f1)));
 assert.ok(comp.includes("NLL "+seq.baseline_v1.independent.nll.toFixed(3)),"Missing legacy V1 NLL");
 assert.ok(comp.includes("NLL "+seq.v2.independent.nll.toFixed(3)),"Missing legacy V2 NLL");
 assert.ok(comp.includes('data-model="Domain V7"'),"V7 still appears with pending status even without metrics");
+assert.ok(comp.includes('stroke-width="1.8"'),"Large rejected V5 outlier requires a visibly broken axis instead of compressing the other results");
+assert.ok(comp.includes('0.9673'),"V5 outlier value must stay visible and unchanged");
 assert.ok(readme.includes("a real CNN, not nearest-template matching"));
 assert.ok(readme.includes("a real generative GRU, not a font or curve lookup"));
 assert.ok(readme.includes("**not** perfect-font replacements"));
