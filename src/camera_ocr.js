@@ -248,13 +248,31 @@ function lineImage(option){
  const targetH=Math.max(1,Math.round(inputH*scale));
  const offX=Math.floor((256-targetW)/2),offY=Math.floor((32-targetH)/2);
  const values=new Array(8192).fill(0);
- const mask=letters[0].mask;
+ const mask=letters[0].mask,pixels=frame.image.data;
+ const luminance=(x,y)=>{
+  const xx=Math.min(frame.w-1,Math.max(0,Math.round(x)));
+  const yy=Math.min(frame.h-1,Math.max(0,Math.round(y)));
+  const k=(yy*frame.w+xx)*4;
+  return pixels[k]*.299+pixels[k+1]*.587+pixels[k+2]*.114;
+ };
+ const background=[
+  luminance(minX-padX,minY-padY),
+  luminance(maxX+padX,minY-padY),
+  luminance(minX-padX,maxY+padY),
+  luminance(maxX+padX,maxY+padY)
+ ].reduce((a,b)=>a+b,0)/4;
+ const inverted=background>=128;
+ const divisor=inverted?Math.max(40,background*.58):
+   Math.max(40,(255-background)*.58);
  for(let y=0;y<targetH;y++)for(let x=0;x<targetW;x++){
   const u=(x+.5)*inputW/targetW-padX;
   const v=(y+.5)*inputH/targetH-padY;
   const px=Math.round(minX+u),py=Math.round(minY+v);
   if(px<0||py<0||px>=frame.w||py>=frame.h)continue;
-  values[(offY+y)*256+offX+x]=mask[py*frame.w+px]?1:0;
+  const grey=luminance(px,py);
+  const signal=(inverted?background-grey:grey-background)/divisor;
+  const isolated=mask[py*frame.w+px]?0.38:0;
+  values[(offY+y)*256+offX+x]=Math.min(1,Math.max(0,signal,isolated));
  }
  return values;
 }
