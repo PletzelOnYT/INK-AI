@@ -54,7 +54,7 @@ To rebuild the standalone HTML from source, use `npm install --no-audit --no-fun
 
 INK AI has two separate models:
 
-**Recognition — a real CNN, not nearest-template matching.** The recognizer runs **three learned convolutional layers and two learned fully connected layers**, trained on real handwritten characters. It converts your ink into a 32 × 32 input, performs neural-network inference, and predicts probabilities for letters, digits, and symbols. The current released V3 CNN was adapted to real pen-drawn characters. It **does not** look through a gallery of stored letter images and choose the closest match. Decoding a neural network's predicted probabilities into a character is normal AI classification.
+**Recognition — a real CNN, not nearest-template matching.** The recognizer runs **three learned convolutional layers and two learned fully connected layers**, trained on real handwritten characters. It converts your ink into a 32 × 32 input, performs neural-network inference, and predicts probabilities for letters, digits, and symbols. The downloadable CNN is selected from the released V3 and any independently validated newer model; its exact version is in the deployed-model manifest. It **does not** look through a gallery of stored letter images and choose the closest match. Decoding a neural network's predicted probabilities into a character is normal AI classification.
 
 **Completer runtime update:** The released neural generator now evaluates fewer but still genuine GRU rollouts, reducing unnecessary repeated inference. On an unfinished lowercase `h` fixture, the same local V8 test took approximately **3.3 seconds before** and **1.2 seconds after** the change (single run; not a benchmark across devices). The input builder now centers strokes using the same normalized scale as the model's training examples, keeps all strokes during dense input, and avoids merging adjacent letters into one glyph. Tests: [input grouping](./tests/completer-input-regression.mjs) and [actual neural rollout](./tests/completer-fast-quality.mjs). This is a runtime improvement, **not a claim of better overall handwriting accuracy**.
 
@@ -89,6 +89,8 @@ The source app loads local model files and runs inference entirely in browser wo
 
 **Graph update rule:** Keep the two original graphs, but show **every recorded version** of the corresponding model, including unsuccessful experiments. Recognizer bars are UJI unseen-writer accuracy (higher is better); Completer bars are independently evaluated free-running trajectory error (lower is better). Different metrics such as pen-lift F1 are **not** presented as trajectory error. Missing results appear as *no score*, never invented percentages. Gray experimental/rejected bars do not mean a checkpoint was released. The charts are regenerated from checked-in benchmark JSON by `python3 scripts/update_model_graphs.py` whenever models are packaged or V7 training publishes a result.
 
+**Which models does the downloadable HTML actually run?** See the generated [deployed-model manifest](./docs/current-models.json). It is produced with `index.html` from the exact CNN and GRU weights selected during that build. The graphs also show rejected and unverified experiments, which are **not** necessarily enabled. V5 CNN is promoted only after real offline Chrome acceptance, and V7 GRU only after unseen-writer, pen-lift, termination and browser acceptance.
+
 
 ### Training data and honest evaluation
 
@@ -100,7 +102,7 @@ Training more examples can help, but no model here is flawless. The next importa
 
 ### Recognition improvement target
 
-The experimental V5 training focused on confusion between `1`, `I`, `l`, `i`, `j`, and `t`. V3 remains the default recognizer until V5 also passes browser handwriting regressions. It checks held-out pen writers and does not deploy a model just because it completed training. **90% accuracy remains a target, not a measured result.**
+The experimental V5 training focused on confusion between `1`, `I`, `l`, `i`, `j`, and `t`. V3 remains the safe fallback; V5 is bundled as the default only after its real browser acceptance report is published. It checks held-out pen writers and does not deploy a model just because it completed training. **90% accuracy remains a target, not a measured result.**
 
 ## Project files
 
