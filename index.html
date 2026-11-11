@@ -12703,7 +12703,7 @@ const hg=overlay.getContext("2d");
 const tracker=Core.createTracker();
 const cache=new Map();
 let active=false,stream=null,timer=0,frameCallback=0,reading=false,epoch=0,pass=0;
-let previousBoxes=[],previousBoxesAt=0;
+
 window.__inkCameraActive=false;
 window.__inkCameraText="";
 window.__inkCameraWords=[];
@@ -12723,7 +12723,7 @@ function stop(){
  if(stream)stream.getTracks().forEach(t=>t.stop());
  stream=null;video.pause();video.srcObject=null;
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
- tracker.reset();cache.clear();previousBoxes=[];
+ tracker.reset();cache.clear();
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
  window.__inkCameraWords=[];
  output.textContent=window.__inkLastGuess||"Draw something";
@@ -12818,12 +12818,12 @@ function extract(view){
        ink<Math.max(8,bw*bh*.045)||ink/(bw*bh)>.83)continue;
     letters.push({x0:left,y0:low,x1:right,y1:high,mask});
    }
-   if(letters.length<2||letters.length>42)continue;
+   if(letters.length<4||letters.length>38)continue;
    const heights=letters.map(a=>a.y1-a.y0+1).sort((a,b)=>a-b);
    const median=heights[Math.floor(heights.length/2)];
    const plausible=letters.filter(a=>(a.y1-a.y0+1)>=median*.4&&
          (a.y1-a.y0+1)<=median*2.05).length;
-   if(plausible/letters.length<.68)continue;
+   if(plausible/letters.length<.78||!Core.looksLikeTextLine(letters))continue;
    const score=(plausible/letters.length)+Math.min(1,letters.length/8);
    lines.push({letters,score});
   }
@@ -12875,20 +12875,18 @@ function paint(candidateBoxes,frame){
  const cw=Math.max(1,Math.round(bw*dpr)),ch=Math.max(1,Math.round(bh*dpr));
  if(overlay.width!==cw||overlay.height!==ch){overlay.width=cw;overlay.height=ch}
  hg.setTransform(dpr,0,0,dpr,0,0);clearMarks();
- const snap=tracker.snapshot();
- const activeBoxes=candidateBoxes.length?candidateBoxes:
-   (Date.now()-previousBoxesAt<1100?previousBoxes:[]);
- const all=dedupe([...activeBoxes,...snap.boxes.filter(t=>t.polygon)]);
- if(!all.length||!video.videoWidth)return;
+ // Critical: candidate boxes ARE NOT text. Highlight only confirmed OCR words
+ // to avoid drawing white rectangles on cabinet edges, people or furniture.
+ const accepted=tracker.snapshot().words.filter(t=>t.polygon?.length===4);
+ if(!accepted.length||!video.videoWidth)return;
  const fit=Math.min(bw/video.videoWidth,bh/video.videoHeight);
  const dx=(bw-video.videoWidth*fit)/2,dy=(bh-video.videoHeight*fit)/2;
  const sx=video.videoWidth/frame.w*fit,sy=video.videoHeight/frame.h*fit;
  hg.fillStyle="rgba(255,255,255,0.30)";
  hg.strokeStyle="rgba(255,255,255,0.98)";
  hg.lineWidth=1.7;
- for(const item of all){
+ for(const item of accepted){
   const polygon=item.polygon;
-  if(!polygon?.length)continue;
   hg.beginPath();
   hg.moveTo(dx+polygon[0].x*sx,dy+polygon[0].y*sy);
   for(let i=1;i<polygon.length;i++)
@@ -12948,8 +12946,8 @@ function decode(lines,predictions){
    for(const {prediction} of segment){
     const top=prediction?.top?.[0],second=prediction?.top?.[1];
     const good=top&&/^[A-Za-z0-9]$/.test(top.char)&&
-      top.confidence>=(window.__inkPrintReady?.23:.43)&&
-      top.confidence-(second?.confidence||0)>=(window.__inkPrintReady?.06:.13);
+      top.confidence>=(window.__inkPrintReady?.43:.68)&&
+      top.confidence-(second?.confidence||0)>=(window.__inkPrintReady?.12:.24);
     if(!good){chars.push("?");unreliable++;confidence+=0}
     else{chars.push(top.char);confidence+=top.confidence}
    }
@@ -12957,7 +12955,7 @@ function decode(lines,predictions){
    const text=chars.join("");
    if(text.includes("?"))continue;
    confidence/=segment.length;
-   if(confidence<(segment.length<=2?.66:.44))continue;
+   if(!Core.looksLikeWord(text,confidence))continue;
    const box={x0:Math.min(...segment.map(x=>x.box.x0)),
     y0:Math.min(...segment.map(x=>x.box.y0)),
     x1:Math.max(...segment.map(x=>x.box.x1)),
@@ -13043,9 +13041,7 @@ async function scan(id){
    }
   }
   const fresh=dedupe(candidateBoxes);
-  if(fresh.length){previousBoxes=fresh;previousBoxesAt=Date.now()}
   const frame={w:base.width,h:base.height};
-  paint(fresh,frame);
   const images=selected.flatMap(item=>item.line.letters.map(box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
   if(!active||id!==epoch)return;
@@ -13054,7 +13050,7 @@ async function scan(id){
   window.__inkCameraWords=state.words;
   window.__inkCameraText=state.text;
   if(state.text)show(state.text,false);
-  else show(fresh.length?"Reading text…":"Point the camera at clear text.");
+  else show("Point your camera at clearly printed text.");
   paint(fresh,frame);
   stats.scans++;stats.lastScanMs=Math.round(performance.now()-t0);
  }catch(error){
@@ -13070,7 +13066,7 @@ async function scan(id){
 async function start(){
  if(active)return;
  active=true;const id=++epoch;pass=0;tracker.reset();cache.clear();
- previousBoxes=[];window.__inkCameraActive=true;
+ window.__inkCameraActive=true;
  window.__inkCameraText="";window.__inkCameraWords=[];
  window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false};
  board.classList.add("camera-active");button.setAttribute("aria-pressed","true");
