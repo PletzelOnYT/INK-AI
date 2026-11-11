@@ -4,7 +4,7 @@
 // INK AI's handwriting recognizer and completer remain first-party systems.
 import tesseract from "tesseract.js";
 import {estimateTextAngle,rotatedSize,unrotateLines,rotationQueue} from "./camera_orientation_core.mjs";
-import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead,perspectiveQuad,rectifyPerspectiveRGBA,findDarkDisplayRGBA} from "./camera_detail_core.mjs";
+import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead,perspectiveQuad,rectifyPerspectiveRGBA,findDarkDisplayRGBA,findAnalogClockRGBA,findDialGlyphRegionsRGBA} from "./camera_detail_core.mjs";
 import englishList from "../data/english-words.txt";
 const vocabulary=new Set(englishList.trim().split(/\s+/));
 import {set} from "idb-keyval";
@@ -325,6 +325,92 @@ async function create(){
     return {lines,rotation:0,detailUpscaled:true,
       enhancement:darkDisplay?"clock-display":mode};
    }
+
+   // Use independently recognized glyph crops around a detected analog dial.
+   // Circle geometry locates ink; it never substitutes for neural OCR.
+   const dialPreview=document.createElement("canvas");
+   dialPreview.width=320;dialPreview.height=180;
+   const dialContext=dialPreview.getContext("2d",{willReadFrequently:true});
+   const dialVotes=new Map();
+   let previousDial=null,dialCursor=0,dialMisses=0;
+   async function readAnalogDial(image,width,height){
+    if(scanNumber%2&&!dialVotes.size)return [];
+    try{
+     const previewH=Math.max(70,Math.round(height*320/width));
+     if(dialPreview.height!==previewH)dialPreview.height=previewH;
+     dialContext.drawImage(image,0,0,320,previewH);
+     const preview=dialContext.getImageData(0,0,320,previewH);
+     const detected=findAnalogClockRGBA(preview.data,320,previewH);
+     if(!detected){
+      if(++dialMisses>=3){dialVotes.clear();previousDial=null}
+      return [];
+     }
+     dialMisses=0;
+     const sx=width/320,sy=height/previewH;
+     const face={cx:detected.cx*sx,cy:detected.cy*sy,
+      radius:detected.radius*(sx+sy)/2};
+     if(previousDial&&(Math.hypot(face.cx-previousDial.cx,
+       face.cy-previousDial.cy)>Math.max(12,face.radius*.23)||
+       Math.abs(face.radius/previousDial.radius-1)>.22)){
+      dialVotes.clear();dialCursor=0;
+     }
+     previousDial=face;
+     const rgba=image.getContext("2d",{willReadFrequently:true})
+      .getImageData(0,0,width,height).data;
+     const regions=findDialGlyphRegionsRGBA(rgba,width,height,face);
+     if(regions.length<6)return [];
+     const batch=Math.min(4,regions.length);
+     for(let i=0;i<batch;i++){
+      const {hour,box}=regions[(dialCursor+i)%regions.length];
+      const w=box.x1-box.x0,h=box.y1-box.y0;
+      if(w<3||h<5)continue;
+      detailCanvas.width=128;detailCanvas.height=112;
+      detailContext.fillStyle="#fff";
+      detailContext.fillRect(0,0,128,112);
+      detailContext.imageSmoothingEnabled=true;
+      detailContext.imageSmoothingQuality="high";
+      const scale=Math.min(106/w,88/h);
+      const dw=w*scale,dh=h*scale;
+      detailContext.drawImage(image,box.x0,box.y0,w,h,
+       (128-dw)/2,(112-dh)/2,dw,dh);
+      let result;
+      try{
+       await worker.setParameters({
+        tessedit_pageseg_mode:String(hour<10?
+         tesseract.PSM.SINGLE_CHAR:tesseract.PSM.SINGLE_WORD),
+        tessedit_char_whitelist:"0123456789"});
+       result=await worker.recognize(detailCanvas);
+      }finally{
+       await worker.setParameters({
+        tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT),
+        tessedit_char_whitelist:""});
+      }
+      const text=String(result?.data?.text||"").trim();
+      const conf=Number(result?.data?.confidence||0)/100;
+      if(text!==String(hour)||!Number.isFinite(conf)||conf<.67)continue;
+      const previous=dialVotes.get(hour);
+      const unchanged=previous&&
+       Math.abs(previous.box.x0+previous.box.x1-box.x0-box.x1)<
+        face.radius*.32;
+      dialVotes.set(hour,{box,confidence:conf,lastSeen:scanNumber,
+       votes:unchanged?Math.min(6,previous.votes+1):1});
+     }
+     dialCursor=(dialCursor+batch)%regions.length;
+     return regions.flatMap(({hour,box})=>{
+      const saved=dialVotes.get(hour);
+      if(!saved||scanNumber-saved.lastSeen>20||
+        (saved.votes<2&&saved.confidence<.91))return [];
+      const word={text:String(hour),confidence:saved.confidence,
+       box,clockDial:true};
+      return [{text:word.text,box,confidence:word.confidence,
+       words:[word],clockDial:true}];
+     });
+    }catch(error){
+     window.__inkClockOCRLastError=String(error?.message||error);
+     return [];
+    }
+   }
+
    const engine={
     kind:"bundled-tesseract-wasm",
     async recognize(image,width,height){
@@ -355,6 +441,7 @@ async function create(){
       previousAngle=null;
      }
      let {data}=await worker.recognize(image,{}, {blocks:true});
+     const clockLines=await readAnalogDial(image,width,height);
      let lines=extractWords(data);
      let strongest=candidateStrength(lines);
      candidate={lines,rotation:0,source:"upright",value:strongest.value};
@@ -375,8 +462,9 @@ async function create(){
       return {engine:engine.kind,width,height,deskewed:false,
        quarterTurn:0,rotationDegrees:0,attempts:0,angleSource:"upright",
        elapsedMs:Math.round(performance.now()-now),
-       lines,words:lines.flatMap(x=>x.words),
-       text:lines.map(x=>x.text).join("\n")};
+       lines:[...lines,...clockLines],
+       words:[...lines,...clockLines].flatMap(x=>x.words),
+       text:[...lines,...clockLines].map(x=>x.text).join("\n")};
      }
      const consider=(next,source)=>{
       const strength=candidateStrength(next.lines);
@@ -431,7 +519,7 @@ async function create(){
       if(consider(result,"angle-projection")&&
          candidate.value>=10)break;
      }
-     lines=candidate.lines;
+     lines=[...candidate.lines,...clockLines];
      const selected=candidate.rotation||0;
      if(selected&&clearRead(lines)){
       const difference=skewHint?
