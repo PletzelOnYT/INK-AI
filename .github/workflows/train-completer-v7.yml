@@ -6,6 +6,7 @@ on:
       - "src/train_completer_v7.py"
       - "tests/completer-v7-boundaries.py"
       - "tests/completer-v7-runtime.mjs"
+      - "scripts/update_model_graphs.py"
       - ".github/workflows/train-completer-v7.yml"
   workflow_dispatch:
 permissions:
@@ -112,6 +113,8 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 scripts/update_model_graphs.py
+          git add docs/recognition-vertical-bars.svg docs/completion-vertical-bars.svg
           git add models/stroke-prefix-domain-v7-metrics.json
           if test -s models/ink-stroke-prefix-domain-v7.json; then
             git add models/ink-stroke-prefix-domain-v7.json
