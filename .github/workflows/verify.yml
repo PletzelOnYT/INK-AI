@@ -74,6 +74,7 @@ jobs:
           node --check src/camera_motion_tracker.js
           node tests/camera-motion-tracker.mjs
           node tests/camera-native-focus.mjs
+          node tests/camera-flicker-regression.mjs
           node --check src/camera_offline_bridge.js
           node --check src/camera_handwriting.js
           node tests/camera-handwriting.mjs
@@ -161,6 +162,7 @@ jobs:
           python3 tests/camera-sideways-browser.py
           python3 tests/camera-detail-browser.py
           python3 tests/camera-fast-focus-browser.py
+          python3 tests/camera-shirt-poster-browser.py
           python3 tests/camera-handwriting-browser.py
           python3 tests/camera-scene-detector-browser.py
           python3 tests/camera-no-false-text-browser.py
