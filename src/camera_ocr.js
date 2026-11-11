@@ -170,7 +170,7 @@ function detectedWordRegions(selected){
    group=[];
   };
   for(const c of letters){
-   if(group.length&&c.x0-group[group.length-1].x1-1>Math.max(7,height*.65))flush();
+   if(group.length&&c.x0-group[group.length-1].x1-1>Math.max(4,height*.34))flush();
    group.push(c);
   }
   flush();
@@ -219,7 +219,7 @@ function decode(lines,predictions){
   for(let i=0;i<letters.length;i++){
    if(i){
     const prev=letters[i-1],next=letters[i];
-    const typical=Math.max(4,(next.y1-next.y0+1)*.46);
+    const typical=Math.max(3,(next.y1-next.y0+1)*.34);
     if(next.x0-prev.x1-1>typical)finish();
    }
    group.push({box:letters[i],prediction:preds[i]});
@@ -311,28 +311,33 @@ async function scan(id){
    }
   }
   choices.sort((a,b)=>b.score-a.score);
-  const selected=[],candidateBoxes=[];
-  let total=0;
+  const geometry=[];
   for(const option of choices){
-   if(selected.length>=6||total+option.line.letters.length>40)continue;
+   if(geometry.length>=12)break;
    const a=option.region;
-   if(selected.some(item=>{
+   if(geometry.some(item=>{
     const b=item.region;
     const overlap=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0))*
       Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
     const area=Math.max(1,(a.x1-a.x0)*(a.y1-a.y0));
     return overlap>area*.48;
    }))continue;
-   selected.push(option);total+=option.line.letters.length;
-   for(const box of option.line.letters){
-    const p=project(box,option.frame);
-    candidateBoxes.push({box:p.box,polygon:p.points});
-   }
+   geometry.push(option);
   }
-  const fresh=dedupe(candidateBoxes);
+  // Preserve highlighting for every convincing printed row. OCR inference
+  // is budgeted separately and cycles through rows instead of permanently
+  // overlooking small rows like "Thank you!!".
+  const shift=geometry.length?(pass*2)%geometry.length:0;
+  const scanOrder=[...geometry.slice(shift),...geometry.slice(0,shift)];
+  const selected=[];let total=0;
+  for(const option of scanOrder){
+   const count=option.line.letters.length;
+   if(count>40||total+count>45||selected.length>=5)continue;
+   selected.push(option);total+=count;
+  }
   const frame={w:base.width,h:base.height};
-  const regions=regionTracker.update(detectedWordRegions(selected),Date.now());
-  stats.detectedLines=selected.length;
+  const regions=regionTracker.update(detectedWordRegions(geometry),Date.now());
+  stats.detectedLines=geometry.length;
   stats.highlightedRegions=regions.length;
   const images=selected.flatMap(item=>item.line.letters.map(box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
@@ -344,7 +349,7 @@ async function scan(id){
   if(state.text)show(state.text,false);
   else if(regions.length)show("Printed text detected — character reading is uncertain.");
   else show("Point your camera at clearly printed text.");
-  paint(fresh,frame);
+  paint(regions,frame);
   stats.scans++;stats.lastScanMs=Math.round(performance.now()-t0);
  }catch(error){
   // A transient failed read must not wipe out words already recognized.
