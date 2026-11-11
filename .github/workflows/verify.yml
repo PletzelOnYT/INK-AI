@@ -163,6 +163,7 @@ jobs:
           python3 tests/camera-detail-browser.py
           python3 tests/camera-fast-focus-browser.py
           python3 tests/camera-shirt-poster-browser.py
+          python3 tests/camera-analog-clock-browser.py
           python3 tests/camera-handwriting-browser.py
           python3 tests/camera-scene-detector-browser.py
           python3 tests/camera-no-false-text-browser.py
