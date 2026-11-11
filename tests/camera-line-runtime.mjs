@@ -9,7 +9,7 @@ class MockBlob{
 }
 class MockWorker{
  constructor(){
-  const local={Float32Array,Uint8Array,Math,Array,Number,Error,Object,
+  const local={Float32Array,Uint8Array,Math,Array,Number,Error,Object,onmessage:null,
    atob:value=>Buffer.from(value,"base64").toString("binary")};
   local.postMessage=message=>this.onmessage?.({data:message});
   vm.createContext(local);
