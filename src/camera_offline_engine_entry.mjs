@@ -4,6 +4,7 @@
 // INK AI's handwriting recognizer and completer remain first-party systems.
 import tesseract from "tesseract.js";
 import {estimateTextAngle,rotatedSize,unrotateLines,rotationQueue} from "./camera_orientation_core.mjs";
+import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead} from "./camera_detail_core.mjs";
 import englishList from "../data/english-words.txt";
 const vocabulary=new Set(englishList.trim().split(/\s+/));
 import {set} from "idb-keyval";
@@ -148,6 +149,8 @@ async function create(){
    const sideContext=sideCanvas.getContext("2d",{alpha:false});
    const probeCanvas=document.createElement("canvas");
    probeCanvas.width=260;probeCanvas.height=146;
+   const detailCanvas=document.createElement("canvas");
+   const detailContext=detailCanvas.getContext("2d",{willReadFrequently:true,alpha:false});
    const probeContext=probeCanvas.getContext("2d",{willReadFrequently:true});
    let previousAngle=null,previousStreak=0,attemptCursor=0,scanNumber=0;
    function candidateStrength(lines){
@@ -159,6 +162,9 @@ async function create(){
       const certainty=Math.max(0,Math.min(1,Number(word.confidence)||0));
       // Short random OCR fragments must not block an actually rotated word.
       if(chars>=3&&certainty>=.56)meaningful++;
+      const numeric=/^\d{1,2}(?::\d{2})?$/.test(String(word.text||"").trim())&&
+        certainty>=.78;
+      if(numeric)meaningful++;
       // Prefer intact words over several implausible fragments, while
       // still accepting new brand names not included in the dictionary.
       const token=String(word.text||"").replace(/[^A-Za-z0-9]/g,"");
@@ -169,15 +175,17 @@ async function create(){
            (chars>=4?1.06:chars>=3?.67:.25)+
            (inVocabulary?2.7*certainty:0)-
            (brokenCase?1.0:0);
-      total+=value;best=Math.max(best,value);
+      const measured=value+(numeric?5.6:0);
+      total+=measured;best=Math.max(best,measured);
      }
     }
     return {value:total,meaningful,best};
    }
    function clearRead(lines){
     const strength=candidateStrength(lines);
-    return strength.value>=6.8&&strength.meaningful>=1&&
-      (strength.best>=5.3||strength.meaningful>=2);
+    return (strength.value>=6.8&&strength.meaningful>=1&&
+      (strength.best>=5.3||strength.meaningful>=2)) ||
+      (isCompactNumericRead(lines)&&strength.value>=4.7);
    }
    function direction(image,width,height){
     // Only 260x170 pixels are read back; no full webcam bitmap is copied.
@@ -238,6 +246,33 @@ async function create(){
     return {lines:unrotateLines(lines,angle,width,height,
        size.width,size.height),rotation:angle,
        rawLines:lines};
+   }
+   // Recovery for small distant signs and low-contrast colored/pencil ink.
+   // Crops only the CENTER of the camera view and maps all OCR geometry back.
+   // It never creates artificial letter shapes or sends frames over the network.
+   async function detailRead(image,width,height,enhance){
+    const crop=centerDetailCrop(width,height);
+    const output=detailSize(crop.width*1.7,crop.height*1.7,1920);
+    detailCanvas.width=output.width;detailCanvas.height=output.height;
+    detailContext.fillStyle="#fff";
+    detailContext.fillRect(0,0,output.width,output.height);
+    detailContext.imageSmoothingEnabled=true;
+    detailContext.imageSmoothingQuality="high";
+    detailContext.drawImage(image,crop.x,crop.y,crop.width,crop.height,
+      0,0,output.width,output.height);
+    if(enhance){
+     const original=detailContext.getImageData(0,0,output.width,output.height);
+     const processed=enhanceInkRGBA(original.data,output.width,output.height);
+     if(processed.hasDetail){
+      original.data.set(processed.data);
+      detailContext.putImageData(original,0,0);
+     }
+    }
+    const scan=await worker.recognize(detailCanvas,{}, {blocks:true});
+    const lines=remapDetailLines(extractWords(scan.data),crop,
+      output.width,output.height);
+    return {lines,rotation:0,detailUpscaled:true,
+      enhancement:enhance?"local-rgb-contrast":"center-detail"};
    }
    const engine={
     kind:"bundled-tesseract-wasm",
@@ -301,8 +336,17 @@ async function create(){
       }
       return false;
      };
+     // Alternate magnified and locally color-normalized center crops
+     // while normal video recognition remains the fast path. This is useful
+     // when a small clock/sign occupies only a fraction of a distant scene.
+     if(!clearRead(candidate.lines)&&scanNumber%2===0){
+      try{
+       const detail=await detailRead(image,width,height,scanNumber%4===0);
+       consider(detail,"center-detail");
+      }catch(_){/* Preserve ordinary/rotation OCR on unsupported canvases */}
+     }
      // First let Tesseract try its own deskew on failed ordinary reads.
-     if(!clearRead(lines)){
+     if(!clearRead(candidate.lines)){
       const auto=await worker.recognize(image,{rotateAuto:true},{blocks:true});
       const rotatedLines=extractWords(auto.data);
       if(clearRead(rotatedLines)){
@@ -349,6 +393,8 @@ async function create(){
       quarterTurn:Math.abs(selected)%90<.01?selected:0,
       rotationDegrees:selected,angleSource:candidate.source,
       projectionAngle:hint?.angle??null,
+      detailUpscaled:!!candidate.detailUpscaled,
+      enhancement:candidate.enhancement||null,
       attempts,elapsedMs:Math.round(performance.now()-now),
       lines,words:lines.flatMap(x=>x.words),
       text:lines.map(x=>x.text).join("\n")};
