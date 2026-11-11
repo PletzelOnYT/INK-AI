@@ -18,7 +18,7 @@ const sceneCanvas=document.createElement("canvas");
 sceneCanvas.width=24;sceneCanvas.height=14;
 const sceneContext=sceneCanvas.getContext("2d",{willReadFrequently:true});
 const cache=new Map();
-let lineRuntime=null,lineInit=null,visionClient=null,visionFailures=0;
+let lineRuntime=null,lineInit=null,offlineClient=null,offlineFailures=0;
 window.__inkCameraLineReady=false;
 async function loadNativeLineOCR(){
  if(lineInit||!window.InkLineRuntime)return lineInit;
@@ -75,8 +75,8 @@ function stop(){
  button.title="Read text with webcam";
  tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
  if(lineRuntime){lineRuntime.terminate();lineRuntime=null}
- if(visionClient){visionClient.reset();visionClient=null}
- visionFailures=0;window.__inkCameraEngine="ink-print-cnn-rotated";
+ if(offlineClient){offlineClient.reset();offlineClient=null}
+ offlineFailures=0;window.__inkCameraEngine="ink-print-cnn-rotated";
  lineInit=null;window.__inkCameraLineReady=false;
  captureWidth=800;usedDocumentUpscale=false;
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
@@ -438,34 +438,34 @@ async function scan(id){
  // On macOS, the optional locally running Apple Vision companion bypasses
  // all expensive browser-side RGB segmentation and character-by-character
  // inference. Video remains native-rate; OCR processes only fresh frames.
- if(visionClient){
+ if(offlineClient){
   if(video.readyState<2||!video.videoWidth){schedule(id,70);return}
   reading=true;
   const started=performance.now();
   try{
-   const payload=await visionClient.recognize(video);
+   const payload=await offlineClient.recognize(video);
    if(!active||id!==epoch)return;
    if(payload){
-    const current=visionClient.track(payload,Date.now());
+    const current=offlineClient.track(payload,Date.now());
     window.__inkCameraText=current.text;
     window.__inkCameraWords=current.words;
-    visionClient.paint(overlay,video,board,current);
+    offlineClient.paint(overlay,video,board,current);
     if(current.text)show(current.text,false);
     else show("Point the camera at printed or handwritten text.");
     const metrics=window.__inkCameraStats;
     metrics.scans++;
-    metrics.engine="apple-vision-local";
+    metrics.engine="offline-tesseract-wasm";
     metrics.lastScanMs=Math.round(performance.now()-started);
     metrics.ocrMs=Math.round(Number(payload.elapsedMs)||0);
     metrics.recognizedWords=current.words.length;
-    visionFailures=0;
+    offlineFailures=0;
    }
   }catch(error){
-   visionFailures++;
-   if(visionFailures>=4){
-    visionClient.reset();visionClient=null;
+   offlineFailures++;
+   if(offlineFailures>=4){
+    offlineClient.reset();offlineClient=null;
     window.__inkCameraEngine="ink-print-cnn-rotated";
-    show("Local Vision companion disconnected — using INK AI OCR.");
+    show("Bundled browser OCR failed — using experimental INK AI OCR.");
    }
   }finally{
    reading=false;
@@ -629,24 +629,30 @@ async function start(){
  try{
   if(!navigator.mediaDevices?.getUserMedia)
    throw Error("Camera requires HTTPS or a supported local browser file.");
-  const preferNative=location.hash.includes("ink-vision-token=");
+  const preferNative=Boolean(window.InkOfflineOCR?.create);
   const incoming=await navigator.mediaDevices.getUserMedia({audio:false,
    video:{facingMode:{ideal:"environment"},
     width:{ideal:preferNative?1920:1280},
     height:{ideal:preferNative?1080:720}}});
   if(!active||id!==epoch){incoming.getTracks().forEach(t=>t.stop());return}
   stream=incoming;video.srcObject=stream;await video.play();
-  if(window.InkVisionBridge?.connect){
-   visionClient=await window.InkVisionBridge.connect();
-   if(!active||id!==epoch){visionClient?.reset();visionClient=null;return}
+  if(window.InkOfflineCamera?.connect){
+   show("Loading fully offline text recognition…");
+   try{
+    offlineClient=await window.InkOfflineCamera.connect();
+   }catch(error){
+    window.__inkCameraOfflineError=String(error?.message||error);
+    offlineClient=null;
+   }
+   if(!active||id!==epoch){offlineClient?.reset();offlineClient=null;return}
   }
-  if(visionClient){
-   window.__inkCameraEngine="apple-vision-local";
-   button.title="Apple Vision on-device OCR is active";
-   show("Apple Vision ready — point the camera at any text.");
+  if(offlineClient){
+   window.__inkCameraEngine="offline-tesseract-wasm";
+   button.title="Bundled offline WebAssembly OCR is active";
+   show("Offline OCR ready — point the camera at text.");
   }else{
    window.__inkCameraEngine="ink-print-cnn-rotated";
-   button.title="Experimental INK OCR. For native Mac accuracy launch: bash mac/start-ink-vision.sh";
+   button.title="Experimental INK OCR is active (bundled OCR unavailable)";
    show("Point the camera at clear text.");
    loadNativeLineOCR();
   }
