@@ -90,15 +90,21 @@ try:
         Object.defineProperty(canvas,"videoWidth",{value:1280});
         Object.defineProperty(canvas,"videoHeight",{value:720});
         const camera=await window.InkOfflineCamera.connect();
-        const browserVisible=[];
+        window.__inkDebugOCR=true;
+        const browserVisible=[],filteredDiagnostics=[];
         for(let k=0;k<4;k++){
           const verified=await camera.recognize(canvas);
           const stable=camera.track(verified,Date.now()+k*320);
           browserVisible.push(stable.text);
+          filteredDiagnostics.push({
+            accepted:verified.words.map(w=>({text:w.text,confidence:w.confidence})),
+            filter:window.__inkCameraEvidence,
+            rejected:window.__inkCameraRejectedWords});
         }
         camera.reset();
+        window.__inkDebugOCR=false;
         collected.push({name:"distant-receipt",...distant,
-          browserVisible});
+          browserVisible,filteredDiagnostics});
         // Colored print and reversed polarities must both produce actual
         // recognized tokens, never be replaced by expected document labels.
         set("#211c53");
@@ -118,7 +124,9 @@ try:
     for case in result["cases"]:
         print("FORM OCR DIAGNOSTIC",{
           "case":case["name"],"sources":case["sources"],
-          "frames":[s[:350] for s in case["seen"]]},flush=True)
+          "frames":[s[:350] for s in case["seen"]],
+          "browserVisible":case.get("browserVisible"),
+          "filteredDiagnostics":case.get("filteredDiagnostics")},flush=True)
     receipt=result["cases"][0]["all"].lower()
     assert "22567" in receipt, "Receipt number was missed: "+repr(receipt)
     assert "august" in receipt and "2026" in receipt, (
