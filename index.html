@@ -10450,6 +10450,16 @@ function completeGlyph(prefix,label,seed,variation,limitSteps=maxSteps,prepared=
        moves,penUps,quality:check,
        rolloutLogLikelihood:evidence,selection,stopReached:false};
     }
+    // The old GRU almost never learns EOS, so it kept generating
+    // numerous extra vectors AFTER a useful round arc had appeared.
+    // Stop inference on an actual good learned stroke segment, not an
+    // invented endpoint; this both improves shape and cuts worker latency.
+    if(/^[acegoqsACGJOQSU]$/.test(label)&&j>=9&&
+       shape.turn>=1.1&&shape.turn<=7.5&&
+       shape.straightness<=.92&&check.length>=.14&&
+       check.length<=.65&&shape.largestTurn<2.2){
+      break;
+    }
    }
   }
   if(predicted.stop&&j>=4){stopReached=true;break}
