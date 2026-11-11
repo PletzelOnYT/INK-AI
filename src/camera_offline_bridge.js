@@ -10,6 +10,23 @@
  const context=canvas.getContext("2d",{alpha:false});
  const Evidence=window.InkTextEvidence;
  const Layout=window.InkCameraLayout;
+ const Handwriting=window.InkCameraHandwriting;
+ function overlaps(a,b){
+  if(!a||!b)return false;
+  const w=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0));
+  const h=Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
+  const smaller=Math.min(Math.max(1,(a.x1-a.x0)*(a.y1-a.y0)),
+    Math.max(1,(b.x1-b.x0)*(b.y1-b.y0)));
+  return w*h/smaller>.48;
+ }
+ function hasReliableText(payload){
+  const words=payload?.words||[];
+  const strong=words.filter(w=>Number(w.confidence)>=.68&&
+   /^[A-Za-z][A-Za-z0-9'-]{2,}$/.test(String(w.text||"")));
+  return strong.some(w=>w.text.length>=5)||
+    strong.reduce((sum,w)=>sum+w.text.length,0)>=9;
+ }
+
  function checkedPayload(payload,width,height){
   if(!payload||!Array.isArray(payload.lines))return {
    width,height,lines:[],words:[],engine:"bundled-tesseract-wasm"};
@@ -163,6 +180,7 @@
   const engine=await window.InkOfflineOCR.create();
   const tracker=createTracker();
   let scan=0,weakScans=0,detailFrames=0,lastDetailBurst=-100,previousWidth=0;
+  let handAttempts=0,handAccepted=0;
   return {
    engine:"offline-tesseract-wasm",
    async recognize(video){
@@ -186,7 +204,43 @@
     context.drawImage(video,0,0,width,height);
     // Only the latest live frame is recognized by the bundled neural worker.
     const result=await engine.recognize(canvas,width,height);
-    const accepted=checkedPayload(result,width,height);
+    let accepted=checkedPayload(result,width,height);
+    // Primary path remains the bundled Tesseract LSTM, which handles
+    // printed and joined text better. On weak/partial reads, also run the
+    // handwriting-trained CNN on segmented ink; occasionally check mixed
+    // printed and handwritten pages without slowing every frame.
+    const reliable=hasReliableText(accepted);
+    const tryHandwriting=Handwriting?.recognize&&
+     window.__inkHandwritingReady===true&&
+     ((!reliable&&scan%2===0)||(reliable&&scan%6===0));
+    if(tryHandwriting){
+     const started=performance.now();
+     handAttempts++;
+     try{
+      const supplement=await Handwriting.recognize(canvas,width,height);
+      const extra=(supplement.lines||[]).filter(line=>
+       !accepted.lines.some(existing=>overlaps(existing.box,line.box))&&
+       !line.words.some(word=>accepted.words.some(existing=>
+        overlaps(existing.box,word.box))));
+      if(extra.length){
+       const combined=checkedPayload({...result,
+        lines:[...accepted.lines,...extra]},width,height);
+       handAccepted+=combined.words.filter(w=>
+        w.recognitionEngine==="ink-handwriting-cnn").length;
+       accepted=combined;
+      }
+      window.__inkCameraHandwritingStats={
+       attempts:handAttempts,acceptedWords:handAccepted,
+       candidateLines:supplement.lines?.length||0,
+       segmentedGlyphs:supplement.glyphs||0,
+       lastMs:Math.round(performance.now()-started),
+       engine:"ink-handwriting-cnn",modelReady:true};
+     }catch(error){
+      window.__inkCameraHandwritingStats={
+       attempts:handAttempts,acceptedWords:handAccepted,
+       error:String(error?.message||error),modelReady:true};
+     }
+    }
     // A fragment such as "112" is not a complete dial read. Keep trying
     // full-detail OCR until independent digits or real words are verified.
     const acceptedWords=accepted.words||[];
@@ -205,7 +259,8 @@
     return accepted;
    },
    track:tracker.update,
-   reset(){tracker.reset();weakScans=0;detailFrames=0;previousWidth=0},
+   reset(){tracker.reset();weakScans=0;detailFrames=0;previousWidth=0;
+    handAttempts=0;handAccepted=0},
    paint
   };
  }
