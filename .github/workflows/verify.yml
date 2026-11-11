@@ -61,6 +61,7 @@ jobs:
           node --check src/stroke_worker.js
           node --check src/camera_ocr.js
           node tests/camera-local-ocr.mjs
+          node tests/print-camera-graphs.mjs
           node tests/completer-prefix-cache.mjs
           node tests/neural-preference-learning.mjs
           node tests/completion-cnn-evidence.mjs
@@ -116,6 +117,7 @@ jobs:
         run: |
           python3 -m pip install --quiet selenium
           command -v google-chrome || command -v chromium
+          python3 tests/camera-colors-browser.py
           python3 tests/browser-smoke.py
           python3 tests/assist-manual-g-browser.py
           if test -s models/ink-stroke-sequence-v1.json; then python3 tests/live-during-pointer-browser.py; fi
