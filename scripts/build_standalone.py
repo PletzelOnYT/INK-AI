@@ -13,12 +13,14 @@ html=(ROOT/"src/index.shell.html").read_text(encoding="utf-8")
 assert '<script src="./src/app.js" defer></script>' in html
 html=html.replace('<script src="./src/camera_tracking.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_text_detector.js" defer></script>', '')
+html=html.replace('<script src="./src/camera_line_runtime.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_ocr.js" defer></script>', '')
 css=(ROOT/"src/app.css").read_text(encoding="utf-8")
 app=(ROOT/"src/app.js").read_text(encoding="utf-8")
 camera=(ROOT/"src/camera_ocr.js").read_text(encoding="utf-8")
 tracking=(ROOT/"src/camera_tracking.js").read_text(encoding="utf-8")
 scene=(ROOT/"src/camera_text_detector.js").read_text(encoding="utf-8")
+line_runtime=(ROOT/"src/camera_line_runtime.js").read_text(encoding="utf-8")
 preference=(ROOT/"src/neural_preference_model.js").read_text(encoding="utf-8")
 def accepted_model(version):
     candidate=ROOT/f"models/ink-stroke-prefix-domain-{version}.json"
@@ -64,6 +66,8 @@ if (ROOT/"models/ink-print-cnn-v1.json").is_file():
 # Dedicated native text-vs-background CNN (published only after synthetic tests).
 if (ROOT/"models/ink-camera-textness-v1.json").is_file():
     models.append(("inkTextnessModel","application/json","models/ink-camera-textness-v1.json"))
+if (ROOT/"models/ink-native-line-ctc-v1.json").is_file():
+    models.append(("inkLineModel","application/json","models/ink-native-line-ctc-v1.json"))
 tags=[]
 for ident,kind,path in models:
     content=(ROOT/path).read_text(encoding="utf-8")
@@ -74,7 +78,7 @@ html=html.replace('<link rel="stylesheet" href="./src/app.css">',
                   '<style>\n'+css+'\n</style>')
 html=html.replace('<script src="./src/neural_preference_model.js"></script>', '')
 html=html.replace('<script src="./src/app.js" defer></script>',
-                  '\n'.join(tags)+'\n<script>\n'+preference+'\n'+app+'\n'+tracking+'\n'+scene+'\n'+camera+'\n</script>')
+                  '\n'.join(tags)+'\n<script>\n'+preference+'\n'+app+'\n'+tracking+'\n'+scene+'\n'+line_runtime+'\n'+camera+'\n</script>')
 out=ROOT/"dist/ink-ai-standalone.html"
 out.parent.mkdir(exist_ok=True)
 out.write_text(html,encoding="utf-8")
