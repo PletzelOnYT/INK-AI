@@ -389,7 +389,7 @@ async function create(){
       }catch(_){/* Preserve ordinary/rotation OCR on unsupported canvases */}
      }
      // First let Tesseract try its own deskew on failed ordinary reads.
-     if(!clearRead(candidate.lines)){
+     if(!clearRead(candidate.lines)&&scanNumber%3===0){
       const auto=await worker.recognize(image,{rotateAuto:true},{blocks:true});
       const rotatedLines=extractWords(auto.data);
       if(clearRead(rotatedLines)){
@@ -404,9 +404,8 @@ async function create(){
      // ladder spread over a few scans without stalling the live video.
      const queue=rotationQueue(skewHint?hint.angle:null,previousAngle);
      const goodAngle=skewHint?Math.round(-hint.angle/5)*5:null;
-     const options=goodAngle!==null?queue.slice(0,3):
-       [queue[attemptCursor%queue.length],
-        queue[(attemptCursor+1)%queue.length]];
+     const options=goodAngle!==null?queue.slice(0,2):
+       [queue[attemptCursor%queue.length]];
      attemptCursor=(attemptCursor+options.length)%queue.length;
      for(const angle of options){
       if(angle===0)continue;
