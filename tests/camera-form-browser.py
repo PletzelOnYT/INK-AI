@@ -83,7 +83,22 @@ try:
         border(801,560,235,83);
         text("RECEIPT NUMBER",833,583,"bold 12px Arial");
         text("22567",893,627,"bold 14px Arial");
-        collected.push({name:"distant-receipt",...(await readFrames(10))});
+        const distant=await readFrames(10);
+        // Verify the public camera adapter, including its independent pixel
+        // evidence filter and temporal transcript. A raw Tesseract result
+        // alone is not proof the app displays the recovered fields.
+        Object.defineProperty(canvas,"videoWidth",{value:1280});
+        Object.defineProperty(canvas,"videoHeight",{value:720});
+        const camera=await window.InkOfflineCamera.connect();
+        const browserVisible=[];
+        for(let k=0;k<4;k++){
+          const verified=await camera.recognize(canvas);
+          const stable=camera.track(verified,Date.now()+k*320);
+          browserVisible.push(stable.text);
+        }
+        camera.reset();
+        collected.push({name:"distant-receipt",...distant,
+          browserVisible});
         // Colored print and reversed polarities must both produce actual
         // recognized tokens, never be replaced by expected document labels.
         set("#211c53");
@@ -116,6 +131,10 @@ try:
       "Detailed region scan did not recover the small date")
     assert "2026" in tiny["seen"][1], (
       "Detailed scan failed to recover date digits")
+    assert any("22567" in line for line in tiny["browserVisible"]), (
+      "Camera evidence filters discarded the recovered receipt number")
+    assert any("August" in line for line in tiny["browserVisible"]), (
+      "Camera UI transcript discarded the recovered receipt date")
     focus=result["cases"][1]["focus"]
     assert any(f and f["attempts"]>=1 for f in focus), (
       "Focused document recovery did not run")
