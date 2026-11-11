@@ -1,0 +1,105 @@
+name: Promote only browser-verified natural handwriting V4
+on:
+  push:
+    branches: [main]
+    paths:
+      - "models/stroke-natural-v4-metrics.json"
+      - "models/ink-stroke-natural-v4.json"
+      - ".github/workflows/promote-stroke-natural-v4.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-ai-promote-natural-v4
+  cancel-in-progress: false
+jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check writer-disjoint gains and candidate presence
+        id: candidate
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          p=Path("models/stroke-natural-v4-metrics.json")
+          w=Path("models/ink-stroke-natural-v4.json")
+          if not (p.is_file() and w.is_file()):
+              print("validate=false")
+          else:
+              m=json.loads(p.read_text())
+              ok=(m.get("eligible") is True and
+                  m.get("gain",0)>=.035 and m.get("hard_gain",0)>=.05 and
+                  "browser_integration_passed" not in m)
+              print("validate="+str(ok).lower())
+          PY
+      - name: Make candidate-only offline HTML and inspect REAL embedded weights
+        if: steps.candidate.outputs.validate == 'true'
+        run: |
+          INK_STROKE_PREVIEW_V4=1 python scripts/build_standalone.py
+          cp dist/ink-ai-standalone.html index.html
+          python - <<'PY'
+          import re,json
+          from pathlib import Path
+          h=Path("index.html").read_text()
+          x=re.search(r'<script id="inkStrokeModel" type="application/json">([\s\S]*?)</script>',h)
+          assert x, "Offline bundle missing stroke neural model"
+          m=json.loads(x.group(1))
+          assert m["training"]["natural_motion_v4"] is True
+          assert m["training"]["fine_tuned_own_model"]=="models/ink-stroke-prefix-domain-v2.json"
+          print("Actual offline model:",m["parameter_count"],"GRU parameters")
+          PY
+      - name: Test candidate in offline real Chrome with actual handwriting
+        id: chrome
+        if: steps.candidate.outputs.validate == 'true'
+        continue-on-error: true
+        run: |
+          python -m pip install --quiet selenium
+          python tests/local-file-browser.py
+          python tests/h-completion-browser.py
+          python tests/completed-h-no-runaway-browser.py
+          python tests/assist-manual-g-browser.py
+          python tests/live-during-pointer-browser.py
+      - name: Release only passed neural weights; otherwise revert HTML
+        if: steps.candidate.outputs.validate == 'true'
+        env:
+          CHROME_RESULT: ${{ steps.chrome.outcome }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json,os
+          p=Path("models/stroke-natural-v4-metrics.json")
+          m=json.loads(p.read_text())
+          passed=os.environ["CHROME_RESULT"]=="success"
+          m["browser_integration_passed"]=passed
+          m["deployable"]=passed and m["eligible"]
+          if not passed:
+              m["browser_rejection_reason"]="Real standalone Chrome tests failed"
+          p.write_text(json.dumps(m,indent=2)+"\n")
+          print("Natural GRU V4 release:", "approved" if passed else "rejected")
+          PY
+          if [ "$CHROME_RESULT" = "success" ]; then
+            python scripts/build_standalone.py
+            cp dist/ink-ai-standalone.html index.html
+          else
+            git restore index.html
+          fi
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/stroke-natural-v4-metrics.json
+          if [ "$CHROME_RESULT" = "success" ]; then git add index.html; fi
+          git commit -m "Record real Chrome promotion decision for natural handwriting V4"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
