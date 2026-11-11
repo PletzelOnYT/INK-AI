@@ -6,6 +6,7 @@
  const canvas=document.createElement("canvas");
  const context=canvas.getContext("2d",{alpha:false});
  const Evidence=window.InkTextEvidence;
+ const Layout=window.InkCameraLayout;
  function checkedPayload(payload,width,height){
   if(!payload||!Array.isArray(payload.lines))return {
    width,height,lines:[],words:[],engine:"bundled-tesseract-wasm"};
@@ -30,7 +31,7 @@
     accepted++;
    }
    if(!supported.length)continue;
-   const text=supported.map(word=>word.text).join(" ").trim();
+   const text=Layout?.formatWords?Layout.formatWords(supported):supported.map(word=>word.text).join(" ").trim();
    const quality=supported.reduce((sum,w)=>sum+w.visualQuality,0)/supported.length;
    const measuredConfidence=supported.reduce((sum,w)=>sum+w.confidence,0)/supported.length;
    // A low-confidence word can still be read on the second camera frame,
@@ -61,7 +62,7 @@
      Array.isArray(line.words)&&line.words.length);
     const visited=new Set();
     for(const line of entries){
-     const cleaned=line.text.replace(/\s+/g," ").trim();
+     const cleaned=Layout?.lineText?Layout.lineText(line):line.text.replace(/\s+/g," ").trim();
      const key=cleaned.toLowerCase();
      let tracked=regions.find(t=>!visited.has(t)&&proximity(t.box,line.box));
      if(!tracked){
@@ -98,6 +99,9 @@
       tracked.words=line.words.filter(w=>w.box&&
        typeof w.text==="string"&&Number(w.confidence)>=.25);
       tracked.confidence=confidence;
+      tracked.blockIndex=line.blockIndex;
+      tracked.paragraphIndex=line.paragraphIndex;
+      tracked.lineIndex=line.lineIndex;
      }
      tracked.key=key;tracked.box=line.box;tracked.lastSeen=now;
     }
@@ -109,7 +113,9 @@
       return ya-yb;
      return a.box.x0-b.box.x0;
     });
-    return {text:active.map(x=>x.text).join("\n").slice(0,4000),
+    const transcript=Layout?.formatDocument?Layout.formatDocument(active):
+     active.map(x=>x.text).join("\n");
+    return {text:transcript.slice(0,6000),
      words:active.flatMap(x=>x.words),
      sourceWidth:payload?.width,sourceHeight:payload?.height};
    },
