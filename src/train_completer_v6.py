@@ -61,30 +61,32 @@ def human_trajectory_loss(model,seq,labels,length,cut,steps,teacher_probability)
     mass=logits.sum()*0.
     for idx in range(cut,min(MAX_STEPS,cut+steps)):
         active=(length>idx).float()
-        if not bool(active.any()):break
+        # The MDN output after consuming token L-1 predicts EOS at the NEXT
+        # step (idx==L), not when about to consume token L-1. Old prefix
+        # trainers supervised stop one step EARLY and never trained a true
+        # terminal state; this also caused endless unwanted glyph tails.
+        stop_valid=(length>=idx).float()
+        if not bool(stop_valid.any()):break
         expected=seq[:,idx]
         proposed=modal_token(logits)
-        actual_position=actual_position+expected[:,:2]
-        predicted_position=predicted_position+proposed[:,:2]
+        actual_position=actual_position+expected[:,:2]*active[:,None]
+        predicted_position=predicted_position+proposed[:,:2]*active[:,None]
         local_nll=mdn_step_loss(logits,expected)
-        # Absolute endpoint behavior in the *visible-prefix* coordinate frame.
         drift=nn.functional.smooth_l1_loss(
             predicted_position,actual_position,beta=.13,reduction="none").sum(dim=1)
-        # Learn actual next-token lift and stop labels, including stroke ends.
         up=expected[:,2]<.5
         lift=nn.functional.binary_cross_entropy_with_logits(
             logits[:,5*MIXTURES],expected[:,2],reduction="none")
         lift_weight=torch.where(up,9.0,1.0)
-        ending=((length-1)==idx).float()
+        ending=(length==idx).float()
         stop=nn.functional.binary_cross_entropy_with_logits(
             logits[:,5*MIXTURES+1],ending,reduction="none",
-            pos_weight=expected.new_tensor(7.0))
+            pos_weight=expected.new_tensor(9.0))
         weight=1.+.45*(idx-cut)/max(1,steps-1)
-        step_loss=local_nll+.27*drift+.25*lift*lift_weight+.27*stop
-        sum_loss=sum_loss+(step_loss*active*weight).sum()
-        mass=mass+(active*weight).sum()
-        # Mix teacher and actual generated token, without backpropagating
-        # through the discrete mixture component sampling choices.
+        movement=(local_nll+.27*drift+.25*lift*lift_weight)*active
+        sum_loss=sum_loss+((movement+.30*stop*stop_valid)*weight).sum()
+        mass=mass+((active+.30*stop_valid)*weight).sum()
+        if not bool(active.any()):break
         next_token=proposed.detach()
         mask=(torch.rand(bsz,device=seq.device)<teacher_probability)[:,None]
         recurrent=torch.where(mask,expected,next_token)
