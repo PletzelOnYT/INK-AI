@@ -1,0 +1,51 @@
+name: Validate distant, colored, angled and handwritten camera OCR
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-camera-detail.yml"
+      - "src/camera_detail_core.mjs"
+      - "src/camera_offline_engine_entry.mjs"
+      - "src/camera_offline_bridge.js"
+      - "src/camera_text_evidence.js"
+      - "src/camera_ocr.js"
+      - "tests/camera-detail-core.mjs"
+      - "tests/camera-detail-browser.py"
+      - "tests/camera-offline-bridge.mjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ink-camera-detail-acceptance
+  cancel-in-progress: true
+jobs:
+  real-offline-ocr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test crop projection, RGB evidence and actual pretrained OCR wiring
+        run: |
+          node --check src/camera_offline_bridge.js
+          node --check src/camera_text_evidence.js
+          node tests/camera-detail-core.mjs
+          node tests/camera-offline-bridge.mjs
+          node tests/camera-text-evidence.mjs
+          node tests/camera-angle-core.mjs
+          node tests/camera-local-ocr.mjs
+      - name: Assemble original offline neural OCR and standalone HTML
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts
+          npm run build:ocr
+          python3 scripts/build_standalone.py
+          cp dist/ink-ai-standalone.html index.html
+      - name: Read real synthetic clock, oblique pencil and colored text in offline Chrome
+        run: |
+          python3 -m pip install --quiet selenium
+          python3 tests/camera-detail-browser.py
+          python3 tests/camera-sideways-browser.py
+          python3 tests/camera-no-false-text-browser.py
+          python3 tests/camera-colors-browser.py
