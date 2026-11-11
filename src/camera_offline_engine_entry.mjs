@@ -381,7 +381,7 @@ async function create(){
      const consider=(next,source)=>{
       const strength=candidateStrength(next.lines);
       const requiredGain=(candidate.rotation===0&&
-        clearRead(candidate.lines))?(looksUpsideDown(candidate.lines)?.8:4.5):1.6;
+        clearRead(candidate.lines))?(looksUpsideDown(candidate.lines)?0.8:4.5):1.6;
       if(strength.value>candidate.value+requiredGain&&
          strength.meaningful>=1&&clearRead(next.lines)){
        candidate={...next,value:strength.value,source};
