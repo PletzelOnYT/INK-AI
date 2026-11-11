@@ -99,6 +99,16 @@
    return {pixels:greyPixels(ctx.getImageData(0,0,w,h),w,h),
     width:w,height:h,sourceW:sw,sourceH:sh};
   }
+  function staticMatch(next){
+   if(!reference||!next||reference.length!==next.length)return false;
+   let changed=0,count=0,total=0;
+   const stride=Math.max(1,Math.floor(next.length/600));
+   for(let i=0;i<next.length;i+=stride){
+    const delta=Math.abs(next[i]-reference[i]);
+    total+=delta;changed+=Number(delta>26);count++;
+   }
+   return total/Math.max(1,count)<8&&changed/Math.max(1,count)<.13;
+  }
   return {
    capture,
    setReference(frame,recognized,srcWidth,srcHeight){
@@ -111,7 +121,7 @@
     lastSample=0;
    },
    update(video,now=0){
-    if(!reference||!anchors.length)return {valid:false,dx:0,dy:0};
+    if(!reference)return {valid:false,dx:0,dy:0};
     if(now-lastSample<65&&last)return last;
     lastSample=now;
     const frame=capture(video);
@@ -119,8 +129,12 @@
        frame.sourceW!==sourceW||frame.sourceH!==sourceH){
      return last={valid:false,dx:0,dy:0};
     }
-    const result=matchTranslation(reference,frame.pixels,
+    let result=matchTranslation(reference,frame.pixels,
      referenceW,referenceH,anchors);
+    // Tiny far-away words may not yield usable motion anchors. Holding
+    // the same picture should still hold a verified rectangle in place.
+    if(!result.valid&&staticMatch(frame.pixels))
+     result={valid:true,dx:0,dy:0,error:0,stationary:true};
     last={...result,dx:result.dx*sourceW/referenceW,
      dy:result.dy*sourceH/referenceH};
     return last;
