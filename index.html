@@ -13315,7 +13315,13 @@ window.InkLineRuntime={create};
    const w=Math.max(2,(b.x1-b.x0)*sx),h=Math.max(2,(b.y1-b.y0)*sy);
    if(x+w<0||y+h<0||x>width||y>height)continue;
    context.beginPath();
-   if(context.roundRect)context.roundRect(x-2,y-1,w+4,h+2,3);
+   const polygon=word.points;
+   if(Array.isArray(polygon)&&polygon.length===4){
+    context.moveTo(ox+polygon[0].x*sx,oy+polygon[0].y*sy);
+    for(let i=1;i<4;i++)
+     context.lineTo(ox+polygon[i].x*sx,oy+polygon[i].y*sy);
+    context.closePath();
+   }else if(context.roundRect)context.roundRect(x-2,y-1,w+4,h+2,3);
    else context.rect(x-2,y-1,w+4,h+2);
    context.fill();context.stroke();
   }
@@ -14000,8 +14006,11 @@ async function start(){
  try{
   if(!navigator.mediaDevices?.getUserMedia)
    throw Error("Camera requires HTTPS or a supported local browser file.");
+  const preferNative=location.hash.includes("ink-vision-token=");
   const incoming=await navigator.mediaDevices.getUserMedia({audio:false,
-   video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
+   video:{facingMode:{ideal:"environment"},
+    width:{ideal:preferNative?1920:1280},
+    height:{ideal:preferNative?1080:720}}});
   if(!active||id!==epoch){incoming.getTracks().forEach(t=>t.stop());return}
   stream=incoming;video.srcObject=stream;await video.play();
   if(window.InkVisionBridge?.connect){
