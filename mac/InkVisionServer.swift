@@ -27,6 +27,15 @@ private func bound(_ box: CGRect, width: Int, height: Int) -> [String: Double] {
     ]
 }
 
+private func corners(_ box: VNRectangleObservation, width: Int,
+                     height: Int) -> [[String: Double]] {
+    return [box.topLeft, box.topRight, box.bottomRight, box.bottomLeft]
+        .map { point in [
+            "x": Double(point.x) * Double(width),
+            "y": (1.0 - Double(point.y)) * Double(height)
+        ] }
+}
+
 private func ocr(_ cgImage: CGImage, fast: Bool) throws -> [String: Any] {
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = fast ? .fast : .accurate
@@ -50,12 +59,12 @@ private func ocr(_ cgImage: CGImage, fast: Bool) throws -> [String: Any] {
             guard let range = Range(match.range, in: candidate.string) else { continue }
             let word = String(candidate.string[range])
             if word.isEmpty { continue }
-            let rectangle = (try? candidate.boundingBox(for: range))?.boundingBox
-                ?? observation.boundingBox
+            let wordObservation = (try? candidate.boundingBox(for: range)) ?? observation
             let item: [String: Any] = [
                 "text": word,
                 "confidence": Double(candidate.confidence),
-                "box": bound(rectangle, width: width, height: height)
+                "box": bound(wordObservation.boundingBox, width: width, height: height),
+                "points": corners(wordObservation, width: width, height: height)
             ]
             words.append(item)
             allWords.append(item)
@@ -64,6 +73,7 @@ private func ocr(_ cgImage: CGImage, fast: Bool) throws -> [String: Any] {
             "text": line,
             "confidence": Double(candidate.confidence),
             "box": bound(observation.boundingBox, width: width, height: height),
+            "points": corners(observation, width: width, height: height),
             "words": words
         ])
     }
@@ -260,6 +270,9 @@ guard token.count >= 24 else {
     fputs("Set a random INK_VISION_TOKEN (minimum 24 characters).\n", stderr)
     exit(1)
 }
+// Browsers may abort stale frame requests while Vision is still running.
+// Never let a broken pipe kill the companion process.
+_ = signal(SIGPIPE, SIG_IGN)
 let listener = socket(AF_INET, SOCK_STREAM, 0)
 guard listener >= 0 else { fatalError("Unable to open local socket") }
 var reusable: Int32 = 1
