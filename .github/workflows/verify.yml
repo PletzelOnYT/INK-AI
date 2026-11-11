@@ -65,6 +65,7 @@ jobs:
           node --check src/camera_text_detector.js
           node --check src/camera_line_runtime.js
           node --check src/camera_vision_bridge.js
+          node tests/camera-vision-bridge.mjs
           node tests/camera-line-runtime.mjs
           node tests/camera-scene-detector.mjs
           node tests/camera-tracking.mjs
