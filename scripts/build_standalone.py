@@ -17,6 +17,7 @@ html=html.replace('<script src="./src/camera_line_runtime.js" defer></script>', 
 html=html.replace('<script src="./src/camera_text_evidence.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_document_layout.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_handwriting.js" defer></script>', '')
+html=html.replace('<script src="./src/camera_motion_tracker.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_offline_bridge.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_ocr.js" defer></script>', '')
 # Preserve attribution directly in the single distributable HTML as well
@@ -34,6 +35,7 @@ line_runtime=(ROOT/"src/camera_line_runtime.js").read_text(encoding="utf-8")
 text_evidence=(ROOT/"src/camera_text_evidence.js").read_text(encoding="utf-8")
 document_layout=(ROOT/"src/camera_document_layout.js").read_text(encoding="utf-8")
 handwriting=(ROOT/"src/camera_handwriting.js").read_text(encoding="utf-8")
+motion_tracker=(ROOT/"src/camera_motion_tracker.js").read_text(encoding="utf-8")
 offline_bridge=(ROOT/"src/camera_offline_bridge.js").read_text(encoding="utf-8")
 ocr_bundle_file=ROOT/"dist/ink-offline-ocr.js"
 if not ocr_bundle_file.is_file():
@@ -166,7 +168,7 @@ html=html.replace('<link rel="stylesheet" href="./src/app.css">',
                   '<style>\n'+css+'\n</style>')
 html=html.replace('<script src="./src/neural_preference_model.js"></script>', '')
 html=html.replace('<script src="./src/app.js" defer></script>',
-                  '\n'.join(tags)+'\n<script>\n'+preference+'\n'+app+'\n'+tracking+'\n'+scene+'\n'+line_runtime+'\n'+ocr_bundle+'\n'+text_evidence+'\n'+document_layout+'\n'+handwriting+'\n'+offline_bridge+'\n'+camera+'\n</script>')
+                  '\n'.join(tags)+'\n<script>\n'+preference+'\n'+app+'\n'+tracking+'\n'+scene+'\n'+line_runtime+'\n'+ocr_bundle+'\n'+text_evidence+'\n'+document_layout+'\n'+handwriting+'\n'+motion_tracker+'\n'+offline_bridge+'\n'+camera+'\n</script>')
 out=ROOT/"dist/ink-ai-standalone.html"
 out.parent.mkdir(exist_ok=True)
 out.write_text(html,encoding="utf-8")
