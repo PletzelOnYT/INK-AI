@@ -12633,105 +12633,147 @@ function createRegionTracker(){
 // Context decoder: still uses the trained CNN's top probabilities. The
 // repository's English-word list only helps resolve plausible character
 // sequences; it never creates regions or processes webcam frames remotely.
+// Probabilistic decoding: only correct a CNN word when each replacement
+// character has genuine CNN support. Never inflate a model probability to
+// manufacture a confident-looking English word.
 function decodePrintedWord(predictions,words){
- if(!predictions?.length||predictions.length>24)return null;
+ if(!Array.isArray(predictions)||predictions.length<3||predictions.length>24)return null;
  const n=predictions.length;
- const raw=predictions.map(p=>p?.top?.[0]?.char||"").join("");
- if(!/^[A-Za-z0-9]{3,24}$/.test(raw))return null;
- if((raw.match(/[0-9]/g)||[]).length>Math.min(2,Math.floor(n*.35)))return null;
- const possible=(words||[]).filter(word=>word.length===n);
+ const options=predictions.map(p=>(p?.top||[]).filter(t=>t&&
+   /^[a-zA-Z0-9]$/.test(t.char)&&Number.isFinite(t.confidence)));
+ if(options.some(o=>!o.length))return null;
+ const raw=options.map(o=>o[0].char).join("");
+ const literal=raw.toLowerCase();
+ const rawProb=Math.exp(options.reduce((s,o)=>s+Math.log(Math.max(.0001,o[0].confidence)),0)/n);
+ if(rawProb<.52)return null;
  let best=null,runner=null;
- for(const word of possible){
-  if(!/^[a-z]+$/.test(word))continue;
-  let logp=0,misses=0;
+ for(const word of words||[]){
+  if(word.length!==n||!/^[a-z]+$/.test(word))continue;
+  let edits=0,sum=0,valid=true;
   for(let i=0;i<n;i++){
-   const options=predictions[i]?.top||[];
-   const found=options.find(x=>String(x.char).toLowerCase()===word[i]);
-   if(!found){if(++misses>Math.max(1,Math.floor(n*.12))){logp=-Infinity;break};logp+=Math.log(.004)}
-   else logp+=Math.log(Math.max(.0001,found.confidence));
+   const ch=word[i],same=literal[i]===ch;
+   if(!same&&++edits>(n>=9?2:1)){valid=false;break}
+   const candidate=options[i].find(o=>o.char.toLowerCase()===ch);
+   if(!candidate||candidate.confidence<(!same?.12:.22)){
+    valid=false;break;
+   }
+   sum+=Math.log(Math.max(.0001,candidate.confidence));
   }
-  if(!Number.isFinite(logp))continue;
-  const score=Math.exp(logp/n);
-  if(!best||score>best.score){runner=best;best={text:word,score,misses}}
-  else if(!runner||score>runner.score)runner={text:word,score,misses};
+  if(!valid)continue;
+  const score=Math.exp(sum/n);
+  // Measured character likelihood and raw CNN margin outrank dictionary
+  // frequency; a mismatched word needs almost as much evidence as raw.
+  if(score<(n<=4?.62:.55)||score<rawProb*(edits===0?.75:edits===1?.84:.90))continue;
+  const choice={text:word,confidence:score,changes:edits};
+  if(!best||choice.confidence>best.confidence){
+   runner=best;best=choice;
+  }else if(!runner||choice.confidence>runner.confidence)runner=choice;
  }
- if(!best||best.score<(n<=3?.17:.10))return null;
- // A low-margin match is not evidence that an arbitrary image is a word.
- if(runner&&best.score<runner.score*1.10)return null;
- const titleCase=/^[A-Z]/.test(raw);
- const text=titleCase?best.text[0].toUpperCase()+best.text.slice(1):best.text;
- return {text,confidence:Math.min(.98,Math.max(n<=3?.94:.70,best.score*2.8)),lexicon:true};
+ if(!best)return null;
+ // Uncertain similarly scoring words should not become arbitrary guesses.
+ if(runner&&runner.text!==best.text&&
+   best.confidence<runner.confidence*1.08)return null;
+ const titled=/^[A-Z]/.test(raw);
+ return {text:titled?best.text[0].toUpperCase()+best.text.slice(1):best.text,
+   confidence:best.confidence,lexicon:true,changes:best.changes};
 }
+// Track current on-screen words by position and temporal voting. Never
+// append old guesses to an unlimited transcript after a page disappears.
 function createTracker(){
- let tracks=[],captured=[],nextId=0,lastAngle=0,lastAngleAt=0;
+ let tracks=[],nextId=0,lastAngle=null,lastAngleAt=0;
+ const holdMs=3200,windowMs=2600;
  function update(detections,now=Date.now()){
-  const incoming=[];
+  const visited=new Set();
   for(const item of detections||[]){
-   const id=normalize(item.text);
-   if(id.length<2||!item.box||!Number.isFinite(item.confidence)||
-      item.confidence<.44)continue;
-   const same=incoming.find(x=>normalize(x.text)===id&&near(x.box,item.box));
-   if(same){if(item.confidence>same.confidence)Object.assign(same,item)}
-   else incoming.push({...item});
-  }
-  for(const item of incoming){
-   const id=normalize(item.text);
-   let track=tracks.find(t=>withinOneEdit(t.id,id)&&near(t.box,item.box));
+   const text=String(item?.text||"");
+   const normalized=normalize(text);
+   if(!/^[a-z]{3,28}$/.test(normalized)||
+      !Number.isFinite(item?.confidence)||item.confidence<.54||
+      !item.box||!item.polygon)continue;
+   let track=tracks.find(t=>!visited.has(t)&&near(t.box,item.box)&&
+     (withinOneEdit(t.bestId,normalized)||t.bestId===normalized));
    if(!track){
-    track={uid:++nextId,id,text:item.text,box:item.box,polygon:item.polygon,
-      angle:item.angle||0,confidence:item.confidence,lastSeen:now,
-      hits:0,confirmed:false,recorded:false};
+    track={uid:++nextId,box:item.box,polygon:item.polygon,
+      angle:item.angle||0,lastSeen:now,bestId:normalized,votes:[],
+      text:"",confidence:0,confirmed:false};
     tracks.push(track);
    }
-   // Update the highlight's position on EVERY matching frame, even if
-   // classification confidence fluctuates. Otherwise rectangles get stuck.
+   visited.add(track);
    track.box=item.box;track.polygon=item.polygon;
-   track.angle=item.angle||0;
-   track.hits=Math.min(12,track.hits+1);
-   track.lastSeen=now;
-   if(item.confidence>=track.confidence){
-    track.id=id;track.text=item.text;track.confidence=item.confidence;
+   track.angle=item.angle||0;track.lastSeen=now;
+   track.votes=track.votes.filter(v=>now-v.when<=windowMs);
+   track.votes.push({id:normalized,text,confidence:item.confidence,when:now});
+   const scores=new Map();
+   for(const v of track.votes){
+    const a=scores.get(v.id)||{weight:0,count:0,text:v.text};
+    a.weight+=v.confidence;a.count++;a.text=v.text;scores.set(v.id,a);
    }
-   // High-confidence words appear immediately; borderline words are
-   // confirmed across two reads, with no arbitrary fixed delay.
-   if(track.hits>=2&&track.confidence>=.65)
-    track.confirmed=true;
-   if(!track.confirmed)continue;
-   lastAngle=track.angle;lastAngleAt=now;
-   if(!track.recorded){
-    // Do not duplicate a tracked word every frame, but allow a repeated
-    // word at a different text position to appear in a real sentence.
-    const recent=captured.find(x=>x.id===track.id&&near(x.box,track.box)&&
-      now-x.when<30000);
-    if(!recent){
-     captured.push({uid:track.uid,id:track.id,text:track.text,
-       box:{...track.box},when:now,confidence:track.confidence});
-     if(captured.length>90)captured.shift();
-    }
-    track.recorded=true;
-   }else{
-    const record=captured.find(x=>x.uid===track.uid);
-    if(record&&track.confidence>record.confidence){
-     record.text=track.text;record.id=track.id;record.confidence=track.confidence;
-    }
+   let best=null,second=null;
+   for(const [id,v] of scores){
+    const entry={id,...v};
+    if(!best||entry.weight>best.weight){second=best;best=entry}
+    else if(!second||entry.weight>second.weight)second=entry;
+   }
+   if(!best)continue;
+   track.bestId=best.id;
+   // Three consistent reads within 2.6 seconds, average confidence >= 0.64.
+   // A strong classifier prediction alone is never enough on camera scenes.
+   track.confirmed=best.count>=3&&best.weight/best.count>=.64&&
+     (!second||best.weight>=second.weight*1.55);
+   if(track.confirmed){
+    track.text=best.text;track.confidence=best.weight/best.count;
+    lastAngle=track.angle;lastAngleAt=now;
    }
   }
-  // Lost camera boxes expire, but committed words never vanish from text.
-  tracks=tracks.filter(t=>now-t.lastSeen<2400);
+  tracks=tracks.filter(t=>now-t.lastSeen<holdMs);
   return snapshot(now);
  }
  function snapshot(now=Date.now()){
-  const visible=tracks.filter(t=>now-t.lastSeen<2400);
-  return {
-   words:visible.filter(t=>t.confirmed).map(t=>({...t})),
-   boxes:visible.map(t=>({...t})),
-   text:captured.map(t=>t.text).join(" ").slice(-3000),
-   activeAngle:now-lastAngleAt<5000?lastAngle:null,
-   totalWords:captured.length
-  };
+  const visible=tracks.filter(t=>t.confirmed&&now-t.lastSeen<holdMs);
+  const words=visible.map(t=>({...t})).sort((a,b)=>{
+    const ah=a.box.y1-a.box.y0,bh=b.box.y1-b.box.y0;
+    const ay=(a.box.y0+a.box.y1)/2,by=(b.box.y0+b.box.y1)/2;
+    if(Math.abs(ay-by)>Math.max(10,(ah+bh)*.42))return ay-by;
+    return a.box.x0-b.box.x0;
+  });
+  const rows=[];
+  for(const word of words){
+   const y=(word.box.y0+word.box.y1)/2,h=word.box.y1-word.box.y0;
+   let row=rows.find(r=>Math.abs(r.y-y)<Math.max(12,(r.h+h)*.36));
+   if(!row){row={y,h,items:[]};rows.push(row)}
+   row.items.push(word);
+  }
+  const text=rows.sort((a,b)=>a.y-b.y).map(row=>
+    row.items.sort((a,b)=>a.box.x0-b.box.x0).map(w=>w.text).join(" ")).join("\n");
+  return {words,boxes:words,text:text.slice(0,2000),
+    activeAngle:now-lastAngleAt<5000?lastAngle:null,
+    totalWords:words.length};
  }
- function reset(){tracks=[];captured=[];nextId=0;lastAngle=0;lastAngleAt=0}
+ function reset(){tracks=[];nextId=0;lastAngle=null;lastAngleAt=0}
  return {update,snapshot,reset};
+}
+// A 24x14 low-resolution color fingerprint detects when a printed page is
+// taken away or replaced. No images are retained; only previous sampled RGB.
+function createSceneMonitor(){
+ let previous=null;
+ function update(data,now=Date.now()){
+  if(!data||!data.length)return {changed:false,mean:0,changedFraction:0};
+  const sample=new Uint8Array(data.length);
+  sample.set(data);
+  if(!previous){previous=sample;return {changed:false,mean:0,changedFraction:0}}
+  let total=0,changed=0,n=0;
+  for(let i=0;i<data.length;i+=4){
+   const delta=(Math.abs(data[i]-previous[i])+
+    Math.abs(data[i+1]-previous[i+1])+
+    Math.abs(data[i+2]-previous[i+2]))/3;
+   total+=delta;changed+=(delta>36?1:0);n++;
+  }
+  const mean=total/n,fraction=changed/n;
+  previous=sample;
+  return {changed:mean>34&&fraction>.36,mean,changedFraction:fraction,when:now};
+ }
+ function reset(){previous=null}
+ return {update,reset};
 }
 function anglesForPass(pass,preferred){
  // Each pass samples the straightforward view plus a rotated pair.
@@ -12741,7 +12783,7 @@ function anglesForPass(pass,preferred){
  const values=Number.isFinite(preferred)?[preferred,0,...pair]:[0,...pair];
  return [...new Set(values.map(n=>Math.round(n)))].slice(0,4);
 }
-const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord,createRegionTracker,decodePrintedWord};
+const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord,createRegionTracker,decodePrintedWord,createSceneMonitor};
 if(typeof window!=="undefined")window.InkCameraCore=api;
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })();
