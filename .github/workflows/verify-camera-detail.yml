@@ -11,6 +11,7 @@ on:
       - "src/camera_ocr.js"
       - "tests/camera-detail-core.mjs"
       - "tests/camera-detail-browser.py"
+      - "tests/camera-no-false-text-browser.py"
       - "tests/camera-offline-bridge.mjs"
   workflow_dispatch:
 permissions:
