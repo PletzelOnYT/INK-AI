@@ -13080,12 +13080,13 @@ for(const word of vocabulary.toLowerCase().split(/\s+/)){
 }
 
 let active=false,stream=null,timer=0,frameCallback=0,reading=false,epoch=0,pass=0;
+let captureWidth=800,usedDocumentUpscale=false;
 
 window.__inkCameraActive=false;
 window.__inkCameraText="";
 window.__inkCameraWords=[];
 window.__inkCameraEngine="ink-print-cnn-rotated";
-window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0,fusedWordCandidates:0};
+window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0,fusedWordCandidates:0,documentUpscaled:false};
 function show(text,muted=true){
  if(!active)return;
  if(output.textContent!==text)output.textContent=text;
@@ -13101,6 +13102,7 @@ function stop(){
  stream=null;video.pause();video.srcObject=null;
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
  tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
+ captureWidth=800;usedDocumentUpscale=false;
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
  window.__inkCameraWords=[];
  output.textContent=window.__inkLastGuess||"Draw something";
@@ -13119,7 +13121,7 @@ function runs(values,minimum=1,gap=0){
 function makeBase(){
  // Camera frames are downscaled before per-pixel RGB segmentation. The
  // original high-resolution video remains untouched in the preview.
- const w=Math.min(800,video.videoWidth);
+ const w=Math.min(captureWidth,video.videoWidth);
  base.width=w;base.height=Math.max(1,Math.round(video.videoHeight*w/video.videoWidth));
  bg.drawImage(video,0,0,base.width,base.height);
 }
@@ -13400,6 +13402,18 @@ async function scan(id){
   }
   const preferred=tracker.snapshot().activeAngle;
   const first=extract(makeView(0));
+  // Small real document text becomes ~7-12 pixels tall at 800px. This
+  // makes isolated-character CNN input too blurry. Switch once to native
+  // camera detail, but keep a fixed coordinate system thereafter.
+  if(!usedDocumentUpscale&&captureWidth<1200&&video.videoWidth>=1100&&
+     first.lines.some(line=>line.letters.length>=5&&
+       line.medianHeight>=6&&line.medianHeight<16)){
+   captureWidth=1200;usedDocumentUpscale=true;
+   tracker.reset();regionTracker.reset();glyphTracker.reset();cache.clear();
+   stats.documentUpscaled=true;
+   show("Document text found — switching to sharper camera detail…");
+   return;
+  }
   const dominant=[...first.lines].sort((a,b)=>b.score-a.score)[0];
   const tilt=dominant?-Math.atan(dominant.slope)*180/Math.PI:null;
   const angles=[0];
@@ -13502,7 +13516,7 @@ async function start(){
  active=true;const id=++epoch;pass=0;tracker.reset();cache.clear();
  window.__inkCameraActive=true;
  window.__inkCameraText="";window.__inkCameraWords=[];
- window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0,fusedWordCandidates:0};
+ window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0,fusedWordCandidates:0,documentUpscaled:false};
  board.classList.add("camera-active");button.setAttribute("aria-pressed","true");
  show("Requesting camera access…");
  try{
