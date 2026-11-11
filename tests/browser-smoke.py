@@ -1,4 +1,4 @@
-"""Verify the simplified UI contains only the canvas and predicted text."""
+"""Verify the original drawing UI plus its mutually exclusive Camera mode."""
 import http.server, threading
 from pathlib import Path
 from selenium import webdriver
@@ -18,12 +18,12 @@ driver=webdriver.Chrome(options=opt)
 try:
     driver.get(f"http://127.0.0.1:{server.server_port}/index.html")
     wait=WebDriverWait(driver,45)
-    assert len(driver.find_elements(By.TAG_NAME,"button"))==3
+    assert len(driver.find_elements(By.TAG_NAME,"button"))==4
     assert driver.find_element(By.ID,"pen").get_attribute("aria-pressed")=="true"
-    assert len(driver.find_elements(By.TAG_NAME,"canvas"))==2
+    assert len(driver.find_elements(By.TAG_NAME,"canvas"))==4
     assert driver.find_element(By.ID,"assist").get_attribute("aria-pressed")=="false"
     assert len(driver.find_elements(By.ID,"guess"))==1
-    print("PASS: pen/eraser/assist, drawing surface and live prediction are visible",flush=True)
+    print("PASS: pen/eraser/assist/camera toolbar, drawing surface and text remain visible",flush=True)
     wait.until(lambda d:d.execute_script("return window.__inkReady===true"))
     if Path("models/ink-cnn-v3.json").is_file():
         assert driver.execute_script("return [3,5].includes(window.__inkRecognitionVersion)"),"No validated real-pen V3/V5 loaded"
