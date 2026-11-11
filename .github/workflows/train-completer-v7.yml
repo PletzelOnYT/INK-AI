@@ -36,6 +36,7 @@ jobs:
           node --check src/stroke_worker.js
           node tests/completer-fast-quality.mjs
           node tests/completer-no-straight-rays.mjs
+          node tests/model-versions-release.mjs
       - name: Train genuine causal pen trajectory GRU from recorded writer traces
         run: |
           python -u src/train_completer_v7.py \
