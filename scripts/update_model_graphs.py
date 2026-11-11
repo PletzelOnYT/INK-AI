@@ -11,6 +11,10 @@ OUT=ROOT/"docs"
 OUT.mkdir(exist_ok=True)
 metrics_path=ROOT/"models/print-cnn-v1-metrics.json"
 print_metrics=json.loads(metrics_path.read_text()) if metrics_path.exists() else {}
+recognition_metrics=json.loads((ROOT/"models/recognition-v3-metrics.json").read_text())
+completion_metrics=json.loads((ROOT/"models/stroke-prefix-domain-v2-metrics.json").read_text())
+hand_accuracy=recognition_metrics["independent_pen_v3"]["overall"]
+completion_gain=completion_metrics["gain"]
 accuracy=print_metrics.get("heldout_accuracy")
 real_camera=print_metrics.get("real_camera_word_accuracy")
 if accuracy is not None and not 0<=accuracy<=1:raise ValueError("Bad heldout accuracy")
@@ -45,8 +49,8 @@ parts.append("</g></svg>")
 (OUT/"camera-print-benchmarks.svg").write_text("".join(parts),encoding="utf8")
 
 parts=svg_start("INK AI | Model and system benchmarks","Different metrics, different datasets. Bar heights must not be compared as one score.",920,590)
-parts+=bar(45,125,.7647,"Handwriting CNN V3 | UJI held-out writers | character accuracy")
-parts+=bar(45,230,.2129,"Completer Domain V2 | reduction in pen trajectory error")
+parts+=bar(45,125,hand_accuracy,"Handwriting CNN V3 | UJI held-out writers | character accuracy")
+parts+=bar(45,230,completion_gain,"Completer Domain V2 | reduction in pen trajectory error")
 parts+=bar(45,335,accuracy,"Printed CNN V1 | synthetic held-out fonts | character accuracy")
 parts+=bar(45,440,real_camera,"Camera OCR | real-world complete-word accuracy")
 parts.append(text(45,547,"Handwriting and completion figures: existing repository benchmark graphs.",13,color="#59626b"))
