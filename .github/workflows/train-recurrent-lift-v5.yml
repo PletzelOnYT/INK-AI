@@ -46,7 +46,12 @@ jobs:
             print("V5 quality-gated candidate, browser testing required")
           else:
             assert not Path("models/ink-stroke-lift-aware-v5.json").exists()
-            print("V5 rejected: proven V2 remains default")
+            research=Path("models/ink-stroke-lift-aware-v5-experimental.json")
+            assert research.is_file(),"Rejected V5 must preserve separate opt-in research checkpoint"
+            model=json.loads(research.read_text())
+            assert model["format"]=="ink-online-stroke-mdn-v1"
+            assert model["training"]["recurrent_lift_v5"] is True
+            print("V5 is experimental; V2 remains the default")
           PY
       - name: Commit real held-out metrics and only accepted research weights
         run: |
@@ -55,6 +60,9 @@ jobs:
           git add models/recurrent-lift-v5-metrics.json
           if test -s models/ink-stroke-lift-aware-v5.json; then
             git add models/ink-stroke-lift-aware-v5.json
+          fi
+          if test -s models/ink-stroke-lift-aware-v5-experimental.json; then
+            git add models/ink-stroke-lift-aware-v5-experimental.json
           fi
           git commit -m "Evaluate recurrent pen-lift generalization on unseen writers"
           for i in 1 2 3 4 5; do
@@ -71,4 +79,5 @@ jobs:
           path: |
             models/recurrent-lift-v5-metrics.json
             models/ink-stroke-lift-aware-v5.json
+            models/ink-stroke-lift-aware-v5-experimental.json
           if-no-files-found: ignore
