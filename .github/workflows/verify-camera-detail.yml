@@ -14,6 +14,7 @@ on:
       - "src/camera_ocr.js"
       - "tests/camera-detail-core.mjs"
       - "tests/camera-detail-browser.py"
+      - "tests/camera-form-browser.py"
       - "tests/camera-no-false-text-browser.py"
       - "tests/camera-offline-bridge.mjs"
   workflow_dispatch:
@@ -52,6 +53,7 @@ jobs:
         run: |
           python3 -m pip install --quiet selenium
           python3 tests/camera-detail-browser.py
+          python3 tests/camera-form-browser.py
           python3 tests/camera-handwriting-browser.py
           python3 tests/camera-sideways-browser.py
           python3 tests/camera-no-false-text-browser.py
