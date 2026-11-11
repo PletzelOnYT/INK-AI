@@ -131,10 +131,25 @@
     }
     let result=matchTranslation(reference,frame.pixels,
      referenceW,referenceH,anchors);
-    // Tiny far-away words may not yield usable motion anchors. Holding
-    // the same picture should still hold a verified rectangle in place.
+    // A poor optical-flow score is not proof that the paper disappeared.
+    // Camera auto-exposure, motion blur and clothing folds can disrupt
+    // gradients even when the printed words are still visible.
     if(!result.valid&&staticMatch(frame.pixels))
      result={valid:true,dx:0,dy:0,error:0,stationary:true};
+    if(!result.valid){
+     let change=0,changed=0,count=0;
+     for(let i=0;i<reference.length;i+=Math.max(1,
+       Math.floor(reference.length/900))){
+      const diff=Math.abs(reference[i]-frame.pixels[i]);
+      change+=diff;
+      changed+=Number(diff>35);
+      count++;
+     }
+     const difference=change/Math.max(1,count);
+     const changedFraction=changed/Math.max(1,count);
+     result={...result,sceneChanged:difference>34&&
+      changedFraction>.46,difference,changedFraction};
+    }
     last={...result,dx:result.dx*sourceW/referenceW,
      dy:result.dy*sourceH/referenceH};
     return last;
