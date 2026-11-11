@@ -112,7 +112,7 @@ for p in sorted(MODELS.glob("stroke-prefix-domain-v*-metrics.json")):
 DOCS.joinpath("completion-vertical-bars.svg").write_text(chart(
     "Completer version history",
     "Held-out writer · free-running trajectory position error (lower is better)",
-    sorted(scores, key=lambda e: (int(re.search(r"V(\\d+)",e[0]).group(1)), 0 if e[0].startswith("Sequence") else 1 if e[0].startswith("Prefix") else 2 if e[0].startswith("PenLift") else 3 if e[0].startswith("Domain") else 4)),.5,"error",
+    sorted(scores, key=lambda e: (int(re.search(r"V(\d+)",e[0]).group(1)), 0 if e[0].startswith("Sequence") else 1 if e[0].startswith("Prefix") else 2 if e[0].startswith("PenLift") else 3 if e[0].startswith("Domain") else 4)),.5,"error",
     "Only comparable trajectory errors have bars; rejected models stay gray; V7 requires independent and browser validation."
 ),encoding="utf-8")
 print("Updated both model-history SVGs from available measured reports.")
