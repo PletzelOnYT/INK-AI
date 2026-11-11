@@ -22,6 +22,8 @@ To rebuild the standalone HTML from source, use `npm install --no-audit --no-fun
 
 **Performance:** the camera video runs at its native frame rate. Text recognition works asynchronously in a Web Worker and processes the newest frame **after** each recognition is finished, rather than queuing stale frames. The OCR inference rate will be slower than the camera's display frame rate, especially on older hardware. This is a substantial engine upgrade for printed labels, documents, and brand names, not a verified Apple Live Text-equivalent result. Handwritten and highly distorted text may still be unreliable. Text below the video represents current visible words, not an accumulating history.
 
+**False-positive filtering:** OCR guesses are checked against the actual pixels inside their word boxes. Flat walls, smooth skin, and isolated furniture edges do not contain the repeated sharp stroke edges expected from readable print, so those guesses are suppressed. Uncertain word readings must also agree across consecutive frames at the same screen position. This is a visual check, not a face or person detector; it does not classify or store the people in the camera. It is validated against generated plain-wall, smooth-shoulder, shelf-edge and genuine printed-label fixtures, not yet a measured real-webcam false-positive rate.
+
 ## Features
 
 - **Live recognition** — identifies handwritten letters, numbers, punctuation, and common math symbols.
