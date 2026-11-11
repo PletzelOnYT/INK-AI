@@ -1,6 +1,6 @@
 # Real Chrome offline OCR acceptance
 
-**PASS:** local standalone HTML preserved genuine print on colored and angled labels while suppressing smooth-wall and shoulder false positives.
+**NOT PASSED:** build or browser OCR needs repair. Do not claim production accuracy.
 
 Test fixture: printed NY THREADS and Torrey Pines High School, generated in Chrome.
 No webcam image, cloud OCR, or external recognition request was used.
@@ -16,19 +16,8 @@ Bundling pretrained English OCR: 5199098 bytes
 
   dist/ink-offline-ocr.js  16.8mb ⚠️
 
-⚡ Done in 150ms
-Built completely offline OCR engine: 17659113 bytes
+⚡ Done in 120ms
+Built completely offline OCR engine: 17659193 bytes
 Bundled GRU: models/ink-stroke-prefix-domain-v2.json
-Built independent offline INK AI: /home/runner/work/INK-AI/INK-AI/dist/ink-ai-standalone.html 19379657 bytes
-PASS: text edges on both polarities; smooth shoulders, walls, lone seams and lone letters rejected
-PASS: confidently hallucinated wall/shoulder words rejected; genuine print preserved
-OFFLINE OCR RESULT: {'elapsedMs': 159.5, 'engine': 'bundled-tesseract-wasm', 'lines': 2, 'text': 'NY THREADS\nTorrey Pines High School', 'words': 6}
-PASS: GitHub index.html reads real printed text while completely offline
-SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 125, 'name': 'white-on-black', 'text': 'NY THREADS', 'words': 2}
-SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 91, 'name': 'dark-on-white-angle-12', 'text': 'NY THREADS', 'words': 2}
-SCENE {'evidence': {'accepted': 2, 'rejected': 0}, 'ms': 49, 'name': 'blue-on-yellow', 'text': 'NY THREADS', 'words': 2}
-SCENE {'ms': 164, 'name': 'empty-cabinet-geometry', 'text': '', 'words': 0}
-SCENE {'evidence': {'accepted': 0, 'rejected': 0}, 'ms': 96, 'name': 'smooth-shoulder', 'text': '', 'words': 0}
-SCENE {'evidence': {'accepted': 0, 'rejected': 0}, 'ms': 88, 'name': 'smooth-wall', 'text': '', 'words': 0}
-PASS: offline OCR preserves colored/angled text and rejects background, wall and shoulder
+Built independent offline INK AI: /home/runner/work/INK-AI/INK-AI/dist/ink-ai-standalone.html 19379737 bytes
 ~~~
