@@ -690,11 +690,11 @@ async function start(){
   }
   if(offlineClient){
    window.__inkCameraEngine="offline-tesseract-wasm";
-   button.title="Bundled offline WebAssembly OCR is active";
+   button.title="Offline OCR active — press C to freeze webcam";
    show("Offline OCR ready — point the camera at text.");
   }else{
    window.__inkCameraEngine="ink-print-cnn-rotated";
-   button.title="Experimental INK OCR is active (bundled OCR unavailable)";
+   button.title="Experimental OCR active — press C to freeze webcam";
    show("Point the camera at clear text.");
    loadNativeLineOCR();
   }
