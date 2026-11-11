@@ -13,6 +13,7 @@ on:
       - "tests/camera-ocr-colors-angles-browser.py"
       - "tests/camera-document-layout.mjs"
       - "tests/camera-mode-controls-browser.py"
+      - "tests/camera-sideways-browser.py"
       - "tests/camera-freeze-unit.mjs"
       - "tests/camera-text-evidence.mjs"
       - "tests/camera-false-positive-injection.mjs"
@@ -47,6 +48,7 @@ jobs:
           python3 tests/camera-bundled-ocr-browser.py 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
           python3 tests/camera-ocr-colors-angles-browser.py 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
           python3 tests/camera-mode-controls-browser.py 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
+          python3 tests/camera-sideways-browser.py 2>&1 | tee -a /tmp/ink-ocr-test-browser.log
       - name: Record actual tested result instead of inventing metrics
         if: always()
         run: |
@@ -61,7 +63,8 @@ jobs:
                grep -q "PASS: confidently hallucinated" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
                grep -q "PASS: GitHub index.html" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
                grep -q "PASS: offline OCR preserves" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
-               grep -q "PASS: C camera freeze/resume" /tmp/ink-ocr-test-browser.log 2>/dev/null; then
+               grep -q "PASS: C camera freeze/resume" /tmp/ink-ocr-test-browser.log 2>/dev/null &&
+               grep -q "PASS: offline OCR reads upright" /tmp/ink-ocr-test-browser.log 2>/dev/null; then
               echo "**PASS:** local standalone HTML preserved genuine print on colored and angled labels while suppressing smooth-wall and shoulder false positives."
             else
               echo "**NOT PASSED:** build or browser OCR needs repair. Do not claim production accuracy."
