@@ -497,9 +497,30 @@ async function create(){
 
    const engine={
     kind:"bundled-tesseract-wasm",
-    async recognize(image,width,height){
+    async recognize(image,width,height,options={}){
      const now=performance.now();
      scanNumber++;
+     // Native-focus scans already use the original webcam pixels. A single
+     // quick neural OCR pass avoids running a second focus/angle pass.
+     if(options.fastRegion===true){
+      const mode=options.documentMode?
+       tesseract.PSM.AUTO:tesseract.PSM.SPARSE_TEXT;
+      if(mode!==tesseract.PSM.SPARSE_TEXT)
+       await worker.setParameters({tessedit_pageseg_mode:String(mode)});
+      let scan;
+      try{scan=await worker.recognize(image,{}, {blocks:true})}
+      finally{
+       if(mode!==tesseract.PSM.SPARSE_TEXT)
+        await worker.setParameters({
+         tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT)});
+      }
+      const lines=extractWords(scan.data);
+      return {engine:engine.kind,width,height,angleSource:"native-focus",
+       regionFast:true,attempts:1,
+       elapsedMs:Math.round(performance.now()-now),
+       lines,words:lines.flatMap(line=>line.words),
+       text:lines.map(line=>line.text).join("\n")};
+     }
      let candidate=null;
      let attempts=0;
      let hint=null;
@@ -525,10 +546,10 @@ async function create(){
       previousAngle=null;
      }
      let {data}=await worker.recognize(image,{}, {blocks:true});
-     const clockLines=await readAnalogDial(image,width,height);
+     const clockLines=options.skipOptionalDetail?[]:await readAnalogDial(image,width,height);
      let lines=extractWords(data);
      let focusLines=[];
-     try{focusLines=await focusRead(image,width,height)}
+     try{if(!options.skipOptionalDetail)focusLines=await focusRead(image,width,height)}
      catch(error){window.__inkDocumentDetailError=String(error?.message||error)}
      let strongest=candidateStrength(lines);
      candidate={lines,rotation:0,source:"upright",value:strongest.value};
@@ -567,7 +588,7 @@ async function create(){
      // Alternate magnified and locally color-normalized center crops
      // while normal video recognition remains the fast path. This is useful
      // when a small clock/sign occupies only a fraction of a distant scene.
-     if(!clearRead(candidate.lines)&&scanNumber%2===0){
+     if(!options.skipOptionalDetail&&!clearRead(candidate.lines)&&scanNumber%2===0){
       try{
        const modes=["center-detail","rgb","yaw+","yaw-","pitch+","pitch-"];
        const detail=await detailRead(image,width,height,
@@ -576,7 +597,7 @@ async function create(){
       }catch(_){/* Preserve ordinary/rotation OCR on unsupported canvases */}
      }
      // First let Tesseract try its own deskew on failed ordinary reads.
-     if(!clearRead(candidate.lines)&&scanNumber%3===0){
+     if(!options.skipOptionalDetail&&!clearRead(candidate.lines)&&scanNumber%3===0){
       const auto=await worker.recognize(image,{rotateAuto:true},{blocks:true});
       const rotatedLines=extractWords(auto.data);
       if(clearRead(rotatedLines)){
@@ -595,11 +616,11 @@ async function create(){
      const goodAngle=(steep||skewHint)?Math.round(-hint.angle/5)*5:null;
      // Rotate stronger perspectives through both signs. Blank rooms only
      // receive a single trial per frame to preserve webcam responsiveness.
-     const options=suspicious&&!steep?[180]:
+     const rotationOptions=suspicious&&!steep?[180]:
        goodAngle!==null?queue.slice(0,3):
        [queue[attemptCursor%queue.length]];
-     attemptCursor=(attemptCursor+options.length)%queue.length;
-     for(const angle of options){
+     attemptCursor=(attemptCursor+rotationOptions.length)%queue.length;
+     for(const angle of (options.skipOptionalDetail?[]:rotationOptions)){
       if(angle===0)continue;
       if(candidate.rotation&&Math.abs(angle-candidate.rotation)<5)continue;
       const result=await query(angle);
