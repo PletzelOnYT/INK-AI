@@ -18,6 +18,30 @@ const sceneCanvas=document.createElement("canvas");
 sceneCanvas.width=24;sceneCanvas.height=14;
 const sceneContext=sceneCanvas.getContext("2d",{willReadFrequently:true});
 const cache=new Map();
+let lineRuntime=null,lineInit=null;
+window.__inkCameraLineReady=false;
+async function loadNativeLineOCR(){
+ if(lineInit||!window.InkLineRuntime)return lineInit;
+ lineInit=(async()=>{
+  try{
+   let model=null;
+   const embedded=document.getElementById("inkLineModel");
+   if(embedded)model=JSON.parse(embedded.textContent);
+   else if(location.protocol!=="file:"){
+    const response=await fetch("models/ink-native-line-ctc-v1.json");
+    if(response.ok)model=await response.json();
+   }
+   if(model?.format!=="ink-line-ctc-v1"||!model.training?.eligible||
+      model.training.heldout_font_count<2)return;
+   const instance=await window.InkLineRuntime.create(model);
+   if(!active){instance.terminate();return}
+   lineRuntime=instance;window.__inkCameraLineReady=true;
+  }catch(error){
+   window.__inkCameraLineError=String(error?.message||error);
+  }
+ })();
+ return lineInit;
+}
 const dictionaryByLength=new Map();
 const vocabulary=document.getElementById("inkEnglishWords")?.textContent||"";
 for(const word of vocabulary.toLowerCase().split(/\s+/)){
@@ -49,6 +73,8 @@ function stop(){
  stream=null;video.pause();video.srcObject=null;
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
  tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
+ if(lineRuntime){lineRuntime.terminate();lineRuntime=null}
+ lineInit=null;window.__inkCameraLineReady=false;
  captureWidth=800;usedDocumentUpscale=false;
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
  window.__inkCameraWords=[];
@@ -203,6 +229,65 @@ function textnessInput(region){
   values[y*64+x]=(data[k]*.299+data[k+1]*.587+data[k+2]*.114)/255;
  }
  return values;
+}
+// Convert a complete detected text line, including spaces and touching
+// letters, into an image for the native CTC sequence model. The input is
+// 32x256 white ink on black, normalized exactly as in synthetic training.
+function lineImage(option){
+ const {line,frame}=option,letters=line.letters;
+ const minX=Math.min(...letters.map(x=>x.x0));
+ const maxX=Math.max(...letters.map(x=>x.x1));
+ const minY=Math.min(...letters.map(x=>x.y0));
+ const maxY=Math.max(...letters.map(x=>x.y1));
+ const height=maxY-minY+1,width=maxX-minX+1;
+ const padX=Math.max(2,Math.round(height*.24));
+ const padY=Math.max(2,Math.round(height*.29));
+ const inputW=width+padX*2,inputH=height+padY*2;
+ const scale=Math.min(247/inputW,26/inputH);
+ const targetW=Math.max(1,Math.round(inputW*scale));
+ const targetH=Math.max(1,Math.round(inputH*scale));
+ const offX=Math.floor((256-targetW)/2),offY=Math.floor((32-targetH)/2);
+ const values=new Array(8192).fill(0);
+ const mask=letters[0].mask;
+ for(let y=0;y<targetH;y++)for(let x=0;x<targetW;x++){
+  const u=(x+.5)*inputW/targetW-padX;
+  const v=(y+.5)*inputH/targetH-padY;
+  const px=Math.round(minX+u),py=Math.round(minY+v);
+  if(px<0||py<0||px>=frame.w||py>=frame.h)continue;
+  values[(offY+y)*256+offX+x]=mask[py*frame.w+px]?1:0;
+ }
+ return values;
+}
+async function readNativeLines(options,verified,id){
+ const subset=options.filter(option=>{
+  if(!window.__inkTextnessReady)return true;
+  return verified.some(region=>{
+   const a=option.region,b=region.box;
+   const area=Math.max(1,(a.x1-a.x0)*(a.y1-a.y0));
+   const overlap=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0))*
+     Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
+   return overlap/area>=.24;
+  });
+ }).slice(0,5);
+ if(!subset.length)return [];
+ const read=await lineRuntime.read(subset.map(lineImage));
+ if(!active||id!==epoch)return [];
+ const words=[];
+ for(let i=0;i<read.length;i++){
+  const value=read[i],text=String(value.text||"").trim().replace(/\s+/g," ");
+  if(!/^[A-Za-z0-9][A-Za-z0-9 .,:/'-]{1,45}$/.test(text)||
+     !/[A-Za-z]{2}|[0-9]{2}/.test(text)||
+     !Number.isFinite(value.confidence)||value.confidence<.64)continue;
+  const {line,frame}=subset[i],box={x0:Math.min(...line.letters.map(x=>x.x0)),
+   y0:Math.min(...line.letters.map(x=>x.y0)),
+   x1:Math.max(...line.letters.map(x=>x.x1)),
+   y1:Math.max(...line.letters.map(x=>x.y1))};
+  const projected=project(box,frame);
+  words.push({text,confidence:value.confidence,angle:frame.view.angle,
+   polygon:projected.points,box:projected.box});
+ }
+ window.__inkCameraStats.lineModelCandidates=subset.length;
+ return words;
 }
 function keyFor(image){
  // The old 1-bit every-other-pixel cache key conflated distinct letters.
@@ -426,6 +511,21 @@ async function scan(id){
   const source=window.__inkTextnessReady?
    scanOrder.filter(option=>verified.some(region=>region.frame===option.frame)):
    scanOrder;
+  if(window.__inkCameraLineReady&&lineRuntime){
+   const sequenceWords=await readNativeLines(scanOrder,verified,id);
+   if(!active||id!==epoch)return;
+   const state=tracker.update(sequenceWords,Date.now());
+   window.__inkCameraWords=state.words;
+   window.__inkCameraText=state.text;
+   if(state.text)show(state.text,false);
+   else show(geometry.length?
+     "Text located — confirming complete lines…":
+     "Point your camera at clearly printed text.");
+   paint(verified,{w:base.width,h:base.height});
+   stats.scans++;stats.lastScanMs=Math.round(performance.now()-t0);
+   stats.lineModelReady=true;
+   return;
+  }
   const selected=[];let total=0;
   for(const option of source){
    const count=option.line.letters.length;
@@ -473,7 +573,9 @@ async function start(){
    video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
   if(!active||id!==epoch){incoming.getTracks().forEach(t=>t.stop());return}
   stream=incoming;video.srcObject=stream;await video.play();
-  show("Point the camera at clear text.");schedule(id,20);
+  show("Point the camera at clear text.");
+  loadNativeLineOCR();
+  schedule(id,20);
  }catch(error){
   if(!active||id!==epoch)return;
   const reason=error.name==="NotAllowedError"?"Camera permission denied.":
