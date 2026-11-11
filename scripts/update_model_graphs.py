@@ -53,109 +53,145 @@ def format_score(value, kind):
 
 def graph(title, subtitle, rows, first_name, second_name,
           first_max, second_max, first_kind, second_kind, notes, target):
-    """Compact milestone lines. Names and real scores only; detailed data in SVG tooltips."""
-    if sum(row["active"] for row in rows) != 1:
-        raise ValueError("Exactly one model per chart must be the deployed checkpoint")
-    # Keep the wide version histories readable in GitHub's narrower README.
-    width = 1000 if len(rows) <= 6 else 1260
-    height = 572
-    left, right = 95, width - 40
-    xs = [left + (right-left)*i/(len(rows)-1) for i in range(len(rows))]
-    blue, gray, ink, faint = "#2563eb", "#94a3b8", "#172033", "#e5e7eb"
+    """Small, legible SVG milestone charts for GitHub's README width.
+
+    Accurate measured values are preserved; extreme trajectory outliers use
+    an explicit broken axis rather than flattening all normal candidates.
+    """
+    if sum(bool(row["active"]) for row in rows) != 1:
+        raise ValueError("One and only one deployed model must be marked blue")
+    width, height = 900, 488
+    left, right = 82, 860
+    xcoords = [left + (right-left)*i/(len(rows)-1) for i in range(len(rows))]
+    blue, gray, ink, grid = "#2563eb", "#94a3b8", "#142137", "#e5e7eb"
     out = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-        f'viewBox="0 0 {width} {height}" role="img" aria-label="{escape(title)}">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
+        f'height="{height}" viewBox="0 0 {width} {height}" '
+        f'role="img" aria-label="{escape(title)}">',
         rect(0, 0, width, height, "#ffffff"),
         '<g font-family="Arial,Helvetica,sans-serif">',
-        text(30, 43, title.replace(" — every model version", ""), 30, ink, "700"),
-        '<circle cx="36" cy="66" r="6" fill="#2563eb"/>',
-        text(49, 71, "In use", 14, blue, "600"),
+        '<circle cx="26" cy="25" r="6" fill="#2563eb"/>',
+        text(41, 31, "In use", 13, blue, "700"),
     ]
-    panel_top = (96, 315)
-    for panel, (key, label, scale, kind) in enumerate((
-        ("first", first_name, first_max, first_kind),
-        ("second", second_name, second_max, second_kind))):
-        top = panel_top[panel]
-        ytop, ybottom = top + 42, top + 155
-        out.append(text(30, top+10, label, 19, ink, "600"))
-        valid = [row[key] for row in rows if row[key] is not None]
-        # Each panel has an honest visible scale, tightly framing the scores.
-        # We do not invent missing values or clip poor-performing trials.
-        if valid:
-            lo, hi = min(valid), max(valid)
-            if kind == "percent":
-                lo = max(0, math.floor((lo - 1.5)/5)*5)
-                hi = min(100, math.ceil((hi + 1.5)/5)*5)
-            else:
-                margin = max(.02, (hi-lo)*.16)
-                lo = max(0, math.floor((lo-margin)*100)/100)
-                hi = math.ceil((hi+margin)*100)/100
-            if hi <= lo:
-                hi = lo + (10 if kind == "percent" else .1)
+    short = {
+        "Sequence": "Seq", "Prefix": "Pre", "Domain": "Dom",
+        "PenLift": "Pen", "Natural": "Nat", "Lift": "Lift",
+    }
+    for panel, (field, label, high, kind, header, ytop, ybottom) in enumerate((
+        ("first", first_name, first_max, first_kind, 70, 110, 218),
+        ("second", second_name, second_max, second_kind, 282, 321, 427),
+    )):
+        out.append(text(24, header, label, 19, ink, "700"))
+        scored = [r[field] for r in rows if r[field] is not None]
+        broken = (kind == "error" and len(scored) > 3 and
+                  max(scored) > 1.75 * sorted(scored)[len(scored)//2])
+        if broken:
+            ordinary = [v for v in scored if v < 0.5]
+            if not ordinary:
+                broken = False
+        if broken:
+            # V5's 0.967+ outlier is placed in a separately scaled TOP band.
+            # The zigzag on the axis makes the scale discontinuity explicit.
+            lo = max(0, math.floor((min(ordinary)-.012)*100)/100)
+            middle = math.ceil((max(ordinary)+.02)*100)/100
+            far = math.ceil((max(scored)+.04)*100)/100
+            lower_top, upper_bottom = ytop+38, ytop+25
+            def position(value):
+                if value <= middle:
+                    return ybottom-(value-lo)/(middle-lo)*(ybottom-lower_top)
+                if value > .5:
+                    return upper_bottom-(value-.5)/(far-.5)*(upper_bottom-ytop)
+                raise ValueError("Unexpected score falls into deliberate axis break")
+            ticks = [(lo,ybottom),(round((lo+middle)/2,4),
+                     position((lo+middle)/2)),(middle,lower_top),
+                     (far,ytop)]
+            # Two short diagonal cuts alongside the y-axis indicate a break.
+            x=left-11
+            out.append(f'<path d="M {x-5} {lower_top-6} l 5 -7 l 5 7 '
+                       f'm 0 -4 l 5 -7" fill="none" stroke="#64748b" '
+                       f'stroke-width="1.8"/>')
         else:
-            lo, hi = 0, scale
-        for t in range(3):
-            v = lo+(hi-lo)*t/2
-            yy = ybottom - (v-lo)/(hi-lo)*(ybottom-ytop)
-            out.append(f'<line x1="{left-9:.1f}" y1="{yy:.1f}" '
-                       f'x2="{right+9:.1f}" y2="{yy:.1f}" '
-                       f'stroke="{faint}" stroke-width="1"/>')
-            out.append(text(left-15, yy+5, format_score(v,kind),
-                            12, "#667085", anchor="end"))
-        # A dash between consecutive measured versions is a timeline, not a
-        # claim of monotonic progress. Missing measurements break the line.
-        positions = []
-        for i, row in enumerate(rows):
-            value = row[key]
-            positions.append(
-                None if value is None
-                else (xs[i],ybottom-(value-lo)/(hi-lo)*(ybottom-ytop)))
-        for p, q in zip(positions, positions[1:]):
-            if p and q:
-                out.append(f'<path d="M {p[0]:.1f} {p[1]:.1f} L {q[0]:.1f} {q[1]:.1f}" '
-                           f'fill="none" stroke="#cbd5e1" stroke-width="2.5" '
-                           f'stroke-dasharray="5 4"/>')
-        for i, row in enumerate(rows):
-            x, value = xs[i], row[key]
-            active = row["active"]
+            if scored:
+                lo,far=min(scored),max(scored)
+                if kind=="percent":
+                    lo=max(0,math.floor((lo-1.5)/5)*5)
+                    far=min(100,math.ceil((far+1.5)/5)*5)
+                else:
+                    margin=max(.012,(far-lo)*.12)
+                    lo=max(0,math.floor((lo-margin)*100)/100)
+                    far=math.ceil((far+margin)*100)/100
+                if far<=lo:
+                    far=lo+(10 if kind=="percent" else .1)
+            else:
+                lo,far=0,high
+            def position(value):
+                return ybottom-(value-lo)/(far-lo)*(ybottom-ytop)
+            ticks=[(lo,ybottom),((lo+far)/2,position((lo+far)/2)),(far,ytop)]
+        for value,y in ticks:
+            out.append(f'<line x1="{left-5:.1f}" y1="{y:.1f}" '
+                       f'x2="{right+6:.1f}" y2="{y:.1f}" '
+                       f'stroke="{grid}" stroke-width="1"/>')
+            out.append(text(left-11, y+4, format_score(value,kind),
+                            11, "#667085", anchor="end"))
+        coordinates=[]
+        for i,row in enumerate(rows):
+            value=row[field]
+            coordinates.append(None if value is None else (xcoords[i],position(value)))
+        for i in range(len(coordinates)-1):
+            p,q=coordinates[i],coordinates[i+1]
+            if not p or not q:
+                continue
+            # Do not draw a falsely continuous slope across a broken axis.
+            if broken and ((rows[i][field] > .5) != (rows[i+1][field] > .5)):
+                continue
+            out.append(f'<path d="M {p[0]:.1f} {p[1]:.1f} '
+                       f'L {q[0]:.1f} {q[1]:.1f}" '
+                       f'fill="none" stroke="#cbd5e1" '
+                       f'stroke-width="2.5" stroke-dasharray="5 4"/>')
+        for i,row in enumerate(rows):
+            x=xcoords[i]
+            value=row[field]
+            active=row["active"]
             out.append(f'<g data-model="{escape(row["name"])}" '
                        f'data-active="{str(active).lower()}" '
-                       f'data-weight="{escape(row["weights"])}" data-metric="{key}">')
-            details = (f'{row["name"]} | {row["status"]} | {label}: '
-                       f'{format_score(value,kind) if value is not None else row.get("legacy") or "N/A"}')
-            out.append(f'<title>{escape(details)}</title>')
+                       f'data-weight="{escape(row["weights"])}" '
+                       f'data-metric="{field}">')
+            legacy = row.get("legacy")
+            desc = format_score(value,kind) if value is not None else (legacy or "not measured")
+            out.append(f'<title>{escape(row["name"])}: {escape(desc)}'
+                       f' · {escape(row["status"])}</title>')
             if value is None:
-                # Legacy sequence models have an NLL rather than a trajectory
-                # measurement; display the actual NLL without faking a dot.
-                legacy = row.get("legacy") if key == "first" else None
-                if legacy:
-                    out.append(text(x, ybottom-12, legacy, 12, "#667085",
-                                    anchor="middle"))
+                if legacy and panel==0:
+                    # Legacy sequence NLL is visible on hover, not on an
+                    # inapplicable trajectory graph.
+                    out.append(text(x,ybottom-13,"—",17,gray,anchor="middle"))
                 else:
-                    out.append(text(x, ybottom-12, "—", 18, gray, anchor="middle"))
+                    out.append(text(x,ybottom-13,"—",17,gray,anchor="middle"))
             else:
-                y = positions[i][1]
+                y=position(value)
+                if not ytop-.01<=y<=ybottom+.01:
+                    raise ValueError(f"Out-of-bounds score for {row['name']}: {value}")
                 if active:
-                    out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="13" '
+                    out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="12" '
                                'fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>')
                 out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" '
-                           f'r="{8 if active else 6.5}" '
+                           f'r="{7.5 if active else 6}" '
                            f'fill="{blue if active else "#ffffff"}" '
-                           f'stroke="{blue if active else gray}" stroke-width="2.8"/>')
-                score_y = y-18
-                if score_y < ytop+5:
-                    score_y = y+30
-                out.append(text(x, score_y, format_score(value,kind),
-                                15 if active else 13, blue if active else ink,
-                                "700" if active else "500", "middle"))
-            if panel == 1:
-                label_name = row["name"].replace("Sequence ","Seq ").replace(
-                    "Prefix ","Pre ").replace("Domain ","Dom ").replace(
-                    "PenLift ","Pen ").replace("Natural ","Nat ").replace("Lift ","Lift ")
-                out.append(text(x, ybottom+29, label_name,
-                                15 if active else 13,
+                           f'stroke="{blue if active else gray}" stroke-width="2.5"/>')
+                ty=y-15
+                if ty < ytop-2:
+                    ty=y+25
+                out.append(text(x,ty,format_score(value,kind),
+                                13 if active else 11.5,
                                 blue if active else ink,
-                                "700" if active else "500", "middle"))
+                                "700" if active else "500","middle"))
+            name=row["name"]
+            chunks=name.split()
+            short_name=(short.get(chunks[0],chunks[0])+chunks[1]
+                        if len(chunks)==2 and len(rows)>7 else name)
+            out.append(text(x,ybottom+26,short_name,13,
+                            blue if active else ink,
+                            "700" if active else "500","middle"))
             out.append("</g>")
     out.append("</g></svg>")
     DOCS.joinpath(target).write_text("".join(out),encoding="utf-8")
