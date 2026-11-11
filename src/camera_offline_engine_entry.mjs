@@ -4,7 +4,7 @@
 // INK AI's handwriting recognizer and completer remain first-party systems.
 import tesseract from "tesseract.js";
 import {estimateTextAngle,rotatedSize,unrotateLines,rotationQueue} from "./camera_orientation_core.mjs";
-import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead,perspectiveQuad,rectifyPerspectiveRGBA,findDarkDisplayRGBA,findAnalogClockRGBA,findDialGlyphRegionsRGBA} from "./camera_detail_core.mjs";
+import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,isCompactNumericRead,perspectiveQuad,rectifyPerspectiveRGBA,findDarkDisplayRGBA,findAnalogClockRGBA,findDialGlyphRegionsRGBA,documentFocusCrop} from "./camera_detail_core.mjs";
 import englishList from "../data/english-words.txt";
 const vocabulary=new Set(englishList.trim().split(/\s+/));
 import {set} from "idb-keyval";
@@ -263,8 +263,8 @@ async function create(){
    // Recovery for small distant signs and low-contrast colored/pencil ink.
    // Crops only the CENTER of the camera view and maps all OCR geometry back.
    // It never creates artificial letter shapes or sends frames over the network.
-   async function detailRead(image,width,height,mode="center-detail"){
-    let crop=centerDetailCrop(width,height);
+   async function detailRead(image,width,height,mode="center-detail",zone=null){
+    let crop=zone?documentFocusCrop(width,height,zone):centerDetailCrop(width,height);
     let darkDisplay=false;
     if(mode==="center-detail"){
      displayContext.drawImage(image,0,0,160,90);
@@ -293,7 +293,7 @@ async function create(){
      detailContext.globalCompositeOperation="source-over";
     }
     let quad=null;
-    if(mode==="rgb"){
+    if(mode==="rgb"||mode==="document-contrast"){
      const original=detailContext.getImageData(0,0,output.width,output.height);
      const processed=enhanceInkRGBA(original.data,output.width,output.height);
      if(processed.hasDetail){
@@ -326,6 +326,42 @@ async function create(){
       enhancement:darkDisplay?"clock-display":mode};
    }
 
+   // A readable title is not evidence that the small fields elsewhere on
+   // the document were seen. Scan 65%-width overlapping regions in turn.
+   const focusZones=["lower-right","lower-left","upper-right","upper-left"];
+   let focusIndex=0;
+   async function focusRead(image,width,height){
+    if(scanNumber%3!==2)return [];
+    const zone=focusZones[focusIndex%4];
+    const mode=Math.floor(focusIndex/4)%2?
+     "document-contrast":"document-focus";
+    focusIndex++;
+    return (await detailRead(image,width,height,mode,zone)).lines;
+   }
+   function mergeDetected(base,detail){
+    if(!detail?.length)return base;
+    const out=base.slice(),used=out.flatMap(l=>l.words||[]);
+    const overlap=(a,b)=>{
+     if(!a||!b)return 0;
+     const x=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0));
+     const y=Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
+     const small=Math.min(Math.max(1,(a.x1-a.x0)*(a.y1-a.y0)),
+       Math.max(1,(b.x1-b.x0)*(b.y1-b.y0)));
+     return x*y/small;
+    };
+    for(const line of detail){
+     const words=(line.words||[]).filter(w=>w.box&&Number(w.confidence)>=.35&&
+       !used.some(v=>overlap(v.box,w.box)>.6));
+     if(!words.length)continue;
+     used.push(...words);
+     out.push({...line,words,text:words.map(w=>w.text).join(" "),
+      box:{x0:Math.min(...words.map(w=>w.box.x0)),
+       y0:Math.min(...words.map(w=>w.box.y0)),
+       x1:Math.max(...words.map(w=>w.box.x1)),
+       y1:Math.max(...words.map(w=>w.box.y1))}});
+    }
+    return out;
+   }
    // Use independently recognized glyph crops around a detected analog dial.
    // Circle geometry locates ink; it never substitutes for neural OCR.
    const dialPreview=document.createElement("canvas");
@@ -443,6 +479,9 @@ async function create(){
      let {data}=await worker.recognize(image,{}, {blocks:true});
      const clockLines=await readAnalogDial(image,width,height);
      let lines=extractWords(data);
+     let focusLines=[];
+     try{focusLines=await focusRead(image,width,height)}
+     catch(error){window.__inkDocumentDetailError=String(error?.message||error)}
      let strongest=candidateStrength(lines);
      candidate={lines,rotation:0,source:"upright",value:strongest.value};
      // The image projection measures an angle without making assumptions
@@ -459,12 +498,12 @@ async function create(){
      if(clearRead(lines)&&!suspicious&&
         !(skewHint&&Math.abs(hint.angle)>=16)){
       previousAngle=null;previousStreak=0;attemptCursor=0;
+      const complete=mergeDetected(mergeDetected(lines,focusLines),clockLines);
       return {engine:engine.kind,width,height,deskewed:false,
        quarterTurn:0,rotationDegrees:0,attempts:0,angleSource:"upright",
        elapsedMs:Math.round(performance.now()-now),
-       lines:[...lines,...clockLines],
-       words:[...lines,...clockLines].flatMap(x=>x.words),
-       text:[...lines,...clockLines].map(x=>x.text).join("\n")};
+       lines:complete,words:complete.flatMap(x=>x.words),
+       text:complete.map(x=>x.text).join("\n")};
      }
      const consider=(next,source)=>{
       const strength=candidateStrength(next.lines);
@@ -519,7 +558,7 @@ async function create(){
       if(consider(result,"angle-projection")&&
          candidate.value>=10)break;
      }
-     lines=[...candidate.lines,...clockLines];
+     lines=mergeDetected(mergeDetected(candidate.lines,focusLines),clockLines);
      const selected=candidate.rotation||0;
      if(selected&&clearRead(lines)){
       const difference=skewHint?
