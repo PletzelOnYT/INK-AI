@@ -31,6 +31,8 @@ on:
       - "models/ink-stroke-prefix-domain-v2.json"
       - "models/ink-stroke-prefix-domain-v3.json"
       - "models/ink-stroke-prefix-domain-v4.json"
+      - "models/ink-stroke-prefix-domain-v6.json"
+      - "models/stroke-prefix-domain-v6-metrics.json"
       - "models/ink-stroke-lift-aware-v5.json"
       - "models/recurrent-lift-v5-metrics.json"
       - "models/ink-stroke-natural-v4.json"
