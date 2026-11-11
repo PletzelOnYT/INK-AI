@@ -9,6 +9,20 @@ export function centerDetailCrop(width,height,fraction=.58){
  return {x:Math.round((width-w)/2),y:Math.round((height-h)/2),
   width:w,height:h};
 }
+// Overlapping focus zones allow a camera to recover small form fields even
+// when a large headline elsewhere already produced a clear OCR result.
+// They are image crops, not guesses about the expected document content.
+export function documentFocusCrop(width,height,zone="lower-right"){
+ if(!Number.isFinite(width)||!Number.isFinite(height)||width<80||height<80)
+  throw Error("Invalid document scan dimensions");
+ const zones=new Set(["upper-left","upper-right","lower-left","lower-right"]);
+ if(!zones.has(zone))throw Error("Unknown document focus zone");
+ const w=Math.round(width*.65),h=Math.round(height*.65);
+ const x=zone.endsWith("right")?width-w:0;
+ const y=zone.startsWith("lower")?height-h:0;
+ return {x,y,width:w,height:h};
+}
+
 export function detailSize(width,height,maxWidth=1920){
  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)
   throw Error("Invalid camera dimensions");
