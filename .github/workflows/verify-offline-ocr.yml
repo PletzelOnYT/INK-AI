@@ -1,0 +1,65 @@
+name: Prove standalone camera OCR works without internet
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/camera_offline_bridge.js"
+      - "src/camera_offline_engine_entry.mjs"
+      - "scripts/build_offline_ocr.mjs"
+      - "scripts/build_standalone.py"
+      - "tests/camera-bundled-ocr-browser.py"
+      - ".github/workflows/verify-offline-ocr.yml"
+      - "index.html"
+  workflow_dispatch:
+concurrency:
+  group: ink-ocr-real-browser-check
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  browser-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build exactly the downloadable standalone HTML
+        run: |
+          npm install --no-audit --no-fund --ignore-scripts 2>&1 | tee /tmp/ink-ocr-test-build.log
+          npm run build:ocr 2>&1 | tee -a /tmp/ink-ocr-test-build.log
+          python3 scripts/build_standalone.py 2>&1 | tee -a /tmp/ink-ocr-test-build.log
+          cp dist/ink-ai-standalone.html index.html
+      - name: Read real printed labels in Chrome with network disabled
+        run: |
+          python3 -m pip install --quiet selenium
+          python3 tests/camera-bundled-ocr-browser.py 2>&1 | tee /tmp/ink-ocr-test-browser.log
+      - name: Record actual tested result instead of inventing metrics
+        if: always()
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+          mkdir -p docs
+          {
+            echo "# Real Chrome offline OCR acceptance"
+            echo
+            if grep -q "PASS: GitHub index.html" /tmp/ink-ocr-test-browser.log 2>/dev/null; then
+              echo "**PASS:** local standalone HTML read a generated label while completely offline."
+            else
+              echo "**NOT PASSED:** build or browser OCR needs repair. Do not claim production accuracy."
+            fi
+            echo
+            echo "Test fixture: printed NY THREADS and Torrey Pines High School, generated in Chrome."
+            echo "No webcam image, cloud OCR, or external recognition request was used."
+            echo
+            echo '~~~text'
+            tail -n 60 /tmp/ink-ocr-test-build.log 2>/dev/null || true
+            tail -n 60 /tmp/ink-ocr-test-browser.log 2>/dev/null || true
+            echo '~~~'
+          } > docs/offline-ocr-acceptance.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/offline-ocr-acceptance.md
+          if ! git diff --cached --quiet; then
+            git commit -m "Record actual offline Chrome OCR acceptance result"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
