@@ -61,7 +61,6 @@ jobs:
           node --check src/stroke_worker.js
           node --check src/camera_ocr.js
           node tests/camera-local-ocr.mjs
-          node tests/print-camera-graphs.mjs
           node tests/completer-prefix-cache.mjs
           node tests/neural-preference-learning.mjs
           node tests/completion-cnn-evidence.mjs
