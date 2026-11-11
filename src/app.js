@@ -1141,6 +1141,17 @@ function request(cmd,payload){
   setTimeout(()=>{const r=requests.get(id);if(r){requests.delete(id);reject(Error("Recognition timed out"))}},30000);
  });
 }
+// Public, narrow interface for the camera's own OCR pipeline.
+// Reuses INK AI's locally trained CNN; no external camera OCR provider.
+window.__inkCameraRecognize=async images=>{
+ if(!loaded||!worker)throw Error("INK AI character model isn't ready");
+ const output=[];
+ for(let i=0;i<images.length;i+=16){
+  const result=await request("read",{images:images.slice(i,i+16)});
+  output.push(...result.predictions);
+ }
+ return output;
+};
 // Geometric recognition for unambiguous single-stroke mathematical marks.
 // A complete hand-drawn caret must not be cut into a long fake "word", and
 // full-character CNNs are not trained to interpret arbitrary partial strokes.
