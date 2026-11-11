@@ -40,6 +40,7 @@ on:
       - "models/ink-stroke-prefix-domain-v7.json"
       - "models/stroke-prefix-domain-v7-metrics.json"
       - "models/ink-stroke-lift-aware-v5.json"
+      - "models/ink-stroke-lift-aware-v5-experimental.json"
       - "models/recurrent-lift-v5-metrics.json"
       - "models/ink-stroke-natural-v4.json"
       - "models/stroke-natural-v4-metrics.json"
