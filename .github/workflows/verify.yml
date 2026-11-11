@@ -82,7 +82,7 @@ jobs:
       - name: Switch to new generated offline HTML for remaining regressions
         run: cp dist/ink-ai-standalone.html index.html
       - name: Verify Python training code compiles
-        run: python3 -m py_compile src/train.py src/train_stroke_sequence.py src/train_recognition_v3.py src/train_prefix_completion.py
+        run: python3 -m py_compile src/train.py src/train_stroke_sequence.py src/train_recognition_v3.py src/train_prefix_completion.py src/train_camera_line_ctc.py
       - name: Extract and syntax-check the embedded JavaScript and worker
         run: |
           python3 - <<'PY'
