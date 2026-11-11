@@ -87,7 +87,7 @@ The source app loads local model files and runs inference entirely in browser wo
 ![Completer results](./docs/completion-vertical-bars.svg)
 
 
-**Graph update rule:** Keep the original Recognizer and Completer graphs only. Update their measured values when those existing models change, and do not add separate graphs for new systems.
+**Graph update rule:** Keep the two original graphs, but show **every recorded version** of the corresponding model, including unsuccessful experiments. Recognizer bars are UJI unseen-writer accuracy (higher is better); Completer bars are independently evaluated free-running trajectory error (lower is better). Different metrics such as pen-lift F1 are **not** presented as trajectory error. Missing results appear as *no score*, never invented percentages. Gray experimental/rejected bars do not mean a checkpoint was released. The charts are regenerated from checked-in benchmark JSON by `python3 scripts/update_model_graphs.py` whenever models are packaged or V7 training publishes a result.
 
 
 ### Training data and honest evaluation
