@@ -84,6 +84,7 @@ jobs:
           node tests/camera-local-ocr.mjs
           node tests/completer-input-regression.mjs
           node tests/completer-fast-quality.mjs
+          node tests/completer-no-straight-rays.mjs
           node tests/completer-v6-runtime.mjs
           node tests/completer-prefix-cache.mjs
           node tests/neural-preference-learning.mjs
@@ -116,6 +117,7 @@ jobs:
           node tests/worker-smoke.mjs
           node tests/completer-input-regression.mjs
           node tests/completer-fast-quality.mjs
+          node tests/completer-no-straight-rays.mjs
           node tests/completer-v6-runtime.mjs
           node tests/completer-prefix-cache.mjs
           node tests/recognition-v2-metrics.mjs
