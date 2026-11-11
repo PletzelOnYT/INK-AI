@@ -17,9 +17,9 @@ export function detailSize(width,height,maxWidth=1920){
 }
 export function remapDetailLines(lines,crop,outputWidth,outputHeight,quad=null){
  const sx=crop.width/outputWidth,sy=crop.height/outputHeight;
- const project=quad?quadMapper(quad):null;
+ const quadPoint=quad?quadMapper(quad):null;
  const transform=({x,y})=>{
-  const p=project?project(x/outputWidth,y/outputHeight):{x,y};
+  const p=quadPoint?quadPoint(x/outputWidth,y/outputHeight):{x,y};
   return {x:crop.x+p.x*sx,y:crop.y+p.y*sy};
  };
  const bounds=points=>({x0:Math.min(...points.map(p=>p.x)),
