@@ -36,7 +36,6 @@ on:
       - "models/ink-stroke-prefix-domain-v6.json"
       - "models/stroke-prefix-domain-v6-metrics.json"
       - "models/*-metrics.json"
-      - "scripts/update_model_graphs.py"
       - "models/ink-stroke-prefix-domain-v7.json"
       - "models/stroke-prefix-domain-v7-metrics.json"
       - "models/ink-stroke-lift-aware-v5.json"
@@ -67,9 +66,6 @@ jobs:
             npm install --no-audit --no-fund --ignore-scripts
             npm run build:ocr
             python3 scripts/build_standalone.py
-            # Build selects weights and writes docs/current-models.json first.
-            # Only then can the blue chart highlights reflect the actual HTML.
-            python3 scripts/update_model_graphs.py
           } 2>&1 | tee /tmp/ink-offline-ocr-build.log
       - name: Preserve the actual build error when packaging fails
         if: failure()
@@ -101,7 +97,7 @@ jobs:
         run: |
           cp dist/ink-ai-standalone.html index.html
           rm -f docs/offline-ocr-build-error.md
-          git add index.html docs/recognition-vertical-bars.svg docs/completion-vertical-bars.svg docs/current-models.json
+          git add index.html docs/current-models.json
           git add -u docs/offline-ocr-build-error.md 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
