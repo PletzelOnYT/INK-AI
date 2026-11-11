@@ -76,18 +76,17 @@ A separately trained **native CNN–bidirectional-GRU–CTC line recognizer** is
 
 The source app loads local model files and runs inference entirely in browser workers. The packaged offline build embeds the same model data. Drawings stay in the canvas unless you accept a suggestion.
 
-## Model graphs
+## Model leaderboards
 
 ### Recognizer
 
-![Recognizer accuracy](./docs/recognition-vertical-bars.svg)
+![Top 3 handwriting recognizers — held-out writer accuracy](./docs/recognition-vertical-bars.svg)
 
 ### Completer
 
-![Completer results](./docs/completion-vertical-bars.svg)
+![Top 3 trajectory-error benchmark results — improvement versus Prefix V1](./docs/completion-vertical-bars.svg)
 
-
-**Blue = current model.** Each point shows a real benchmark score; a dash means that version was not measured on that benchmark. [Current deployed models](./docs/current-models.json).
+Recognizer % = independent-writer accuracy. Completer % = trajectory-error reduction versus Prefix V1, **not a success rate**. Its podium includes rejected research trials, not necessarily usable releases. The actual tested models are in [Current deployed models](./docs/current-models.json).
 
 ### Training data and honest evaluation
 
