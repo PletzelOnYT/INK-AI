@@ -76,17 +76,15 @@ A separately trained **native CNN–bidirectional-GRU–CTC line recognizer** is
 
 The source app loads local model files and runs inference entirely in browser workers. The packaged offline build embeds the same model data. Drawings stay in the canvas unless you accept a suggestion.
 
-## Model leaderboards
+## Models used by INK AI
 
-### Recognizer
+**Handwriting recognition — CNN V5.** A trained convolutional neural network recognizes pen-written letters, numbers and symbols. It achieved **77.89%** accuracy on an independent UJI writer test (1,551 glyphs). The model runs locally; it is not nearest-template matching.
 
-![Top 3 handwriting recognizers — held-out writer accuracy](./docs/recognition-vertical-bars.svg)
+**Handwriting completion — Domain V2 GRU.** A trained recurrent generative neural network predicts continuation strokes from your actual pen movements. Domain V2 remains the default because later research versions have not passed the complete trajectory, pen-lift, stopping and browser-stability checks. Suggestions are experimental; press **G** only when a preview is useful.
 
-### Completer
+**Camera OCR — embedded Tesseract LSTM + INK AI neural models.** The offline camera reader uses bundled Tesseract.js/Tesseract WASM with a pretrained English LSTM text-recognition model. INK AI also includes its own printed-character CNN, text-region verifier, and CNN–BiGRU–CTC line reader for fallback and experimental recognition. OCR is **real trained machine learning**, not just comparing image shapes. It works without sending camera frames to a server. Small, distant, very blurry or steeply perspective-distorted text may remain unreadable because the camera must capture enough actual detail.
 
-![Top 3 trajectory-error benchmark results — improvement versus Prefix V1](./docs/completion-vertical-bars.svg)
-
-Recognizer % = independent-writer accuracy. Completer % = trajectory-error reduction versus Prefix V1, **not a success rate**. Its podium includes rejected research trials, not necessarily usable releases. The actual tested models are in [Current deployed models](./docs/current-models.json).
+The [deployed-model manifest](./docs/current-models.json) records the exact recognizer and completion weights bundled into the downloadable HTML.
 
 ### Training data and honest evaluation
 
