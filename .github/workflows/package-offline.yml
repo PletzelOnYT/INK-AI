@@ -39,6 +39,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
+          git fetch origin main
+          git reset --hard origin/main
           python3 scripts/update_model_graphs.py
           python3 scripts/build_standalone.py
       - name: Update downloadable index.html
