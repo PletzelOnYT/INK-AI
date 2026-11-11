@@ -12933,6 +12933,10 @@ const rotated=document.createElement("canvas"),rg=rotated.getContext("2d",{willR
 const hg=overlay.getContext("2d");
 const tracker=Core.createTracker();
 const regionTracker=Core.createRegionTracker();
+const sceneMonitor=Core.createSceneMonitor();
+const sceneCanvas=document.createElement("canvas");
+sceneCanvas.width=24;sceneCanvas.height=14;
+const sceneContext=sceneCanvas.getContext("2d",{willReadFrequently:true});
 const cache=new Map();
 const dictionaryByLength=new Map();
 const vocabulary=document.getElementById("inkEnglishWords")?.textContent||"";
@@ -12948,7 +12952,7 @@ window.__inkCameraActive=false;
 window.__inkCameraText="";
 window.__inkCameraWords=[];
 window.__inkCameraEngine="ink-print-cnn-rotated";
-window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0};
+window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0};
 function show(text,muted=true){
  if(!active)return;
  if(output.textContent!==text)output.textContent=text;
@@ -12963,7 +12967,7 @@ function stop(){
  if(stream)stream.getTracks().forEach(t=>t.stop());
  stream=null;video.pause();video.srcObject=null;
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
- tracker.reset();regionTracker.reset();cache.clear();
+ tracker.reset();regionTracker.reset();sceneMonitor.reset();cache.clear();
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
  window.__inkCameraWords=[];
  output.textContent=window.__inkLastGuess||"Draw something";
@@ -13053,8 +13057,10 @@ function paint(candidateBoxes,frame){
  hg.setTransform(dpr,0,0,dpr,0,0);clearMarks();
  // Text-shaped regions are highlighted only after successive scans.
  // OCR transcription remains a separate, stricter confirmation.
- const accepted=[...regionTracker.snapshot(),...tracker.snapshot().words]
-  .filter(t=>t.polygon?.length===4);
+ // Only OCR words supported by three consistent CNN reads may receive
+ // a white highlight. A geometric region alone (hair, cabinet, jersey)
+ // is not proof that the region contains printed text.
+ const accepted=tracker.snapshot().words.filter(t=>t.polygon?.length===4);
  if(!accepted.length||!video.videoWidth)return;
  const fit=Math.min(bw/video.videoWidth,bh/video.videoHeight);
  const dx=(bw-video.videoWidth*fit)/2,dy=(bh-video.videoHeight*fit)/2;
@@ -13213,6 +13219,16 @@ async function scan(id){
  const t0=performance.now(),stats=window.__inkCameraStats;
  try{
   makeBase();
+  // A new document / moved camera must not inherit guesses from previous
+  // scenes. Compare a tiny low-resolution color signature, never store video.
+  sceneContext.drawImage(base,0,0,sceneCanvas.width,sceneCanvas.height);
+  const signature=sceneContext.getImageData(0,0,sceneCanvas.width,sceneCanvas.height);
+  const scene=sceneMonitor.update(signature.data,Date.now());
+  if(scene.changed){
+   tracker.reset();regionTracker.reset();
+   stats.sceneChanges++;
+   window.__inkCameraText="";window.__inkCameraWords=[];
+  }
   const preferred=tracker.snapshot().activeAngle;
   const first=extract(makeView(0));
   const dominant=[...first.lines].sort((a,b)=>b.score-a.score)[0];
@@ -13276,7 +13292,7 @@ async function scan(id){
   // should never block the overlay from appearing on the live video.
   paint(regions,frame);
   if(regions.length&&!tracker.snapshot().text)
-   show("Printed text detected — reading characters…");
+   show("Scanning text — checking character evidence…");
   const images=selected.flatMap(item=>item.line.letters.map(box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
   if(!active||id!==epoch)return;
@@ -13285,7 +13301,7 @@ async function scan(id){
   window.__inkCameraWords=state.words;
   window.__inkCameraText=state.text;
   if(state.text)show(state.text,false);
-  else if(regions.length)show("Printed text detected — character reading is uncertain.");
+  else if(regions.length)show("Scanning for reliable words…");
   else show("Point your camera at clearly printed text.");
   paint(regions,frame);
   stats.scans++;stats.lastScanMs=Math.round(performance.now()-t0);
@@ -13304,7 +13320,7 @@ async function start(){
  active=true;const id=++epoch;pass=0;tracker.reset();cache.clear();
  window.__inkCameraActive=true;
  window.__inkCameraText="";window.__inkCameraWords=[];
- window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0};
+ window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0};
  board.classList.add("camera-active");button.setAttribute("aria-pressed","true");
  show("Requesting camera access…");
  try{
