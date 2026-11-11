@@ -63,7 +63,7 @@ html=html.replace('<link rel="stylesheet" href="./src/app.css">',
                   '<style>\n'+css+'\n</style>')
 html=html.replace('<script src="./src/neural_preference_model.js"></script>', '')
 html=html.replace('<script src="./src/app.js" defer></script>',
-                  '\n'.join(tags)+'\n<script>\n'+preference+'\n'+app+'\n</script>')
+                  '\n'.join(tags)+'\n<script>\n'+preference+'\n'+app+'\n'+camera+'\n</script>')
 out=ROOT/"dist/ink-ai-standalone.html"
 out.parent.mkdir(exist_ok=True)
 out.write_text(html,encoding="utf-8")
