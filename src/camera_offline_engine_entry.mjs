@@ -454,7 +454,12 @@ async function create(){
        votes:stable&&prev.lastSeen!==scanNumber?
         Math.min(6,prev.votes+1):stable?prev.votes:1});
      }
-     try{
+     const rgba=image.getContext("2d",{willReadFrequently:true})
+      .getImageData(0,0,width,height).data;
+     const regions=findDialGlyphRegionsRGBA(rgba,width,height,face);
+     // The whole-dial pass is an expensive *fallback*, not something to
+     // repeat when real individual numeral candidates already exist.
+     if(regions.length<6)try{
       const left=Math.max(0,Math.floor(face.cx-face.radius*1.12));
       const top=Math.max(0,Math.floor(face.cy-face.radius*1.12));
       const right=Math.min(width,Math.ceil(face.cx+face.radius*1.12));
@@ -500,10 +505,7 @@ async function create(){
      }catch(error){
       window.__inkClockBlockDiagnostic=String(error?.message||error);
      }
-     const rgba=image.getContext("2d",{willReadFrequently:true})
-      .getImageData(0,0,width,height).data;
-     const regions=findDialGlyphRegionsRGBA(rgba,width,height,face);
-     const batch=Math.min(4,regions.length);
+     const batch=Math.min(8,regions.length);
      for(let i=0;i<batch;i++){
       const {hour,box}=regions[(dialCursor+i)%regions.length];
       const w=box.x1-box.x0,h=box.y1-box.y0;
