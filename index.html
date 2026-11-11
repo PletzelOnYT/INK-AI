@@ -12545,48 +12545,74 @@ function near(a,b){
  const cy=((a.y0+a.y1)-(b.y0+b.y1))/2;
  return Math.abs(cx)<Math.max(36,w*.75)&&Math.abs(cy)<Math.max(25,h*1.7);
 }
+function withinOneEdit(a,b){
+ if(a===b)return true;
+ if(a.length<5||b.length<5||Math.abs(a.length-b.length)>1)return false;
+ let i=0,j=0,edits=0;
+ while(i<a.length&&j<b.length){
+  if(a[i]===b[j]){i++;j++;continue}
+  if(++edits>1)return false;
+  if(a.length>b.length)i++;
+  else if(b.length>a.length)j++;
+  else{i++;j++}
+ }
+ return edits+(a.length-i)+(b.length-j)<=1;
+}
 function createTracker(){
- let tracks=[],captured=[],lastAngle=0,lastAngleAt=0;
+ let tracks=[],captured=[],nextId=0,lastAngle=0,lastAngleAt=0;
  function update(detections,now=Date.now()){
-  const incoming=new Map();
+  const incoming=[];
   for(const item of detections||[]){
    const id=normalize(item.text);
-   if(id.length<2||!item.box||!Number.isFinite(item.confidence))continue;
-   if(item.confidence<.44)continue;
-   const old=incoming.get(id);
-   if(!old||item.confidence>old.confidence)incoming.set(id,item);
+   if(id.length<2||!item.box||!Number.isFinite(item.confidence)||
+      item.confidence<.44)continue;
+   const same=incoming.find(x=>normalize(x.text)===id&&near(x.box,item.box));
+   if(same){if(item.confidence>same.confidence)Object.assign(same,item)}
+   else incoming.push({...item});
   }
-  for(const item of incoming.values()){
+  for(const item of incoming){
    const id=normalize(item.text);
-   let track=tracks.find(t=>t.id===id&&near(t.box,item.box));
+   let track=tracks.find(t=>withinOneEdit(t.id,id)&&near(t.box,item.box));
    if(!track){
-    track={id,text:item.text,box:item.box,polygon:item.polygon,
+    track={uid:++nextId,id,text:item.text,box:item.box,polygon:item.polygon,
       angle:item.angle||0,confidence:item.confidence,lastSeen:now,
-      hits:0,confirmed:false};
+      hits:0,confirmed:false,recorded:false};
     tracks.push(track);
    }
+   // Update the highlight's position on EVERY matching frame, even if
+   // classification confidence fluctuates. Otherwise rectangles get stuck.
+   track.box=item.box;track.polygon=item.polygon;
+   track.angle=item.angle||0;
    track.hits=Math.min(12,track.hits+1);
    track.lastSeen=now;
-   if(item.confidence>=track.confidence||!track.polygon){
-    track.text=item.text;track.box=item.box;track.polygon=item.polygon;
-    track.angle=item.angle||0;
+   if(item.confidence>=track.confidence){
+    track.id=id;track.text=item.text;track.confidence=item.confidence;
    }
-   track.confidence=Math.max(track.confidence,item.confidence);
-   // High-confidence words are shown on the first inference. A low-confidence
-   // guess must survive a second independently processed frame.
+   // High-confidence words appear immediately; borderline words are
+   // confirmed across two reads, with no arbitrary fixed delay.
    if(track.confidence>=(id.length>=3?.65:.80)||track.hits>=2)
     track.confirmed=true;
-   if(track.confirmed){
-    lastAngle=track.angle;lastAngleAt=now;
-    const recent=captured.find(x=>x.id===id);
+   if(!track.confirmed)continue;
+   lastAngle=track.angle;lastAngleAt=now;
+   if(!track.recorded){
+    // Do not duplicate a tracked word every frame, but allow a repeated
+    // word at a different text position to appear in a real sentence.
+    const recent=captured.find(x=>x.id===track.id&&near(x.box,track.box)&&
+      now-x.when<1800);
     if(!recent){
-     captured.push({id,text:track.text,when:now});
+     captured.push({uid:track.uid,id:track.id,text:track.text,
+       box:{...track.box},when:now,confidence:track.confidence});
      if(captured.length>90)captured.shift();
+    }
+    track.recorded=true;
+   }else{
+    const record=captured.find(x=>x.uid===track.uid);
+    if(record&&track.confidence>record.confidence){
+     record.text=track.text;record.id=track.id;record.confidence=track.confidence;
     }
    }
   }
-  // Unreliable boxes should expire from the highlighter, but NEVER erase
-  // committed words from the session transcript.
+  // Lost camera boxes expire, but committed words never vanish from text.
   tracks=tracks.filter(t=>now-t.lastSeen<2400);
   return snapshot(now);
  }
@@ -12600,7 +12626,7 @@ function createTracker(){
    totalWords:captured.length
   };
  }
- function reset(){tracks=[];captured=[];lastAngle=0;lastAngleAt=0}
+ function reset(){tracks=[];captured=[];nextId=0;lastAngle=0;lastAngleAt=0}
  return {update,snapshot,reset};
 }
 function anglesForPass(pass,preferred){
