@@ -129,6 +129,59 @@ export function rectifyPerspectiveRGBA(rgba,width,height,quad){
  return result;
 }
 
+
+// Find compact dark display faces (such as a distant digital clock) in
+// a tiny 160x90 preview. This only proposes a crop: the pretrained neural
+// recognizer and repeated pixel evidence still decide whether text exists.
+export function findDarkDisplayRGBA(data,width,height){
+ if(data.length!==width*height*4)throw Error("Display preview dimensions mismatch");
+ const hist=new Uint32Array(256),gray=new Uint8Array(width*height);
+ for(let i=0;i<gray.length;i++){
+  const p=i*4;
+  const v=Math.round(.299*data[p]+.587*data[p+1]+.114*data[p+2]);
+  gray[i]=v;hist[v]++;
+ }
+ let total=0,median=255;
+ for(let i=0;i<256;i++){total+=hist[i];if(total>=gray.length*.5){median=i;break}}
+ if(median<85)return null; // Avoid scanning every dark wall/scene.
+ const threshold=Math.min(145,median-58);
+ const visited=new Uint8Array(gray.length);
+ let best=null;
+ for(let i=0;i<gray.length;i++){
+  if(visited[i]||gray[i]>threshold)continue;
+  const todo=[i];visited[i]=1;
+  let count=0,x0=width,y0=height,x1=0,y1=0;
+  for(let j=0;j<todo.length;j++){
+   const index=todo[j],x=index%width,y=Math.floor(index/width);
+   count++;x0=Math.min(x0,x);x1=Math.max(x1,x);
+   y0=Math.min(y0,y);y1=Math.max(y1,y);
+   if(todo.length>width*height*.32)break;
+   for(const neighbor of [index-1,index+1,index-width,index+width]){
+    if(neighbor<0||neighbor>=gray.length||visited[neighbor]||
+       gray[neighbor]>threshold)continue;
+    const nx=neighbor%width,ny=Math.floor(neighbor/width);
+    if(Math.abs(nx-x)+Math.abs(ny-y)!==1)continue;
+    visited[neighbor]=1;todo.push(neighbor);
+   }
+  }
+  const bw=x1-x0+1,bh=y1-y0+1,area=bw*bh;
+  const density=count/Math.max(1,area),ratio=bw/Math.max(1,bh);
+  if(area<width*height*.004||area>width*height*.24||
+     density<.49||ratio<1.25||ratio>7.2)continue;
+  const cx=(x0+x1)/2/width,cy=(y0+y1)/2/height;
+  const distance=(cx-.5)**2+(cy-.5)**2;
+  if(distance>.14)continue;
+  const merit=count/(1+distance*12);
+  if(!best||merit>best.merit)best={x0,y0,x1,y1,merit};
+ }
+ if(!best)return null;
+ const padX=Math.max(1,Math.round((best.x1-best.x0)*.045));
+ const padY=Math.max(1,Math.round((best.y1-best.y0)*.085));
+ const x0=Math.max(0,best.x0-padX),y0=Math.max(0,best.y0-padY);
+ const x1=Math.min(width,best.x1+1+padX),y1=Math.min(height,best.y1+1+padY);
+ return {x:x0,y:y0,width:x1-x0,height:y1-y0};
+}
+
 export function isCompactNumericRead(lines){
  return (lines||[]).some(line=>(line.words||[]).some(word=>{
   const token=String(word.text||"").trim();
