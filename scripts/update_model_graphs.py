@@ -60,7 +60,7 @@ recog = [
     ("CNN V2","superseded",measured(v3.get("baseline_v2",{}).get("pen_independent",{}).get("overall"),100)),
     ("CNN V3","released",measured(v3.get("independent_pen_v3",{}).get("overall"),100)),
     ("CNN V4","rejected",74.40), # Historic graph value, V4 experiment is on its own branch.
-    ("CNN V5","experimental",measured(v5.get("independent_pen_v3",{}).get("overall"),100)),
+    ("CNN V5","released" if v5.get("eligible") is True and v5.get("deployable") is True and v5.get("browser_integration_passed") is True else "experimental",measured(v5.get("independent_pen_v3",{}).get("overall"),100)),
 ]
 # Future recognizer experiments are added automatically if a comparable
 # independently held-out pen-writer accuracy is recorded.
@@ -75,7 +75,7 @@ DOCS.joinpath("recognition-vertical-bars.svg").write_text(chart(
     "Recognizer version history",
     "UJI · held-out pen writers · accuracy (higher is better)",
     recog,100,"percent",
-    "V5 has a held-out score, but browser release is not verified. V4 was rejected; V1 has no comparable score."
+    "V5 shown as released only if held-out and real-browser acceptance passed. V4 rejected; V1 unscored."
 ),encoding="utf-8")
 
 v2 = record("stroke-prefix-domain-v2-metrics.json")
