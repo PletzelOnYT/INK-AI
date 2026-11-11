@@ -118,6 +118,37 @@ function createRegionTracker(){
  return {update,snapshot:(now=Date.now())=>regions.filter(r=>r.hits>=2&&now-r.lastSeen<1500).map(r=>({...r})),
  reset:()=>{regions=[]}};
 }
+// Context decoder: still uses the trained CNN's top probabilities. The
+// repository's English-word list only helps resolve plausible character
+// sequences; it never creates regions or processes webcam frames remotely.
+function decodePrintedWord(predictions,words){
+ if(!predictions?.length||predictions.length>24)return null;
+ const n=predictions.length;
+ const raw=predictions.map(p=>p?.top?.[0]?.char||"").join("");
+ if(!/^[A-Za-z]{3,24}$/.test(raw))return null;
+ const possible=(words||[]).filter(word=>word.length===n);
+ let best=null,runner=null;
+ for(const word of possible){
+  if(!/^[a-z]+$/.test(word))continue;
+  let logp=0,misses=0;
+  for(let i=0;i<n;i++){
+   const options=predictions[i]?.top||[];
+   const found=options.find(x=>String(x.char).toLowerCase()===word[i]);
+   if(!found){if(++misses>Math.max(1,Math.floor(n*.12))){logp=-Infinity;break};logp+=Math.log(.004)}
+   else logp+=Math.log(Math.max(.0001,found.confidence));
+  }
+  if(!Number.isFinite(logp))continue;
+  const score=Math.exp(logp/n);
+  if(!best||score>best.score){runner=best;best={text:word,score,misses}}
+  else if(!runner||score>runner.score)runner={text:word,score,misses};
+ }
+ if(!best||best.score<.10)return null;
+ // A low-margin match is not evidence that an arbitrary image is a word.
+ if(runner&&best.score<runner.score*1.10)return null;
+ const titleCase=/^[A-Z]/.test(raw);
+ const text=titleCase?best.text[0].toUpperCase()+best.text.slice(1):best.text;
+ return {text,confidence:Math.min(.98,Math.max(.70,best.score*2.5)),lexicon:true};
+}
 function createTracker(){
  let tracks=[],captured=[],nextId=0,lastAngle=0,lastAngleAt=0;
  function update(detections,now=Date.now()){
@@ -197,7 +228,7 @@ function anglesForPass(pass,preferred){
  const values=Number.isFinite(preferred)?[preferred,0,...pair]:[0,...pair];
  return [...new Set(values.map(n=>Math.round(n)))].slice(0,4);
 }
-const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord,createRegionTracker};
+const api={pointFromRotated,projectBox,visibility,createTracker,anglesForPass,normalize,near,looksLikeTextLine,looksLikeWord,createRegionTracker,decodePrintedWord};
 if(typeof window!=="undefined")window.InkCameraCore=api;
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 })();
