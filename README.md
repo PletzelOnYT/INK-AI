@@ -16,6 +16,7 @@ The source code is stored in GitHub: edit the [small HTML shell](./src/index.she
 
 - **Live recognition** — identifies handwritten letters, numbers, punctuation, and common math symbols.
 - **Pen and eraser** — a simple canvas without extra menus.
+- **Camera text reader** — click the camera button to replace the whiteboard with a live webcam view and see recognized printed words and sentences below it. Uses local browser OCR with an initial online model download; camera access is permission-based.
 - **Assist** — opt-in neural handwriting suggestions while drawing, controlled by the Assist button.
 - **Stroke continuations** — the assistant draws light-gray, semi-transparent extensions of your actual ink. It does not overlay printed letters.
 - **Multi-stroke characters** — handles separate strokes in characters like `+`, `=`, `:`, and `X`.
@@ -28,6 +29,7 @@ The source code is stored in GitHub: edit the [small HTML shell](./src/index.she
 | --- | --- |
 | Pen | Draw |
 | Eraser | Erase |
+| Camera | Toggle webcam text recognition; press again to restore the whiteboard |
 | ✨ Assist | Toggle character suggestions |
 | Tab | Switch between available suggestions |
 | G / Enter | Accept the suggested strokes and teach the personal neural ranker |
@@ -44,6 +46,8 @@ INK AI has two separate models:
 **Completion — a real generative GRU, not a font or curve lookup.** A trained gated recurrent unit (GRU) predicts the next pen-coordinate changes and pen-up/pen-down states conditioned on the strokes you've drawn. It samples genuine neural vector trajectories, ranks them with geometric and recognition checks, and displays the chosen strokes in translucent gray. The original black ink is preserved. It is a separate model from the CNN; it is **not ChatGPT** and has not achieved human-level handwriting completion accuracy.
 
 Assist uses multiple candidate trajectories and filters out implausible shapes. It can use a built-in English word-frequency list to choose between genuinely plausible letters in a word, while leaving strongly recognized strokes alone. It does not force a tail onto a lowercase h that already reaches its baseline. It also takes the full-character recognition result into account, so a partial-stroke prediction doesn't override a more reliable whole-character guess. If the newer completion model can't produce a usable continuation, it can fall back to the previous trained stroke model.
+
+Camera OCR uses a separate Tesseract.js WebAssembly model rather than the handwriting CNN. The browser requires camera permission; OCR scans frames locally and does not upload video to a server. The first use requires network access to load the OCR library and language weights, so webcam text reading is not guaranteed to work offline even in the standalone HTML. It is intended primarily for printed English and will be less accurate on handwriting, glare, motion, or tiny text.
 
 The source app loads local model files and runs inference entirely in browser workers. The packaged offline build embeds the same model data. Drawings stay in the canvas unless you accept a suggestion.
 
@@ -77,6 +81,7 @@ The experimental V5 training focused on confusion between `1`, `I`, `l`, `i`, `j
 | [index.html](./index.html) | Downloadable self-contained HTML — works offline |
 | [src/index.shell.html](./src/index.shell.html) | Small editable HTML template |
 | [src/app.js](./src/app.js) | In-browser recognizer and drawing controller |
+| [src/camera_ocr.js](./src/camera_ocr.js) | Permission-based live camera OCR |
 | [src/app.css](./src/app.css) | Interface styles |
 | [scripts/build_standalone.py](./scripts/build_standalone.py) | Generate the complete offline HTML |
 | [data/english-words.txt](./data/english-words.txt) | Optional word context |
