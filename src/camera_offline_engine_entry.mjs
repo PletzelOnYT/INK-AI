@@ -417,8 +417,9 @@ async function create(){
    const dialContext=dialPreview.getContext("2d",{willReadFrequently:true});
    const dialVotes=new Map();
    let previousDial=null,dialCursor=0,dialMisses=0;
-   async function readAnalogDial(image,width,height){
-    if(scanNumber%2&&!dialVotes.size)return [];
+   async function readAnalogDial(image,width,height,{force=false}={}){
+    // Earlier odd/even gating could skip every rare detailed clock pass.
+    if(!force&&scanNumber%(dialVotes.size?3:7)!==0)return [];
     try{
      const previewH=Math.max(70,Math.round(height*320/width));
      if(dialPreview.height!==previewH)dialPreview.height=previewH;
@@ -514,9 +515,28 @@ async function create(){
         await worker.setParameters({
          tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT)});
       }
-      const lines=extractWords(scan.data);
+      let lines=extractWords(scan.data);
+      let attempts=1;
+      // Periodic BLOCK OCR recovers connected lines of printed code
+      // and poster headings missed by SPARSE_TEXT on colored backgrounds.
+      if(options.layoutRescue===true){
+       try{
+        await worker.setParameters({
+         tessedit_pageseg_mode:String(tesseract.PSM.SINGLE_BLOCK)});
+        const block=await worker.recognize(image,{}, {blocks:true});
+        lines=mergeDetected(lines,extractWords(block.data));
+        attempts++;
+       }finally{
+        await worker.setParameters({
+         tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT)});
+       }
+      }
+      if(options.clockProbe===true){
+       const dial=await readAnalogDial(image,width,height,{force:true});
+       lines=mergeDetected(lines,dial);
+      }
       return {engine:engine.kind,width,height,angleSource:"native-focus",
-       regionFast:true,attempts:1,
+       regionFast:true,attempts,
        elapsedMs:Math.round(performance.now()-now),
        lines,words:lines.flatMap(line=>line.words),
        text:lines.map(line=>line.text).join("\n")};
