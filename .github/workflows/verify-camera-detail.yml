@@ -7,6 +7,8 @@ on:
       - "src/camera_detail_core.mjs"
       - "src/camera_offline_engine_entry.mjs"
       - "src/camera_offline_bridge.js"
+      - "src/camera_handwriting.js"
+      - "tests/camera-handwriting.mjs"
       - "src/camera_text_evidence.js"
       - "src/camera_ocr.js"
       - "tests/camera-detail-core.mjs"
@@ -31,6 +33,8 @@ jobs:
       - name: Test crop projection, RGB evidence and actual pretrained OCR wiring
         run: |
           node --check src/camera_offline_bridge.js
+          node --check src/camera_handwriting.js
+          node tests/camera-handwriting.mjs
           node --check src/camera_text_evidence.js
           node tests/camera-detail-core.mjs
           node tests/camera-offline-bridge.mjs
