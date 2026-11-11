@@ -49,8 +49,12 @@ try:
         p.fillStyle='#f3ece1';p.fillRect(100,365,170,100);
       }
       interior();
+      // The synthetic webcam must emit actual successive frames. A static
+      // captureStream() sometimes sends only one frame in headless Chrome
+      // and falsely times out before three OCR passes can be observed.
+      const timer=setInterval(interior,90);
       navigator.mediaDevices.getUserMedia=async()=>c.captureStream(12);
-      window.__inkSyntheticRoom=interior;
+      window.__inkSyntheticRoom={interior,timer};
     """)
     driver.execute_script("document.getElementById('camera').click()")
     wait.until(lambda d:d.execute_script("return window.__inkCameraActive"))
@@ -67,4 +71,8 @@ try:
     assert canvas_alpha==0, f"False highlighter rectangles: {canvas_alpha} pixels"
     print("PASS: non-text interior causes no hallucinated words or highlight rectangles")
 finally:
+    try:
+        driver.execute_script("if(window.__inkSyntheticRoom)clearInterval(window.__inkSyntheticRoom.timer)")
+    except Exception:
+        pass
     driver.quit()
