@@ -12,6 +12,22 @@ A small browser-based drawing app for writing letters, numbers, and symbols. Dra
 
 The source code is stored in GitHub: edit the [small HTML shell](./src/index.shell.html), [CSS](./src/app.css), and [JavaScript](./src/app.js). The full `index.html` is generated from these files and the trained models. GitHub excludes this generated file from the source-language percentages, but it remains available to download and run offline. To rebuild it, run `python3 scripts/build_standalone.py`; GitHub Actions also [regenerates the repository root `index.html`](./.github/workflows/package-offline.yml) when source changes. It is checked into GitHub, not only stored as an artifact.
 
+## Fast on-device camera OCR on Mac (optional)
+
+The usual **index.html** remains a standalone, offline browser app that uses the project's own recognition models. For more accurate printed and handwritten text on **macOS**, there is now a second, optional engine using the **Apple Vision framework already installed on your Mac**. This is the same kind of native OCR technology used by Apple apps, rather than an experimental model trained on synthetic text. Apple supplies this recognition engine; it is not represented as a home-trained INK AI model.
+
+To enable it, download/clone the **entire repository**, open Terminal in the repository folder, and run:
+
+```bash
+bash mac/start-ink-vision.sh
+```
+
+The launcher compiles the included Swift helper if needed, opens the **same original INK AI interface** in Chrome, and enables camera recognition through a random per-session token. Click the existing camera button. Keep the Terminal session open while using it; Control-C stops the helper. The first run requires Apple's Command Line Tools for `swiftc` (install with `xcode-select --install` if needed).
+
+**Performance and privacy:** The webcam preview itself renders continuously at the camera's normal frame rate. The native Vision recognizer receives a new JPEG only after the previous read finishes, preventing old frames from building up in a queue; it is not guaranteed to recognize text on *every* video frame. The Mac helper listens only on `127.0.0.1:17861`, requires an unpredictable token, and processes frames in memory. It does **not** upload frames to an external server or save recordings. Recognized words receive the same translucent white highlights. When camera text disappears, the displayed text automatically expires.
+
+**Why the launcher matters:** Double-clicking a previously downloaded `index.html` on your Desktop does not start Apple's Vision service; that file alone will still use the custom INK AI model. Use the launcher from a complete repository copy to enable the native path. The Mac companion is optional and does not alter Pen, Eraser, Assist, the original layout, or the Recognizer and Completer graphs.
+
 ## Features
 
 - **Live recognition** — identifies handwritten letters, numbers, punctuation, and common math symbols.
