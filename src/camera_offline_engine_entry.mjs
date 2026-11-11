@@ -21,9 +21,9 @@ function blobURL(bytes){
 function extractWords(data){
  const blocks=data?.blocks||[];
  const lines=[];
- for(const block of blocks){
-  for(const paragraph of block.paragraphs||[]){
-   for(const line of paragraph.lines||[]){
+ for(const [blockIndex,block] of blocks.entries()){
+  for(const [paragraphIndex,paragraph] of (block.paragraphs||[]).entries()){
+   for(const [lineIndex,line] of (paragraph.lines||[]).entries()){
     const words=(line.words||[])
       .filter(word=>word&&word.bbox&&typeof word.text==="string"&&
         /[A-Za-z0-9]/.test(word.text)&&Number(word.confidence)>=25)
@@ -44,7 +44,8 @@ function extractWords(data){
     };
     const text=words.map(w=>w.text).join(" ").trim();
     lines.push({
-     text,confidence:Math.max(0,Math.min(1,Number(line.confidence||60)/100)),
+     text,blockIndex,paragraphIndex,lineIndex,
+     confidence:Math.max(0,Math.min(1,Number(line.confidence||60)/100)),
      box:{x0:Number(bounds.x0),y0:Number(bounds.y0),
        x1:Number(bounds.x1),y1:Number(bounds.y1)},
      words
