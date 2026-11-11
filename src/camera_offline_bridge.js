@@ -28,6 +28,26 @@
     strong.reduce((sum,w)=>sum+w.text.length,0)>=9;
  }
 
+ // Tight, small printed glyph boxes can have >72% edge pixels even
+ // when they contain genuine numbers. A broad relaxation would hallucinate
+ // text on textured backgrounds, so this exception requires strong OCR
+ // certainty, multiple independent ink bands, and either a full numeric
+ // token or surrounding words in the very same Tesseract line.
+ function compactPrintedEvidence(word,lineWords,metrics){
+  const text=String(word?.text||"").trim(),b=word?.box;
+  if(!b||!metrics)return false;
+  const w=b.x1-b.x0,h=b.y1-b.y0,confidence=Number(word.confidence);
+  if(!Number.isFinite(w+h)||w<8||h<5||h>24||w/h<1.12||
+     !Number.isFinite(confidence)||confidence<.92||
+     metrics.contrast<45||metrics.score<.84||
+     metrics.edgeRate<.08||metrics.edgeRate>.86||
+     metrics.verticalStrokeRate<.045)return false;
+  const chars=text.replace(/[^A-Za-z0-9]/g,"").length;
+  const wellGroupedNumeric=/^\d{4,10}$/.test(text)&&metrics.bands>=2;
+  const supportedInLine=lineWords>=3&&chars>=3&&
+   metrics.bands>=1;
+  return wellGroupedNumeric||supportedInLine;
+ }
  function checkedPayload(payload,width,height){
   if(!payload||!Array.isArray(payload.lines))return {
    width,height,lines:[],words:[],engine:"bundled-tesseract-wasm"};
@@ -55,7 +75,9 @@
     const confidence=Number(word.confidence);
     if(!Number.isFinite(confidence)||confidence<.32){rejected++;report(word,"confidence");continue}
     const metrics=Evidence.evidence(context,word.box,width,height,word.points);
-    if(!metrics.ok||metrics.score<.43){rejected++;report(word,metrics.reason,metrics.score,metrics);continue}
+    if((!metrics.ok&&!compactPrintedEvidence(word,line.words.length,metrics))||metrics.score<.43){
+     rejected++;report(word,metrics.reason,metrics.score,metrics);continue
+    }
     supported.push({...word,visualQuality:metrics.score});
     accepted++;
    }
