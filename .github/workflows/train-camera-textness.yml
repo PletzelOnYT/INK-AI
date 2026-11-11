@@ -49,6 +49,8 @@ jobs:
           node --check src/camera_text_detector.js
           node tests/camera-local-ocr.mjs
           node tests/camera-scene-detector.mjs
+          npm install --no-audit --no-fund --ignore-scripts
+          npm run build:ocr
           python3 scripts/build_standalone.py
           cp dist/ink-ai-standalone.html index.html
       - name: Save native model weights, exact metrics and root HTML
