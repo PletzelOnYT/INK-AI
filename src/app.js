@@ -1144,6 +1144,16 @@ function request(cmd,payload){
 // Public, narrow interface for the camera's own OCR pipeline.
 // Reuses INK AI's locally trained CNN; no external camera OCR provider.
 window.__inkPrintReady=false;
+window.__inkTextnessReady=false;
+window.__inkCameraVerifyText=async images=>{
+ if(!window.__inkTextnessReady||!worker)return null;
+ const scores=[];
+ for(let i=0;i<images.length;i+=8){
+  const result=await request("readTextness",{images:images.slice(i,i+8)});
+  scores.push(...result.scores);
+ }
+ return scores;
+};
 window.__inkCameraRecognize=async images=>{
  if(!loaded||!worker)throw Error("INK AI character model isn't ready");
  const output=[],cmd=window.__inkPrintReady?"readPrint":"read";
@@ -1592,7 +1602,7 @@ function createWorker(){
  const source=String.raw`
 "use strict";
 let labels=[],c1,c2,c3,f1,f2;
-let printLabels=[],printLayers=null;
+let printLabels=[],printLayers=null,textnessLayers=null;
 function unpack(layer){
  const raw=atob(layer.weights);
  const w=new Float32Array(raw.length),b=new Float32Array(layer.bias);
@@ -1658,6 +1668,41 @@ function predictPrint(image){
  return {top:probabilities.map((p,i)=>({char:printLabels[i],confidence:p/sum}))
   .sort((a,b)=>b.confidence-a.confidence).slice(0,5)};
 }
+function convRect(input,L,h,w){
+ const [outChannels,inChannels,kernel]=L.shape;
+ const result=new Float32Array(outChannels*h*w),pad=(kernel-1)/2;
+ for(let o=0;o<outChannels;o++)for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+  let total=L.b[o];
+  for(let c=0;c<inChannels;c++)for(let ky=0;ky<kernel;ky++){
+   const yy=y+ky-pad;if(yy<0||yy>=h)continue;
+   for(let kx=0;kx<kernel;kx++){
+    const xx=x+kx-pad;if(xx<0||xx>=w)continue;
+    total+=input[(c*h+yy)*w+xx]*L.w[((o*inChannels+c)*kernel+ky)*kernel+kx];
+   }
+  }
+  result[(o*h+y)*w+x]=Math.max(0,total);
+ }
+ return result;
+}
+function poolRect(input,channels,h,w){
+ const oh=h/2,ow=w/2,result=new Float32Array(channels*oh*ow);
+ for(let c=0;c<channels;c++)for(let y=0;y<oh;y++)for(let x=0;x<ow;x++){
+  const a=(c*h+y*2)*w+x*2;
+  result[(c*oh+y)*ow+x]=Math.max(input[a],input[a+1],
+    input[a+w],input[a+w+1]);
+ }
+ return result;
+}
+function predictTextness(image){
+ if(!textnessLayers)throw Error("Scene textness CNN unavailable");
+ let a=poolRect(convRect(Float32Array.from(image),textnessLayers[0],24,64),8,24,64);
+ a=poolRect(convRect(a,textnessLayers[1],12,32),16,12,32);
+ a=poolRect(convRect(a,textnessLayers[2],6,16),24,6,16);
+ const logits=dense(dense(a,textnessLayers[3],true),textnessLayers[4],false);
+ const high=Math.max(...logits);
+ const values=logits.map(v=>Math.exp(v-high));
+ return values[1]/(values[0]+values[1]);
+}
 self.onmessage=e=>{
  const {id,cmd}=e.data;
  try{
@@ -1678,6 +1723,15 @@ self.onmessage=e=>{
    self.postMessage({id,result:{classes:printLabels.length}});
   }else if(cmd==="readPrint"){
    self.postMessage({id,result:{predictions:e.data.images.map(predictPrint)}});
+  }else if(cmd==="initTextness"){
+   const m=e.data.model;
+   if(m.format!=="ink-textness-cnn-int8-v1"||
+     m.layers?.length!==5||m.input?.[1]!==24||m.input?.[2]!==64)
+    throw Error("Invalid scene textness model");
+   textnessLayers=m.layers.map(unpack);
+   self.postMessage({id,result:{classes:2}});
+  }else if(cmd==="readTextness"){
+   self.postMessage({id,result:{scores:e.data.images.map(predictTextness)}});
   }else throw Error("Unsupported command");
  }catch(error){self.postMessage({id,error:String(error?.message||error)})}
 };
@@ -1758,6 +1812,24 @@ async function load(){
     window.__inkPrintAccuracy=printed.training.heldout_accuracy;
    }
   }catch(_){/* Use the old CNN until an eligible print model is published. */}
+  // Separately trained text-versus-clutter CNN. It is optional until
+  // independent synthetic holdout tests approve a checked-in checkpoint.
+  try{
+   let textness=null;
+   const embedded=document.getElementById("inkTextnessModel");
+   if(embedded)textness=JSON.parse(embedded.textContent);
+   else if(location.protocol!=="file:"){
+    const response=await fetch("models/ink-camera-textness-v1.json");
+    if(response.ok)textness=await response.json();
+   }
+   if(textness?.format==="ink-textness-cnn-int8-v1"&&
+     textness?.training?.eligible===true&&
+     textness.training.synthetic_clutter_fpr<=.035&&
+     textness.training.heldout_font_count>=2){
+    await request("initTextness",{model:textness});
+    window.__inkTextnessReady=true;
+   }
+  }catch(_){/* The conservative camera pipeline works without this checkpoint. */}
   window.__inkRecognitionVersion=version;
   window.__inkRecognitionAccuracy=model.training?.emnist_test_accuracy||0;
   window.__inkRecognitionPenAccuracy=model.training?.uji_independent_accuracy||null;
