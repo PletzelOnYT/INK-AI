@@ -53,68 +53,126 @@ def format_score(value, kind):
 
 def graph(title, subtitle, rows, first_name, second_name,
           first_max, second_max, first_kind, second_kind, notes, target):
+    """Two vertically stacked milestone timelines; each panel is one metric.
+
+    Dashed connectors show the measured sequence of experiments, not a
+    guaranteed improvement or proof that successive candidates were released.
+    Only the exact deployed-model weight from the build manifest gets blue.
+    """
     active = [r for r in rows if r["active"]]
     if len(active) != 1:
-        raise ValueError(f"Expected one deployed model in {title}, found {len(active)}")
-    width = 1500
-    row_height = 64
-    start = 177
-    height = start + len(rows) * row_height + 106
-    first_x, first_w = 282, 405
-    second_x, second_w = 866, 268
+        raise ValueError(f"{title}: exactly one deployed checkpoint required")
+    if len(rows) < 2:
+        raise ValueError("Need two or more model milestones")
+    width = max(1240, len(rows) * 160 + 180)
+    left, right = 112, width - 74
+    panel_height = 294
+    first_panel = 170
+    height = first_panel + 2 * panel_height + 112
+    white, ink, muted, grid, blue, gray = (
+        "#ffffff", "#111827", "#64748b", "#e2e8f0", "#2563eb", "#94a3b8")
+    xcoords = [left + (right-left)*i/(len(rows)-1) for i in range(len(rows))]
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
            f'height="{height}" viewBox="0 0 {width} {height}" '
            f'role="img" aria-label="{escape(title)}">',
-           rect(0, 0, width, height, "#ffffff"),
+           rect(0, 0, width, height, white),
            '<g font-family="Arial,Helvetica,sans-serif">',
-           text(36, 43, title, 28, "#111827", "700"),
-           text(36, 70, subtitle, 14, "#475569"),
-           rect(37, 87, 16, 13, "#2563eb", radius=2),
-           text(61, 99, "Blue = model actually bundled in index.html", 13, "#334155"),
-           rect(398, 87, 16, 13, "#9ca3af", radius=2),
-           text(422, 99, "Gray = other versions, including rejected experiments", 13, "#64748b"),
-           text(36, 148, "Model / release status", 15, "#334155", "600"),
-           text(first_x, 148, first_name, 15, "#334155", "600"),
-           text(second_x, 148, second_name, 15, "#334155", "600"),
-           text(1238, 148, "Release decision", 15, "#334155", "600")]
-    for j, row in enumerate(rows):
-        y = start + j * row_height
-        active_now = row["active"]
-        out.append(f'<g data-model="{escape(row["name"])}" data-active="{str(active_now).lower()}" data-weight="{escape(row["weights"])}">')
-        if active_now:
-            out.append(rect(26, y-8, 1435, 58, "#eff6ff", "#93c5fd", 6))
-        else:
-            out.append(f'<line x1="31" y1="{y+50}" x2="1462" y2="{y+50}" stroke="#e5e7eb"/>')
-        out.append(text(40, y+19, row["name"], 16,
-                        "#1d4ed8" if active_now else "#334155",
-                        "700" if active_now else "500"))
-        if row.get("subtitle"):
-            out.append(text(40, y+37, row["subtitle"], 11, "#64748b"))
-        for val, pos, span, scale, kind, legacy in [
-            (row["first"], first_x, first_w, first_max, first_kind, row.get("legacy")),
-            (row["second"], second_x, second_w, second_max, second_kind, None)]:
-            out.append(rect(pos, y+5, span, 17, "#e5e7eb", radius=3))
-            if val is None:
-                out.append(text(pos+8, y+19, legacy or "No comparable result", 12, "#64748b"))
+           text(36, 46, title, 29, ink, "700"),
+           text(36, 73, subtitle, 15, muted),
+           rect(37, 94, 12, 12, blue, radius=6),
+           text(60, 106, "Blue node = model deployed in index.html", 13, ink),
+           rect(425, 94, 12, 12, gray, radius=6),
+           text(448, 106, "Gray = earlier version / trial", 13, muted),
+           text(785, 106, "Dotted line = measured trial history; not guaranteed improvement",
+                13, muted),
+           text(36, 132, "Milestones ordered by version (not calendar date)", 12, muted)]
+    for panel, (field, name, high, kind) in enumerate(
+        (("first", first_name, first_max, first_kind),
+         ("second", second_name, second_max, second_kind))):
+        top = first_panel + panel * panel_height
+        plot_top, plot_bottom = top + 46, top + 185
+        out.append(text(36, top+4, name, 18, ink, "700"))
+        out.append(text(width-40, top+4,
+                        "LOWER IS BETTER" if kind == "error" else "HIGHER IS BETTER",
+                        12, muted, anchor="end"))
+        for grid_index in range(5):
+            number = high * grid_index/4
+            y = (plot_top + (number/high)*(plot_bottom-plot_top)
+                 if kind == "error" else
+                 plot_bottom - (number/high)*(plot_bottom-plot_top))
+            out.append(f'<line x1="{left-6:.1f}" y1="{y:.1f}" '
+                       f'x2="{right+6:.1f}" y2="{y:.1f}" stroke="{grid}"/>')
+            out.append(text(left-15, y+4, format_score(number, kind),
+                            12, muted, anchor="end"))
+        scored = []
+        for i, row in enumerate(rows):
+            value = row[field]
+            if value is None:
+                continue
+            y = (plot_top + value/high*(plot_bottom-plot_top)
+                 if kind == "error" else
+                 plot_bottom - value/high*(plot_bottom-plot_top))
+            # Axis bounds must include every nonmissing score; do not clip
+            # failures merely to make the progress line look better.
+            if not plot_top-0.01 <= y <= plot_bottom+0.01:
+                raise ValueError(f"Score outside axis: {row['name']} / {name}: {value}")
+            scored.append((i, xcoords[i], y))
+        # Each dot is a distinct milestone. The dashed link is a visual
+        # experiment history rather than a continuous model family.
+        for first, second in zip(scored, scored[1:]):
+            ax, ay, bx, by = first[1], first[2], second[1], second[2]
+            out.append(f'<path d="M {ax:.1f} {ay:.1f} L {bx:.1f} {by:.1f}" '
+                       f'fill="none" stroke="#cbd5e1" stroke-width="2.5" '
+                       f'stroke-dasharray="7 6" />')
+        for i, row in enumerate(rows):
+            x = xcoords[i]
+            value = row[field]
+            used = row["active"]
+            out.append(
+                f'<g data-model="{escape(row["name"])}" '
+                f'data-active="{str(used).lower()}" '
+                f'data-weight="{escape(row["weights"])}" '
+                f'data-metric="{field}">')
+            if value is None:
+                if panel == 0 and row.get("legacy"):
+                    out.append(text(x, plot_top+26, row["legacy"],
+                                    12, muted, anchor="middle"))
+                    out.append(text(x, plot_top+44, "different benchmark",
+                                    10, muted, anchor="middle"))
+                else:
+                    out.append(text(x, plot_bottom-9, "unmeasured",
+                                    11, muted, anchor="middle"))
             else:
-                fraction = min(1, max(0, val/scale))
-                if fraction > 0:
-                    out.append(rect(pos, y+5, span*fraction, 17,
-                                    "#2563eb" if active_now else "#9ca3af", radius=3))
-                out.append(text(pos+span+12, y+19, format_score(val, kind),
-                                13, "#1d4ed8" if active_now else "#334155", "600"))
-        out.append(text(1238, y+19, "IN USE" if active_now else row["status"],
-                        13, "#1d4ed8" if active_now else "#64748b",
-                        "700" if active_now else "400"))
-        if row.get("extra"):
-            out.append(text(1238, y+37, row["extra"], 11, "#64748b"))
-        out.append("</g>")
-    bottom = start + len(rows)*row_height + 15
-    for i, note in enumerate(notes):
-        out.append(text(36, bottom+i*23, note, 12, "#475569"))
-    out.append('</g></svg>')
+                y = (plot_top + value/high*(plot_bottom-plot_top)
+                     if kind == "error" else
+                     plot_bottom - value/high*(plot_bottom-plot_top))
+                if used:
+                    out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="12.5" '
+                               f'fill="#dbeafe" stroke="{blue}" stroke-width="2"/>')
+                out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" '
+                           f'r="{7.5 if used else 6.5}" '
+                           f'fill="{blue if used else white if row["status"]=="REJECTED" else gray}" '
+                           f'stroke="{blue if used else gray}" stroke-width="2.6"/>')
+                label_y = y - 17
+                # Avoid touching the top boundary; place extreme scores below.
+                if label_y < plot_top + 4:
+                    label_y = y + 24
+                out.append(text(x, label_y, format_score(value, kind),
+                                14, blue if used else "#334155",
+                                "700" if used else "500", "middle"))
+            out.append(text(x, plot_bottom+28, row["name"], 13,
+                            blue if used else ink, "700" if used else "500",
+                            "middle"))
+            status = "IN USE" if used else row["status"]
+            out.append(text(x, plot_bottom+47, status, 11,
+                            blue if used else muted, "700" if used else "400",
+                            "middle"))
+            out.append("</g>")
+    footer_y = first_panel + 2 * panel_height + 11
+    for j, note in enumerate(notes):
+        out.append(text(36, footer_y+j*24, note, 12, muted))
+    out.append("</g></svg>")
     DOCS.joinpath(target).write_text("".join(out), encoding="utf-8")
-
 
 manifest = load("docs/current-models.json")
 selected_cnn = manifest.get("recognizer", {}).get("weights")
