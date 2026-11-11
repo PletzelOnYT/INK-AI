@@ -37,6 +37,10 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
 .board.camera-active #pad,.board.camera-active #ghost{display:none}
 .board.camera-active #cameraVideo{display:block}
 
+/* Recognized words receive transparent white highlighting above the live feed. */
+#cameraHighlights{display:none;position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none}
+.board.camera-active #cameraHighlights{display:block}
+
 </style>
 
 </head>
@@ -52,6 +56,7 @@ main{width:min(96vw,1300px);margin:0 auto;min-height:100dvh;display:flex;flex-di
     <canvas id="pad" width="1200" height="550" data-tool="pen" aria-label="Write or draw here"></canvas>
     <canvas id="ghost" width="1200" height="550" aria-hidden="true"></canvas>
     <video id="cameraVideo" autoplay muted playsinline aria-label="Live camera preview"></video>
+    <canvas id="cameraHighlights" aria-hidden="true"></canvas>
   </div>
   <div id="guess" data-muted="true" aria-live="polite">Loading AI…</div>
 </main>
@@ -11870,6 +11875,17 @@ function request(cmd,payload){
   setTimeout(()=>{const r=requests.get(id);if(r){requests.delete(id);reject(Error("Recognition timed out"))}},30000);
  });
 }
+// Public, narrow interface for the camera's own OCR pipeline.
+// Reuses INK AI's locally trained CNN; no external camera OCR provider.
+window.__inkCameraRecognize=async images=>{
+ if(!loaded||!worker)throw Error("INK AI character model isn't ready");
+ const output=[];
+ for(let i=0;i<images.length;i+=16){
+  const result=await request("read",{images:images.slice(i,i+16)});
+  output.push(...result.predictions);
+ }
+ return output;
+};
 // Geometric recognition for unambiguous single-stroke mathematical marks.
 // A complete hand-drawn caret must not be cut into a long fake "word", and
 // full-character CNNs are not trained to interpret arbitrary partial strokes.
