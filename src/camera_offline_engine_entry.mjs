@@ -440,10 +440,69 @@ async function create(){
       dialVotes.clear();dialCursor=0;
      }
      previousDial=face;
+     // A whole-dial BLOCK OCR pass can recover the numerals whose small
+     // connected components get fragmented by the hands or rim. Radial
+     // geometry only validates actual model output; it never supplies
+     // numbers based on their positions.
+     function remember(hour,box,confidence){
+      const prev=dialVotes.get(hour);
+      const cx=(box.x0+box.x1)/2,cy=(box.y0+box.y1)/2;
+      const stable=prev&&Math.hypot(cx-(prev.box.x0+prev.box.x1)/2,
+       cy-(prev.box.y0+prev.box.y1)/2)<face.radius*.28;
+      dialVotes.set(hour,{box,confidence:Math.max(confidence,
+       stable?prev.confidence:0),lastSeen:scanNumber,
+       votes:stable&&prev.lastSeen!==scanNumber?
+        Math.min(6,prev.votes+1):stable?prev.votes:1});
+     }
+     try{
+      const left=Math.max(0,Math.floor(face.cx-face.radius*1.12));
+      const top=Math.max(0,Math.floor(face.cy-face.radius*1.12));
+      const right=Math.min(width,Math.ceil(face.cx+face.radius*1.12));
+      const bottom=Math.min(height,Math.ceil(face.cy+face.radius*1.12));
+      const w=right-left,h=bottom-top;
+      if(w>=50&&h>=50){
+       detailCanvas.width=512;detailCanvas.height=512;
+       detailContext.fillStyle="#fff";
+       detailContext.fillRect(0,0,512,512);
+       detailContext.imageSmoothingEnabled=true;
+       detailContext.imageSmoothingQuality="high";
+       detailContext.drawImage(image,left,top,w,h,0,0,512,512);
+       let block;
+       try{
+        await worker.setParameters({
+         tessedit_pageseg_mode:String(tesseract.PSM.SINGLE_BLOCK),
+         tessedit_char_whitelist:"0123456789"});
+        block=await worker.recognize(detailCanvas,{}, {blocks:true});
+       }finally{
+        await worker.setParameters({
+         tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT),
+         tessedit_char_whitelist:""});
+       }
+       for(const line of extractWords(block.data))
+        for(const word of line.words){
+         const str=String(word.text||"").replace(/[^0-9]/g,"");
+         if(!/^(?:[1-9]|1[0-2])$/.test(str)||
+            Number(word.confidence)<.55)continue;
+         const box={x0:left+word.box.x0*w/512,
+          y0:top+word.box.y0*h/512,
+          x1:left+word.box.x1*w/512,
+          y1:top+word.box.y1*h/512};
+         const dx=((box.x0+box.x1)/2-face.cx)/face.radius;
+         const dy=((box.y0+box.y1)/2-face.cy)/face.radius;
+         const radius=Math.hypot(dx,dy);
+         if(radius<.51||radius>1.09)continue;
+         const hour=((Math.round((Math.atan2(dy,dx)+Math.PI/2)/
+          (Math.PI/6))%12)+12)%12||12;
+         if(String(hour)!==str)continue;
+         remember(hour,box,Number(word.confidence));
+        }
+      }
+     }catch(error){
+      window.__inkClockBlockDiagnostic=String(error?.message||error);
+     }
      const rgba=image.getContext("2d",{willReadFrequently:true})
       .getImageData(0,0,width,height).data;
      const regions=findDialGlyphRegionsRGBA(rgba,width,height,face);
-     if(regions.length<6)return [];
      const batch=Math.min(4,regions.length);
      for(let i=0;i<batch;i++){
       const {hour,box}=regions[(dialCursor+i)%regions.length];
@@ -473,23 +532,18 @@ async function create(){
       const text=String(result?.data?.text||"").trim();
       const conf=Number(result?.data?.confidence||0)/100;
       if(text!==String(hour)||!Number.isFinite(conf)||conf<.67)continue;
-      const previous=dialVotes.get(hour);
-      const unchanged=previous&&
-       Math.abs(previous.box.x0+previous.box.x1-box.x0-box.x1)<
-        face.radius*.32;
-      dialVotes.set(hour,{box,confidence:conf,lastSeen:scanNumber,
-       votes:unchanged?Math.min(6,previous.votes+1):1});
+      remember(hour,box,conf);
      }
-     dialCursor=(dialCursor+batch)%regions.length;
-     return regions.flatMap(({hour,box})=>{
-      const saved=dialVotes.get(hour);
-      if(!saved||scanNumber-saved.lastSeen>20||
-        (saved.votes<2&&saved.confidence<.91))return [];
-      const word={text:String(hour),confidence:saved.confidence,
-       box,clockDial:true};
-      return [{text:word.text,box,confidence:word.confidence,
-       words:[word],clockDial:true}];
-     });
+     if(regions.length)dialCursor=(dialCursor+batch)%regions.length;
+     return [...dialVotes.entries()].sort((a,b)=>a[0]-b[0])
+      .flatMap(([hour,saved])=>{
+       if(scanNumber-saved.lastSeen>20||
+         (saved.votes<2&&saved.confidence<.91))return [];
+       const word={text:String(hour),confidence:saved.confidence,
+        box:saved.box,clockDial:true};
+       return [{text:word.text,box:word.box,confidence:word.confidence,
+        words:[word],clockDial:true}];
+      });
     }catch(error){
      window.__inkClockOCRLastError=String(error?.message||error);
      return [];
