@@ -13,7 +13,8 @@ const doc={createElement:type=>{
  assert.equal(type,"canvas");
  return {...canvas};
 }};
-let received=0;
+let received=0,forceEmpty=false;
+const capturedWidths=[];
 const payload={width:1000,height:500,elapsedMs:125,lines:[
  {text:"NY THREADS",confidence:.95,box:{x0:90,y0:30,x1:490,y1:65},
   words:[
@@ -24,10 +25,10 @@ const payload={width:1000,height:500,elapsedMs:125,lines:[
 ]};
 const engine={create:async()=>({
  recognize:async(c,w,h)=>{
-  assert.equal(w,1000);
-  assert.equal(h,500);
+  if(!forceEmpty){assert.equal(w,1000);assert.equal(h,500);}
+  capturedWidths.push(w);
   received++;
-  return payload;
+  return forceEmpty?{width:w,height:h,lines:[],words:[]}:payload;
  }
 })};
 const context={window:{InkOfflineOCR:engine,devicePixelRatio:1},
@@ -50,6 +51,14 @@ assert.equal(client.track(empty,2700).text,"","Old document words must expire");
 client.reset();
 assert.equal(client.track(empty,3000).text,"");
 assert.equal(received,1);
+// A repeatedly unreadable 1920px frame must trigger full native detail,
+// without imposing 1080p cost on clear normal scans.
+forceEmpty=true;
+client.reset();
+for(let i=0;i<9;i++)await client.recognize({videoWidth:1920,videoHeight:1080});
+assert.equal(capturedWidths[0],1000);
+assert.ok(capturedWidths.slice(1).includes(1280));
+assert.ok(capturedWidths.slice(1).includes(1920),"Small distant text needs high-res recovery");
 const reader=api.createTracker();
 const wrapped=reader.update({
  width:1000,height:500,
