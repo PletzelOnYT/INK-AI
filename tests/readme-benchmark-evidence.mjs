@@ -20,7 +20,9 @@ for(const [file,svg] of [["recognition-vertical-bars.svg",recog],["completion-ve
  assert.ok(!/<script|onload=|<foreignObject/i.test(svg));
  assert.ok(readme.includes("./docs/"+file));
  assert.ok(svg.includes('fill="#ffffff"'),"Chart must have white background");
- assert.equal((svg.match(/data-active="true"/g)||[]).length,1,"Exactly one deployed model must be blue");
+ assert.equal((svg.match(/data-active="true"/g)||[]).length,2,"Each metric panel must mark the same single deployed model");
+ assert.ok(svg.includes("<path d="),"Version timeline must have connected milestone paths");
+ assert.ok(svg.includes("data-metric=\"first\"") && svg.includes("data-metric=\"second\""),"Need two separate metric panels");
 }
 const liveCnn=manifest.recognizer.weights,liveGru=manifest.completer.weights;
 assert.ok(recog.includes('data-active="true" data-weight="'+liveCnn+'"'),"CNN blue must match actual HTML manifest");
@@ -48,4 +50,12 @@ assert.ok(readme.includes("a real CNN, not nearest-template matching"));
 assert.ok(readme.includes("a real generative GRU, not a font or curve lookup"));
 assert.ok(readme.includes("**not** perfect-font replacements"));
 assert.ok(readme.includes("whole-character suggestion acceptance/correctness rate"));
-console.log("PASS: every model with scores shown, exactly one blue active checkpoint per chart, all measured metrics match checked-in records");
+for(const [svg,live] of [[recog,liveCnn],[comp,liveGru]]){
+ for(const metric of ["first","second"]){
+  const groups=[...svg.matchAll(/<g data-model="([^"]+)" data-active="true" data-weight="([^"]+)" data-metric="([^"]+)"/g)]
+   .filter(m=>m[3]===metric);
+  assert.equal(groups.length,1,"One active milestone per metric");
+  assert.equal(groups[0][2],live,"Blue node must match build manifest");
+ }
+}
+console.log("PASS: connected milestone timeline, two distinct metrics, measured scores and one blue deployed model");
