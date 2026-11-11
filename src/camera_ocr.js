@@ -204,11 +204,13 @@ function paint(candidateBoxes,frame){
  }
 }
 function keyFor(image){
+ // The old 1-bit every-other-pixel cache key conflated distinct letters.
+ // Quantize every pixel into 16 levels using independent hash streams.
  let a=2166136261,b=2166136261;
- for(let i=0;i<image.length;i+=2){
-  const x=image[i]>0.5?1:0;
+ for(let i=0;i<image.length;i++){
+  const x=Math.max(0,Math.min(15,Math.round(image[i]*15)));
   a=Math.imul(a^x,16777619);
-  b=Math.imul(b^((x<<1)^(i&31)),16777619);
+  b=Math.imul(b^(x+(i&255)),2246822519);
  }
  return (a>>>0).toString(16)+":"+(b>>>0).toString(16);
 }
