@@ -35,7 +35,7 @@ from train_stroke_sequence import MIXTURES
 from torch import nn
 
 HARD = set("hnbmrukapgqofeIil1jJ0OoQ9B6Ss5zZ2+≠÷=:")
-FOCUS = set("hnbmrukapgqofe")
+FOCUS = set("hnbmrukapgqofexitj")
 CUTS = (5,6,6,8,8,10,10,12,12,16,20,24)
 FOCUS_WEIGHTS = {"h":9.0,"n":5.0,"m":5.0,"b":4.0,"r":4.0,
                  "u":3.5,"k":6.0,"a":3.5,"p":3.5,"g":3.5,
