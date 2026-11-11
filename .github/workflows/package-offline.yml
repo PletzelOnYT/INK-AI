@@ -7,6 +7,8 @@ on:
       - "src/index.shell.html"
       - "src/app.js"
       - "src/camera_ocr.js"
+      - "src/camera_line_runtime.js"
+      - "models/ink-native-line-ctc-v1.json"
       - "src/camera_text_detector.js"
       - "src/camera_tracking.js"
       - "src/train_print_cnn.py"
