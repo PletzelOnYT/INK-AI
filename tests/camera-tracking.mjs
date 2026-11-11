@@ -6,13 +6,25 @@ const win={};
 vm.runInNewContext(source,{window:win,Date,Math,Number,Map,Set,Uint8Array});
 const core=win.InkCameraCore;
 assert.ok(core?.createTracker&&core?.projectBox&&core?.createSceneMonitor);
-assert.equal(core.looksLikeWord("Jmz5",.99),false);
-assert.equal(core.looksLikeWord("JmzS",.99),false);
+// The dictionary cannot decide whether a camera contains a word:
+ // ANY confidently read brand, short abbreviation or identifier is valid.
+assert.equal(core.looksLikeWord("NY",.90),true);
+assert.equal(core.looksLikeWord("THREADS",.88),true);
+assert.equal(core.looksLikeWord("BMW",.88),true);
+assert.equal(core.looksLikeWord("XZ90",.95),true);
 assert.equal(core.looksLikeWord("Chromebook",.84),true);
+assert.equal(core.looksLikeWord("NY",.50),false);
+assert.equal(core.looksLikeWord("NY!",.99),false);
+assert.equal(core.looksLikeWord("FAKE",.30),false);
 const preds=word=>[...word].map(ch=>({top:[
  {char:ch,confidence:.82},{char:"z",confidence:.09}]}));
 const valid=core.decodePrintedWord(preds("Thank"),["thank","think","thunk"]);
 assert.equal(valid.text,"Thank");
+const brand=core.decodePrintedWord(preds("THREADS"),["threads","thread"]);
+assert.equal(brand.text,"THREADS",
+ "Uppercase packaging text must stay uppercase");
+assert.equal(core.decodePrintedWord(preds("NY"),["ny"])?.text,"NY",
+ "Two-letter abbreviations must not be filtered out");
 assert.ok(valid.confidence<=.83,
  "Dictionary correction must never inflate model confidence");
 assert.equal(core.decodePrintedWord(preds("JmzS"),["nancy","thank"]),null,
