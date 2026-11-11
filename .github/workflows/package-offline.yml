@@ -11,6 +11,7 @@ on:
       - "src/camera_document_layout.js"
       - "src/camera_offline_bridge.js"
       - "src/camera_offline_engine_entry.mjs"
+      - "src/camera_orientation_core.mjs"
       - "scripts/build_offline_ocr.mjs"
       - "package.json"
       - "src/camera_line_runtime.js"
