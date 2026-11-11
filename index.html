@@ -24220,6 +24220,11 @@ poison
   const aa=normalized(a),bb=normalized(b);
   if(!aa||!bb)return false;
   if(aa===bb||aa.includes(bb)||bb.includes(aa))return true;
+  // Character-identical OCR variants with missing/extra spaces refer to
+  // the same printed line. Do not display "OCTOBER 21ST" twice merely
+  // because another crop reads "OCTOBER21ST".
+  const compactA=aa.replace(/\s+/g,""),compactB=bb.replace(/\s+/g,"");
+  if(compactA.length>=4&&compactA===compactB)return true;
   const aset=new Set(aa.split(" "));
   return bb.split(" ").some(token=>token.length>=3&&aset.has(token));
  }
@@ -24298,8 +24303,12 @@ poison
       // (e.g., "Open House" -> "House" -> "Open House").
       const incomingChars=key.replace(/ /g,"").length;
       const oldChars=tracked.key.replace(/ /g,"").length;
+      const sameVisibleLetters=tracked.key.replace(/\s+/g,"")===
+       key.replace(/\s+/g,"");
+      const betterSeparated=tracked.words.length>line.words.length;
       const keepFull=compatible&&tracked.text&&
        (incomingChars<oldChars||
+        (sameVisibleLetters&&betterSeparated)||
         (!same&&incomingChars<=oldChars&&tracked.votes<2))&&
        now-tracked.lastSeen<6500;
       if(keepFull){
