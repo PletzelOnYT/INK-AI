@@ -214,13 +214,25 @@ async function create(){
    async function tiltedRead(image,width,height,angle){
     const size=rotatedSize(angle,width,height);
     sideCanvas.width=size.width;sideCanvas.height=size.height;
-    sideContext.fillStyle=backgroundColor(image,width,height);
+    const background=backgroundColor(image,width,height);
+    sideContext.fillStyle=background;
     sideContext.fillRect(0,0,size.width,size.height);
     sideContext.save();
     sideContext.translate(size.width/2,size.height/2);
     sideContext.rotate(angle*Math.PI/180);
     sideContext.drawImage(image,-width/2,-height/2,width,height);
     sideContext.restore();
+    // On dark signs, feed the OCR recognizer black letters on light paper
+    // after deskewing. It is the SAME pixels (no fake text), only inverted.
+    // This avoids Tesseract interpreting a bright sign as a negative photo.
+    const rgb=background.match(/\d+/g)?.map(Number)||[255,255,255];
+    const luminance=.299*rgb[0]+.587*rgb[1]+.114*rgb[2];
+    if(luminance<110){
+     sideContext.globalCompositeOperation="difference";
+     sideContext.fillStyle="#ffffff";
+     sideContext.fillRect(0,0,size.width,size.height);
+     sideContext.globalCompositeOperation="source-over";
+    }
     const scan=await worker.recognize(sideCanvas,{}, {blocks:true});
     const lines=extractWords(scan.data);
     return {lines:unrotateLines(lines,angle,width,height,
