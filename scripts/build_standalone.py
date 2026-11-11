@@ -11,10 +11,12 @@ import json,os
 ROOT=Path(__file__).resolve().parents[1]
 html=(ROOT/"src/index.shell.html").read_text(encoding="utf-8")
 assert '<script src="./src/app.js" defer></script>' in html
+html=html.replace('<script src="./src/camera_tracking.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_ocr.js" defer></script>', '')
 css=(ROOT/"src/app.css").read_text(encoding="utf-8")
 app=(ROOT/"src/app.js").read_text(encoding="utf-8")
 camera=(ROOT/"src/camera_ocr.js").read_text(encoding="utf-8")
+tracking=(ROOT/"src/camera_tracking.js").read_text(encoding="utf-8")
 preference=(ROOT/"src/neural_preference_model.js").read_text(encoding="utf-8")
 def accepted_model(version):
     candidate=ROOT/f"models/ink-stroke-prefix-domain-{version}.json"
@@ -67,7 +69,7 @@ html=html.replace('<link rel="stylesheet" href="./src/app.css">',
                   '<style>\n'+css+'\n</style>')
 html=html.replace('<script src="./src/neural_preference_model.js"></script>', '')
 html=html.replace('<script src="./src/app.js" defer></script>',
-                  '\n'.join(tags)+'\n<script>\n'+preference+'\n'+app+'\n'+camera+'\n</script>')
+                  '\n'.join(tags)+'\n<script>\n'+preference+'\n'+app+'\n'+tracking+'\n'+camera+'\n</script>')
 out=ROOT/"dist/ink-ai-standalone.html"
 out.parent.mkdir(exist_ok=True)
 out.write_text(html,encoding="utf-8")
