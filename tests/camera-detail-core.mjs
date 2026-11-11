@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import {centerDetailCrop,detailSize,remapDetailLines,enhanceInkRGBA,
- isCompactNumericRead,perspectiveQuad,quadMapper,rectifyPerspectiveRGBA,findDarkDisplayRGBA} from "../src/camera_detail_core.mjs";
+ isCompactNumericRead,perspectiveQuad,quadMapper,rectifyPerspectiveRGBA,findDarkDisplayRGBA,findAnalogClockRGBA,findDialGlyphRegionsRGBA} from "../src/camera_detail_core.mjs";
 
 assert.deepEqual(detailSize(1920,1080),{width:1920,height:1080});
 assert.deepEqual(detailSize(3840,2160),{width:1920,height:1080});
@@ -100,3 +100,41 @@ assert.ok(evidence.plausibleWord({text:"9",confidence:.93,
 assert.ok(!evidence.plausibleWord({text:"I",confidence:.93,
  box:{x0:20,y0:5,x1:40,y1:22}},1,W,H));
 console.log("PASS: 1080p detail, magnified crop geometry, numeric clocks, pencil and RGB text evidence");
+
+
+// A distant room clock is not an ordinary horizontal text line. Regression:
+// localize the circular rim, then localize real separated numeral ink; a
+// blank wall must not produce a clock or invented numbers.
+const aw=320,ah=180,analog=new Uint8ClampedArray(aw*ah*4);
+const acx=149,acy=82,ar=26;
+for(let y=0;y<ah;y++)for(let x=0;x<aw;x++){
+ const d=Math.hypot(x-acx,y-acy);
+ let shade=d<24?219:(d>=24&&d<=27?67:213);
+ for(let hour=1;hour<=12;hour++){
+  const theta=(hour*30-90)*Math.PI/180;
+  const px=Math.round(acx+Math.cos(theta)*ar*.62);
+  const py=Math.round(acy+Math.sin(theta)*ar*.62);
+  if(Math.abs(x-px)<=1&&Math.abs(y-py)<=2)shade=40;
+ }
+ const p=(y*aw+x)*4;
+ analog[p]=analog[p+1]=analog[p+2]=shade;
+ analog[p+3]=255;
+}
+const analogFace=findAnalogClockRGBA(analog,aw,ah);
+assert.ok(analogFace,"The clock-face detector must find a small real annular dial");
+assert.ok(Math.hypot(analogFace.cx-acx,analogFace.cy-acy)<7);
+assert.ok(analogFace.radius>=22&&analogFace.radius<=32);
+const glyphRegions=findDialGlyphRegionsRGBA(analog,aw,ah,analogFace);
+assert.ok(glyphRegions.length>=8,"The detector must isolate ink around the dial");
+assert.ok(glyphRegions.every(region=>region.hour>=1&&region.hour<=12));
+const emptyRoom=new Uint8ClampedArray(aw*ah*4);
+for(let i=0;i<emptyRoom.length;i+=4){
+ emptyRoom[i]=emptyRoom[i+1]=emptyRoom[i+2]=213;
+ emptyRoom[i+3]=255;
+}
+assert.equal(findAnalogClockRGBA(emptyRoom,aw,ah),null);
+assert.ok(evidence.plausibleWord({text:"7",clockDial:true,confidence:.76,
+ box:{x0:20,y0:5,x1:30,y1:24}},1,W,H));
+assert.ok(!evidence.plausibleWord({text:"7",clockDial:true,confidence:.20,
+ box:{x0:20,y0:5,x1:30,y1:24}},1,W,H));
+console.log("PASS: pixel-grounded analog clock ring and isolated numerals, without guessing blank walls");
