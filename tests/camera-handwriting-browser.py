@@ -45,10 +45,12 @@ try:
           g.fillStyle="#f9f9f5";g.fillRect(0,0,960,540);
           g.font=font;g.fillStyle="#1a2430";
           g.fillText("handwriting example",125,260);
+          const started=performance.now();
           const read=await window.InkCameraHandwriting.recognize(
             canvas,960,540);
           results.push({font,regions:read.regions||0,
-            glyphs:read.glyphs||0,
+            glyphs:read.glyphs||0,printAssistedGlyphs:read.printAssistedGlyphs||0,
+            ms:Math.round(performance.now()-started),
             text:read.lines.map(line=>line.text).join(" ")});
         }
         g.fillStyle="#f9f9f5";g.fillRect(0,0,960,540);
@@ -63,6 +65,8 @@ try:
     assert result["modelCalls"]>=1, result
     assert result["modelGlyphs"]>=3, result
     assert result["blankLines"]==0, result
+    assert result["results"][0]["text"], result
+    assert result["results"][1]["text"], result
     print("PASS: offline Chrome invokes shipped handwriting CNN on actual camera-style glyph pixels", flush=True)
     print("HANDWRITING_DIAGNOSTICS",result,flush=True)
 finally:
