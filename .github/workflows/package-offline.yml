@@ -8,7 +8,6 @@ on:
       - "src/app.js"
       - "src/camera_ocr.js"
       - "src/train_print_cnn.py"
-      - "scripts/update_model_graphs.py"
       - "models/ink-print-cnn-v1.json"
       - "models/print-cnn-v1-metrics.json"
       - "models/recognition-v3-metrics.json"
@@ -41,15 +40,14 @@ jobs:
       - run: |
           git fetch origin main
           git reset --hard origin/main
-          python3 scripts/update_model_graphs.py
           python3 scripts/build_standalone.py
       - name: Update downloadable index.html
         run: |
           cp dist/ink-ai-standalone.html index.html
-          git add index.html docs/ai-systems.svg docs/camera-print-benchmarks.svg
+          git add index.html
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Refresh INK AI benchmarks and root standalone HTML"
+            git commit -m "Rebuild root standalone HTML"
             git push origin HEAD:main
           fi
