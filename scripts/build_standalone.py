@@ -53,6 +53,10 @@ models=[
  ("inkEnglishWords","text/plain","data/english-words.txt"),
  ("strokeWorkerSource","text/plain","src/stroke_worker.js"),
 ]
+# Include the locally trained printed-character CNN when the checked-in
+# checkpoint exists; keep older source builds functional until it is trained.
+if (ROOT/"models/ink-print-cnn-v1.json").is_file():
+    models.append(("inkPrintModel","application/json","models/ink-print-cnn-v1.json"))
 tags=[]
 for ident,kind,path in models:
     content=(ROOT/path).read_text(encoding="utf-8")
