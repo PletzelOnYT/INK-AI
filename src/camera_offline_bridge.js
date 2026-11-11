@@ -15,9 +15,10 @@
   if(!a||!b)return false;
   const w=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0));
   const h=Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
-  const smaller=Math.min(Math.max(1,(a.x1-a.x0)*(a.y1-a.y0)),
-    Math.max(1,(b.x1-b.x0)*(b.y1-b.y0)));
-  return w*h/smaller>.48;
+  // Score against the proposed handwritten word, not the smaller box:
+  // a short incorrect Tesseract fragment must not hide a full handwritten line.
+  const candidateArea=Math.max(1,(b.x1-b.x0)*(b.y1-b.y0));
+  return w*h/candidateArea>.68;
  }
  function hasReliableText(payload){
   const words=payload?.words||[];
@@ -218,10 +219,18 @@
      handAttempts++;
      try{
       const supplement=await Handwriting.recognize(canvas,width,height);
-      const extra=(supplement.lines||[]).filter(line=>
-       !accepted.lines.some(existing=>overlaps(existing.box,line.box))&&
-       !line.words.some(word=>accepted.words.some(existing=>
-        overlaps(existing.box,word.box))));
+      const extra=(supplement.lines||[]).map(line=>{
+       // Retain non-overlapping handwritten words even when a printed label
+       // or an incorrect Tesseract fragment sits on the same physical row.
+       const words=line.words.filter(word=>
+        !accepted.words.some(existing=>overlaps(existing.box,word.box)));
+       if(!words.length)return null;
+       const box={x0:Math.min(...words.map(w=>w.box.x0)),
+        y0:Math.min(...words.map(w=>w.box.y0)),
+        x1:Math.max(...words.map(w=>w.box.x1)),
+        y1:Math.max(...words.map(w=>w.box.y1))};
+       return {...line,words,box,text:words.map(w=>w.text).join(" ")};
+      }).filter(Boolean);
       if(extra.length){
        const combined=checkedPayload({...result,
         lines:[...accepted.lines,...extra]},width,height);
