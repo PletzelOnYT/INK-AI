@@ -51,15 +51,16 @@ export function estimateTextAngle(rgba,width,height,options={}){
  const quantile=p=>{const stop=Math.ceil(n*p);let sum=0;for(let i=0;i<256;i++){sum+=hist[i];if(sum>=stop)return i}return 255};
  const low=quantile(.05),high=quantile(.95);
  if(high-low<28)return {angle:null,confidence:0,reason:"low-contrast"};
- let sum=0,sumMass=0,best=-1,bestT=127;
- for(let i=0;i<256;i++)sum+=i*hist[i];
+ let totalSum=0,backgroundSum=0,backgroundCount=0,best=-1,bestT=127;
+ for(let i=0;i<256;i++)totalSum+=i*hist[i];
  for(let t=0;t<255;t++){
-  sumMass+=hist[t];
-  sum-=t*hist[t];
-  if(sumMass<1||sumMass>=n)continue;
-  const diff=(sum+sumMass*t)/sumMass-
-      (sum)/Math.max(1,n-sumMass);
-  const v=sumMass*(n-sumMass)*diff*diff;
+  backgroundCount+=hist[t];
+  backgroundSum+=t*hist[t];
+  if(backgroundCount<1||backgroundCount>=n)continue;
+  const otherCount=n-backgroundCount;
+  const diff=backgroundSum/backgroundCount-
+      (totalSum-backgroundSum)/otherCount;
+  const v=backgroundCount*otherCount*diff*diff;
   if(v>best){best=v;bestT=t}
  }
  // Text is the minority foreground in printed-label imagery.
