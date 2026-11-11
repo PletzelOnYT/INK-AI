@@ -172,7 +172,8 @@ function detectedWordRegions(selected){
     y1:Math.max(...group.map(c=>c.y1))};
    const projected=project(box,frame);
    if(Core.visibility(projected.points,base.width,base.height))
-    regions.push({box:projected.box,polygon:projected.points});
+    regions.push({box:projected.box,polygon:projected.points,
+     frame,sourceBox:box});
    group=[];
   };
   for(const c of letters){
@@ -182,6 +183,23 @@ function detectedWordRegions(selected){
   flush();
  }
  return dedupe(regions);
+}
+// Crop text-region RGB evidence for the independent text-vs-clutter neural
+// classifier. A crop that merely has plausible glyph geometry is not trusted.
+function textnessInput(region){
+ const frame=region.frame,box=region.sourceBox;
+ const values=new Array(64*24),data=frame.image.data;
+ const width=box.x1-box.x0+1,height=box.y1-box.y0+1;
+ const px=Math.max(3,width*.055),py=Math.max(2,height*.16);
+ for(let y=0;y<24;y++)for(let x=0;x<64;x++){
+  const sx=Math.min(frame.w-1,Math.max(0,
+    Math.floor(box.x0-px+(x+.5)*(width+px*2)/64)));
+  const sy=Math.min(frame.h-1,Math.max(0,
+    Math.floor(box.y0-py+(y+.5)*(height+py*2)/24)));
+  const k=(sy*frame.w+sx)*4;
+  values[y*64+x]=(data[k]*.299+data[k+1]*.587+data[k+2]*.114)/255;
+ }
+ return values;
 }
 function keyFor(image){
  // The old 1-bit every-other-pixel cache key conflated distinct letters.
@@ -357,22 +375,35 @@ async function scan(id){
   // overlooking small rows like "Thank you!!".
   const shift=geometry.length?(pass*2)%geometry.length:0;
   const scanOrder=[...geometry.slice(shift),...geometry.slice(0,shift)];
+  const frame={w:base.width,h:base.height};
+  const proposed=detectedWordRegions(geometry);
+  let verified=proposed;
+  if(window.__inkTextnessReady&&proposed.length){
+   const scores=await window.__inkCameraVerifyText(
+     proposed.slice(0,14).map(textnessInput));
+   if(!active||id!==epoch)return;
+   verified=proposed.slice(0,14).filter((item,i)=>
+     Number.isFinite(scores?.[i])&&scores[i]>=.88);
+  }
+  const regions=regionTracker.update(verified,Date.now());
+  stats.detectedLines=geometry.length;
+  stats.highlightedRegions=regions.length;
+  stats.textnessReady=Boolean(window.__inkTextnessReady);
+  stats.verifiedRegions=verified.length;
+  const source=window.__inkTextnessReady?
+   scanOrder.filter(option=>verified.some(region=>region.frame===option.frame)):
+   scanOrder;
   const selected=[];let total=0;
-  for(const option of scanOrder){
+  for(const option of source){
    const count=option.line.letters.length;
    if(count>40||total+count>45||selected.length>=5)continue;
    selected.push(option);total+=count;
   }
-  const frame={w:base.width,h:base.height};
-  const regions=regionTracker.update(detectedWordRegions(geometry),Date.now());
-  stats.detectedLines=geometry.length;
-  stats.highlightedRegions=regions.length;
-  // Show verified text-region highlights immediately; slow CNN inference
-  // should never block the overlay from appearing on the live video.
   paint(regions,frame);
   if(regions.length&&!tracker.snapshot().text)
-   show("Scanning text — checking character evidence…");
-  const images=selected.flatMap(item=>item.line.letters.map(box=>characterImage(box,item.frame)));
+   show("Verifying printed characters…");
+  const images=selected.flatMap(item=>item.line.letters.map(
+    box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
   if(!active||id!==epoch)return;
   const found=decode(selected,predictions);
