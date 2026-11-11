@@ -48,16 +48,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
+      - name: Compile and embed offline pretrained OCR
+        run: |
           git fetch origin main
           git reset --hard origin/main
-          npm install --no-audit --no-fund --ignore-scripts
-          npm run build:ocr
-          python3 scripts/build_standalone.py
+          {
+            npm install --no-audit --no-fund --ignore-scripts
+            npm run build:ocr
+            python3 scripts/build_standalone.py
+          } 2>&1 | tee /tmp/ink-offline-ocr-build.log
+      - name: Preserve the actual build error when packaging fails
+        if: failure()
+        run: |
+          mkdir -p docs
+          {
+            echo "# Offline OCR build failed"
+            echo
+            echo "GitHub Actions could not produce the embedded WASM model."
+            echo "The existing index.html was NOT replaced."
+            echo
+            echo '---'
+            echo
+            echo '## Last build messages'
+            echo
+            echo '~~~text'
+            tail -n 65 /tmp/ink-offline-ocr-build.log 2>/dev/null || echo "Build log unavailable"
+            echo '~~~'
+          } > docs/offline-ocr-build-error.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/offline-ocr-build-error.md
+          if ! git diff --cached --quiet; then
+            git commit -m "Record offline OCR packaging failure for debugging"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
       - name: Update downloadable index.html
         run: |
           cp dist/ink-ai-standalone.html index.html
+          rm -f docs/offline-ocr-build-error.md
           git add index.html
+          git add -u docs/offline-ocr-build-error.md 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
