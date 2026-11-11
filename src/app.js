@@ -32,6 +32,9 @@ window.__inkGhostPoints=0;
 function display(text,muted=false){if(window.__inkCameraActive)return;guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
 function chooseTool(next){
  if(next!=="pen"&&next!=="eraser")return;
+ // Selecting a drawing tool exits Camera instead of leaving hidden tool
+ // states and two active toolbar icons simultaneously.
+ if(window.__inkCameraActive)window.__inkStopCamera?.();
  tool=next;canvas.dataset.tool=next;
  if(tool!=="pen"){++glyphEpoch;clearGhost()}
  queueGhost();
@@ -292,6 +295,7 @@ function queueGhost(){
  glyphTimer=setTimeout(()=>{glyphTimer=0;generateGlyph()},delay);
 }
 function updateAssist(){
+ if(window.__inkCameraActive)window.__inkStopCamera?.();
  assistEnabled=!assistEnabled;
  window.__inkAssistEnabled=assistEnabled;
  assistButton.setAttribute("aria-pressed",String(assistEnabled));
@@ -305,6 +309,33 @@ function updateAssist(){
  }
 }
 assistButton.addEventListener("click",updateAssist);
+
+// Camera has its own mutually exclusive tool state. Suspend drawing/Assist
+// without deleting the actual drawing or the user's previous choice.
+let beforeCamera=null;
+window.__inkEnterCameraMode=()=>{
+ if(beforeCamera)return;
+ beforeCamera={tool,assistEnabled};
+ if(assistEnabled){
+  ++glyphEpoch;
+  clearTimeout(glyphTimer);glyphTimer=0;glyphDirty=false;
+  clearGhost();
+ }
+ assistEnabled=false;
+ window.__inkAssistEnabled=false;
+ assistButton.setAttribute("aria-pressed","false");
+ assistButton.classList.remove("assist-on");
+ document.getElementById("pen").setAttribute("aria-pressed","false");
+ document.getElementById("eraser").setAttribute("aria-pressed","false");
+ canvas.dataset.tool="camera";
+};
+window.__inkLeaveCameraMode=()=>{
+ if(!beforeCamera)return;
+ const previous=beforeCamera;
+ beforeCamera=null;
+ chooseTool(previous.tool);
+ if(previous.assistEnabled&&!assistEnabled)updateAssist();
+};
 function bounds(stroke){
  let l=Infinity,r=-Infinity,t=Infinity,b=-Infinity;
  for(const [x,y] of stroke.points){l=Math.min(l,x);r=Math.max(r,x);t=Math.min(t,y);b=Math.max(b,y)}
