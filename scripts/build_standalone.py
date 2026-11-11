@@ -16,6 +16,12 @@ html=html.replace('<script src="./src/camera_text_detector.js" defer></script>',
 html=html.replace('<script src="./src/camera_line_runtime.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_offline_bridge.js" defer></script>', '')
 html=html.replace('<script src="./src/camera_ocr.js" defer></script>', '')
+# Preserve attribution directly in the single distributable HTML as well
+# as in the editable GitHub repository.
+from html import escape as html_escape
+notice=(ROOT/"third_party/OCR_NOTICE.md").read_text(encoding="utf-8")
+html=html.replace("</head>",'<script id="inkOcrAttribution" type="text/plain">'+
+                  html_escape(notice)+'</script>\n</head>')
 css=(ROOT/"src/app.css").read_text(encoding="utf-8")
 app=(ROOT/"src/app.js").read_text(encoding="utf-8")
 camera=(ROOT/"src/camera_ocr.js").read_text(encoding="utf-8")
