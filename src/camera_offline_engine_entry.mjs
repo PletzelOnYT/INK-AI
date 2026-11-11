@@ -83,6 +83,30 @@ function restoreRotation(lines,angle,width,height){
    })};
  });
 }
+// Correctly map 90°/180° OCR results back to the unrotated webcam. The
+// standard camera path is never rotated unless ordinary OCR finds no text.
+function restoreRightAngle(lines,degrees,w,h){
+ const back=(x,y)=>degrees===90?{x:y,y:h-x}:
+  degrees===-90?{x:w-y,y:x}:{x:w-x,y:h-y};
+ function corners(box){
+  const points=[
+   back(box.x0,box.y0),back(box.x1,box.y0),
+   back(box.x1,box.y1),back(box.x0,box.y1)
+  ];
+  return {points,box:{
+   x0:Math.min(...points.map(p=>p.x)),x1:Math.max(...points.map(p=>p.x)),
+   y0:Math.min(...points.map(p=>p.y)),y1:Math.max(...points.map(p=>p.y))
+  }};
+ }
+ return lines.map(line=>{
+  const projected=corners(line.box);
+  return {...line,box:projected.box,points:projected.points,
+   words:line.words.map(word=>{
+    const wbox=corners(word.box);
+    return {...word,box:wbox.box,points:wbox.points};
+   })};
+ });
+}
 async function create(){
  if(singleton)return singleton;
  if(creation)return creation;
@@ -112,6 +136,9 @@ async function create(){
     tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT),
     preserve_interword_spaces:"1"
    });
+   let emptyFrames=0;
+   const sideCanvas=document.createElement("canvas");
+   const sideContext=sideCanvas.getContext("2d",{alpha:false});
    const engine={
     kind:"bundled-tesseract-wasm",
     async recognize(image,width,height){
@@ -131,7 +158,33 @@ async function create(){
        deskewed=true;
       }
      }
-     return {engine:engine.kind,width,height,deskewed,
+     let quarterTurn=0;
+     if(lines.some(x=>x.text.replace(/[^A-Za-z0-9]/g,"").length>=3)){
+      emptyFrames=0;
+     }else{
+      emptyFrames++;
+      // Only on unsuccessful frames: try ONE quarter-turn every second
+      // miss. Avoid slowing the already-working horizontal OCR path.
+      if(emptyFrames%2===0){
+       const angle=[90,-90,180][Math.floor(emptyFrames/2-1)%3];
+       sideCanvas.width=Math.abs(angle)===90?height:width;
+       sideCanvas.height=Math.abs(angle)===90?width:height;
+       sideContext.fillStyle="#fff";
+       sideContext.fillRect(0,0,sideCanvas.width,sideCanvas.height);
+       sideContext.save();
+       sideContext.translate(sideCanvas.width/2,sideCanvas.height/2);
+       sideContext.rotate(angle*Math.PI/180);
+       sideContext.drawImage(image,-width/2,-height/2,width,height);
+       sideContext.restore();
+       const other=await worker.recognize(sideCanvas,{}, {blocks:true});
+       const candidateLines=extractWords(other.data);
+       if(candidateLines.some(x=>x.text.replace(/[^A-Za-z0-9]/g,"").length>=3)){
+        lines=restoreRightAngle(candidateLines,angle,width,height);
+        quarterTurn=angle;emptyFrames=0;
+       }
+      }
+     }
+     return {engine:engine.kind,width,height,deskewed,quarterTurn,
       elapsedMs:Math.round(performance.now()-now),
       lines,words:lines.flatMap(x=>x.words),
       text:lines.map(x=>x.text).join("\n")};
