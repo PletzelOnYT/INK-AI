@@ -85,6 +85,11 @@ function restoreRotation(lines,angle,width,height){
 }
 // Correctly map 90°/180° OCR results back to the unrotated webcam. The
 // standard camera path is never rotated unless ordinary OCR finds no text.
+function strongPrintedRead(lines){
+ return lines.some(line=>(line.words||[]).some(word=>
+  (Number(word.confidence)||0)>=.68&&
+  String(word.text||"").replace(/[^A-Za-z0-9]/g,"").length>=4));
+}
 function restoreRightAngle(lines,degrees,w,h){
  const back=(x,y)=>degrees===90?{x:y,y:h-x}:
   degrees===-90?{x:w-y,y:x}:{x:w-x,y:h-y};
@@ -159,7 +164,7 @@ async function create(){
       }
      }
      let quarterTurn=0;
-     if(lines.some(x=>x.text.replace(/[^A-Za-z0-9]/g,"").length>=3)){
+     if(strongPrintedRead(lines)){
       emptyFrames=0;
      }else{
       emptyFrames++;
@@ -178,7 +183,7 @@ async function create(){
        sideContext.restore();
        const other=await worker.recognize(sideCanvas,{}, {blocks:true});
        const candidateLines=extractWords(other.data);
-       if(candidateLines.some(x=>x.text.replace(/[^A-Za-z0-9]/g,"").length>=3)){
+       if(strongPrintedRead(candidateLines)){
         lines=restoreRightAngle(candidateLines,angle,width,height);
         quarterTurn=angle;emptyFrames=0;
        }
