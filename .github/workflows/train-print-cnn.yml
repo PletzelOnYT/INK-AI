@@ -44,7 +44,6 @@ jobs:
           cp dist/ink-ai-standalone.html index.html
           node --check src/camera_ocr.js
           node tests/camera-local-ocr.mjs
-          node tests/print-camera-graphs.mjs
       - name: Commit trained model, exact measurements and HTML
         run: |
           git config user.name "github-actions[bot]"
