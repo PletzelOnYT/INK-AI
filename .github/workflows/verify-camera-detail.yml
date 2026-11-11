@@ -12,6 +12,7 @@ on:
       - "tests/camera-native-focus.mjs"
       - "tests/camera-flicker-regression.mjs"
       - "tests/camera-shirt-poster-browser.py"
+      - "tests/camera-analog-clock-browser.py"
       - "src/camera_handwriting.js"
       - "tests/camera-handwriting.mjs"
       - "tests/camera-handwriting-browser.py"
@@ -65,6 +66,7 @@ jobs:
           python3 tests/camera-detail-browser.py
           python3 tests/camera-fast-focus-browser.py
           python3 tests/camera-shirt-poster-browser.py
+          python3 tests/camera-analog-clock-browser.py
           python3 tests/camera-form-browser.py
           python3 tests/camera-handwriting-browser.py
           python3 tests/camera-sideways-browser.py
