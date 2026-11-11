@@ -57,12 +57,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Regenerate model history from released evaluation files
-        run: python3 scripts/update_model_graphs.py
       - name: Compile and embed offline pretrained OCR
         run: |
           git fetch origin main
           git reset --hard origin/main
+          python3 scripts/update_model_graphs.py
           {
             npm install --no-audit --no-fund --ignore-scripts
             npm run build:ocr
