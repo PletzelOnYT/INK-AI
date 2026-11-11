@@ -3,6 +3,7 @@
 // Tesseract.js and Tesseract are open-source third-party OCR engines (Apache-2.0).
 // INK AI's handwriting recognizer and completer remain first-party systems.
 import tesseract from "tesseract.js";
+import {estimateTextAngle,rotatedSize,unrotateLines,rotationQueue} from "./camera_orientation_core.mjs";
 import {set} from "idb-keyval";
 import {simd} from "wasm-feature-detect";
 import workerCode from "../.ocr-build/worker.bin";
@@ -141,56 +142,160 @@ async function create(){
     tessedit_pageseg_mode:String(tesseract.PSM.SPARSE_TEXT),
     preserve_interword_spaces:"1"
    });
-   let emptyFrames=0;
    const sideCanvas=document.createElement("canvas");
    const sideContext=sideCanvas.getContext("2d",{alpha:false});
+   const probeCanvas=document.createElement("canvas");
+   probeCanvas.width=260;probeCanvas.height=170;
+   const probeContext=probeCanvas.getContext("2d",{willReadFrequently:true});
+   let previousAngle=null,previousStreak=0,attemptCursor=0,scanNumber=0;
+   function candidateStrength(lines){
+    let total=0,meaningful=0,best=0;
+    for(const line of lines){
+     for(const word of line.words||[]){
+      const chars=String(word.text||"").replace(/[^A-Za-z0-9]/g,"").length;
+      if(!chars)continue;
+      const certainty=Math.max(0,Math.min(1,Number(word.confidence)||0));
+      // Short random OCR fragments must not block an actually rotated word.
+      if(chars>=3&&certainty>=.56)meaningful++;
+      const value=Math.min(16,chars)*certainty*
+         (chars>=3?1:0.25);
+      total+=value;best=Math.max(best,value);
+     }
+    }
+    return {value:total,meaningful,best};
+   }
+   function clearRead(lines){
+    const strength=candidateStrength(lines);
+    return strength.value>=6.8&&strength.meaningful>=1&&
+      (strength.best>=5.3||strength.meaningful>=2);
+   }
+   function direction(image,width,height){
+    // Only 260x170 pixels are read back; no full webcam bitmap is copied.
+    probeContext.fillStyle="#fff";
+    probeContext.fillRect(0,0,260,170);
+    probeContext.drawImage(image,0,0,260,170);
+    const rgba=probeContext.getImageData(0,0,260,170).data;
+    return estimateTextAngle(rgba,260,170);
+   }
+   async function tiltedRead(image,width,height,angle){
+    const size=rotatedSize(angle,width,height);
+    sideCanvas.width=size.width;sideCanvas.height=size.height;
+    sideContext.fillStyle="#fff";
+    sideContext.fillRect(0,0,size.width,size.height);
+    sideContext.save();
+    sideContext.translate(size.width/2,size.height/2);
+    sideContext.rotate(angle*Math.PI/180);
+    sideContext.drawImage(image,-width/2,-height/2,width,height);
+    sideContext.restore();
+    const scan=await worker.recognize(sideCanvas,{}, {blocks:true});
+    const lines=extractWords(scan.data);
+    return {lines:unrotateLines(lines,angle,width,height,
+       size.width,size.height),rotation:angle,
+       rawLines:lines};
+   }
    const engine={
     kind:"bundled-tesseract-wasm",
     async recognize(image,width,height){
      const now=performance.now();
+     scanNumber++;
+     let candidate=null;
+     let attempts=0;
+     let hint=null;
+     let deskewed=false;
+     const query=async angle=>{
+      attempts++;
+      return tiltedRead(image,width,height,angle);
+     };
+     // For stable sideways text, reuse its accepted orientation first
+     // instead of doing two complete Tesseract passes on every new frame.
+     if(previousAngle!==null&&previousStreak>=2&&
+        scanNumber%8!==0){
+      const scan=await query(previousAngle);
+      if(clearRead(scan.lines)){
+       return {engine:engine.kind,width,height,deskewed:false,
+        quarterTurn:previousAngle,rotationDegrees:previousAngle,
+        attempts,angleSource:"tracked",
+        elapsedMs:Math.round(performance.now()-now),
+        lines:scan.lines,words:scan.lines.flatMap(x=>x.words),
+        text:scan.lines.map(x=>x.text).join("\n")};
+      }
+      previousStreak=0;
+      previousAngle=null;
+     }
      let {data}=await worker.recognize(image,{}, {blocks:true});
      let lines=extractWords(data);
-     let deskewed=false;
-     // Do not pay for an extra OCR pass on readable horizontal frames.
-     // If sparse scene recognition misses an angled brand/document,
-     // Tesseract estimates the text gradient and straightens it itself.
-     if(!lines.some(x=>x.text.replace(/[^A-Za-z0-9]/g,"").length>=3)){
-      const rotated=await worker.recognize(image,{rotateAuto:true},{blocks:true});
-      const rotatedLines=extractWords(rotated.data);
-      if(rotatedLines.some(x=>x.text.replace(/[^A-Za-z0-9]/g,"").length>=3)){
-       data=rotated.data;
-       lines=restoreRotation(rotatedLines,Number(data.rotateRadians)||0,width,height);
-       deskewed=true;
+     let strongest=candidateStrength(lines);
+     candidate={lines,rotation:0,source:"upright",value:strongest.value};
+     // The image projection measures an angle without making assumptions
+     // about individual letters or language-model guesses.
+     const needsChallenge=!clearRead(lines)||scanNumber%7===0;
+     if(needsChallenge){
+      try{hint=direction(image,width,height)}catch(_){}
+     }
+     const skewHint=hint?.angle!==null&&Number.isFinite(hint?.angle)&&
+       hint.confidence>=.24&&Math.abs(hint.angle)>=7;
+     // A horizontal, high-confidence read is the fast path. A strong
+     // projection indicating tilted text can challenge a suspicious OCR.
+     if(clearRead(lines)&&!(skewHint&&Math.abs(hint.angle)>=16)){
+      previousAngle=null;previousStreak=0;attemptCursor=0;
+      return {engine:engine.kind,width,height,deskewed:false,
+       quarterTurn:0,rotationDegrees:0,attempts:0,angleSource:"upright",
+       elapsedMs:Math.round(performance.now()-now),
+       lines,words:lines.flatMap(x=>x.words),
+       text:lines.map(x=>x.text).join("\n")};
+     }
+     const consider=(next,source)=>{
+      const strength=candidateStrength(next.lines);
+      if(strength.value>candidate.value+1.6&&
+         strength.meaningful>=1&&clearRead(next.lines)){
+       candidate={...next,value:strength.value,source};
+       return true;
+      }
+      return false;
+     };
+     // First let Tesseract try its own deskew on failed ordinary reads.
+     if(!clearRead(lines)){
+      const auto=await worker.recognize(image,{rotateAuto:true},{blocks:true});
+      const rotatedLines=extractWords(auto.data);
+      if(clearRead(rotatedLines)){
+       const rad=Number(auto.data.rotateRadians)||0;
+       const projected=restoreRotation(rotatedLines,rad,width,height);
+       consider({lines:projected,rotation:rad*180/Math.PI},"tesseract-deskew");
+       deskewed=candidate.source==="tesseract-deskew";
       }
      }
-     let quarterTurn=0;
-     if(strongPrintedRead(lines)){
-      emptyFrames=0;
-     }else{
-      emptyFrames++;
-      // Only on unsuccessful frames: try ONE quarter-turn every second
-      // miss. Avoid slowing the already-working horizontal OCR path.
-      if(emptyFrames%2===0){
-       const angle=[90,-90,180][Math.floor(emptyFrames/2-1)%3];
-       sideCanvas.width=Math.abs(angle)===90?height:width;
-       sideCanvas.height=Math.abs(angle)===90?width:height;
-       sideContext.fillStyle="#fff";
-       sideContext.fillRect(0,0,sideCanvas.width,sideCanvas.height);
-       sideContext.save();
-       sideContext.translate(sideCanvas.width/2,sideCanvas.height/2);
-       sideContext.rotate(angle*Math.PI/180);
-       sideContext.drawImage(image,-width/2,-height/2,width,height);
-       sideContext.restore();
-       const other=await worker.recognize(sideCanvas,{}, {blocks:true});
-       const candidateLines=extractWords(other.data);
-       if(strongPrintedRead(candidateLines)){
-        lines=restoreRightAngle(candidateLines,angle,width,height);
-        quarterTurn=angle;emptyFrames=0;
-       }
-      }
+     // Projection-estimated rotations first; if the image has too much
+     // clutter to identify a dominant line, use an exhaustive rotation
+     // ladder spread over a few scans without stalling the live video.
+     const queue=rotationQueue(skewHint?hint.angle:null,previousAngle);
+     const goodAngle=skewHint?Math.round(-hint.angle/5)*5:null;
+     const options=goodAngle!==null?queue.slice(0,3):
+       [queue[attemptCursor%queue.length],
+        queue[(attemptCursor+1)%queue.length]];
+     attemptCursor=(attemptCursor+options.length)%queue.length;
+     for(const angle of options){
+      if(angle===0)continue;
+      if(candidate.rotation&&Math.abs(angle-candidate.rotation)<5)continue;
+      const result=await query(angle);
+      if(consider(result,"angle-projection")&&
+         candidate.value>=10)break;
      }
-     return {engine:engine.kind,width,height,deskewed,quarterTurn,
-      elapsedMs:Math.round(performance.now()-now),
+     lines=candidate.lines;
+     const selected=candidate.rotation||0;
+     if(selected&&clearRead(lines)){
+      if(previousAngle!==null&&Math.abs(previousAngle-selected)<7)
+       previousStreak=Math.min(8,previousStreak+1);
+      else previousStreak=1;
+      previousAngle=selected;
+      attemptCursor=0;
+     }else if(selected===0&&clearRead(lines)){
+      previousAngle=null;previousStreak=0;attemptCursor=0;
+     }
+     return {engine:engine.kind,width,height,deskewed,
+      quarterTurn:Math.abs(selected)%90<.01?selected:0,
+      rotationDegrees:selected,angleSource:candidate.source,
+      projectionAngle:hint?.angle??null,
+      attempts,elapsedMs:Math.round(performance.now()-now),
       lines,words:lines.flatMap(x=>x.words),
       text:lines.map(x=>x.text).join("\n")};
     },
