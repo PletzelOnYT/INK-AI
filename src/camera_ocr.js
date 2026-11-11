@@ -13,6 +13,14 @@ const hg=overlay.getContext("2d");
 const tracker=Core.createTracker();
 const regionTracker=Core.createRegionTracker();
 const cache=new Map();
+const dictionaryByLength=new Map();
+const vocabulary=document.getElementById("inkEnglishWords")?.textContent||"";
+for(const word of vocabulary.toLowerCase().split(/\s+/)){
+ if(!/^[a-z]{3,24}$/.test(word))continue;
+ if(!dictionaryByLength.has(word.length))dictionaryByLength.set(word.length,[]);
+ dictionaryByLength.get(word.length).push(word);
+}
+
 let active=false,stream=null,timer=0,frameCallback=0,reading=false,epoch=0,pass=0;
 
 window.__inkCameraActive=false;
@@ -211,27 +219,31 @@ function decode(lines,predictions){
   for(let i=0;i<letters.length;i++){
    if(i){
     const prev=letters[i-1],next=letters[i];
-    const typical=Math.max(9,(next.y1-next.y0+1)*.55);
+    const typical=Math.max(4,(next.y1-next.y0+1)*.46);
     if(next.x0-prev.x1-1>typical)finish();
    }
    group.push({box:letters[i],prediction:preds[i]});
   }
   finish();
   for(const segment of groups){
-   if(segment.length<2||segment.length>32)continue;
-   let confidence=0,unreliable=0;const chars=[];
-   for(const {prediction} of segment){
-    const top=prediction?.top?.[0],second=prediction?.top?.[1];
-    const good=top&&/^[A-Za-z0-9]$/.test(top.char)&&
-      top.confidence>=(window.__inkPrintReady?.43:.68)&&
-      top.confidence-(second?.confidence||0)>=(window.__inkPrintReady?.12:.24);
-    if(!good){chars.push("?");unreliable++;confidence+=0}
-    else{chars.push(top.char);confidence+=top.confidence}
+   if(segment.length<3||segment.length>24)continue;
+   const selected=segment.map(x=>x.prediction);
+   let text="",confidence=0;
+   const corrected=Core.decodePrintedWord(selected,dictionaryByLength.get(segment.length));
+   if(corrected){
+    text=corrected.text;confidence=corrected.confidence;
+   }else{
+    let failed=false;
+    for(const {prediction} of segment){
+     const top=prediction?.top?.[0],second=prediction?.top?.[1];
+     if(!top||!/[A-Za-z]/.test(top.char)||top.char.length!==1||
+        top.confidence<.58||
+        top.confidence-(second?.confidence||0)<.22){failed=true;break}
+     text+=top.char;confidence+=top.confidence;
+    }
+    if(failed)continue;
+    confidence/=segment.length;
    }
-   if(unreliable>Math.max(1,Math.floor(segment.length*.16)))continue;
-   const text=chars.join("");
-   if(text.includes("?"))continue;
-   confidence/=segment.length;
    if(!Core.looksLikeWord(text,confidence))continue;
    const box={x0:Math.min(...segment.map(x=>x.box.x0)),
     y0:Math.min(...segment.map(x=>x.box.y0)),
