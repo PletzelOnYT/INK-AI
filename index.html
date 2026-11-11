@@ -13594,9 +13594,11 @@ var InkOfflineOCR=(()=>{var RI=Object.create;var _=Object.defineProperty;var NI=
 (()=>{
 const button=document.getElementById("camera"),board=document.querySelector(".board");
 const video=document.getElementById("cameraVideo"),overlay=document.getElementById("cameraHighlights");
+const frozenCanvas=document.getElementById("cameraFrozen");
+const frozenCtx=frozenCanvas?.getContext("2d");
 const output=document.getElementById("guess"),Core=window.InkCameraCore,
  Detector=window.InkCameraDetector;
-if(!button||!board||!video||!overlay||!output||!Core||!Detector)return;
+if(!button||!board||!video||!overlay||!frozenCanvas||!frozenCtx||!output||!Core||!Detector)return;
 const base=document.createElement("canvas"),bg=base.getContext("2d",{willReadFrequently:true});
 const rotated=document.createElement("canvas"),rg=rotated.getContext("2d",{willReadFrequently:true});
 const hg=overlay.getContext("2d");
@@ -13641,9 +13643,11 @@ for(const word of vocabulary.toLowerCase().split(/\s+/)){
 }
 
 let active=false,stream=null,timer=0,frameCallback=0,reading=false,epoch=0,pass=0;
+let frozen=false,freezeRevision=0;
 let captureWidth=800,usedDocumentUpscale=false;
 
 window.__inkCameraActive=false;
+window.__inkCameraFrozen=false;
 window.__inkCameraText="";
 window.__inkCameraWords=[];
 window.__inkCameraEngine="ink-print-cnn-rotated";
@@ -13654,15 +13658,46 @@ function show(text,muted=true){
  output.dataset.muted=String(muted);
 }
 function clearMarks(){hg.clearRect(0,0,overlay.width,overlay.height)}
-function stop(){
- active=false;epoch++;clearTimeout(timer);timer=0;
+function cancelCameraSchedule(){
+ clearTimeout(timer);timer=0;
  if(frameCallback&&typeof video.cancelVideoFrameCallback==="function")
   video.cancelVideoFrameCallback(frameCallback);
  frameCallback=0;
+}
+function toggleFreeze(){
+ if(!active)return;
+ if(!frozen){
+  if(video.readyState<2||!video.videoWidth)return;
+  frozenCanvas.width=video.videoWidth;
+  frozenCanvas.height=video.videoHeight;
+  frozenCtx.drawImage(video,0,0,frozenCanvas.width,frozenCanvas.height);
+  frozen=true;freezeRevision++;
+  window.__inkCameraFrozen=true;
+  board.classList.add("camera-frozen");
+  cancelCameraSchedule();
+  button.title="Camera frozen — press C to resume";
+  if(!window.__inkCameraText)show("Camera frozen — press C to resume.",true);
+ }else{
+  frozen=false;freezeRevision++;
+  window.__inkCameraFrozen=false;
+  board.classList.remove("camera-frozen");
+  button.title="Camera active — press C to freeze";
+  if(!window.__inkCameraText)show("Scanning — press C to freeze.",true);
+  if(active&&!document.hidden)schedule(epoch,30);
+ }
+}
+
+function stop(){
+ active=false;epoch++;freezeRevision++;
+ cancelCameraSchedule();
  if(stream)stream.getTracks().forEach(t=>t.stop());
  stream=null;video.pause();video.srcObject=null;
- board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
+ board.classList.remove("camera-active","camera-frozen");
+ button.setAttribute("aria-pressed","false");
  button.title="Read text with webcam";
+ frozen=false;window.__inkCameraFrozen=false;
+ frozenCtx.clearRect(0,0,frozenCanvas.width,frozenCanvas.height);
+ frozenCanvas.width=0;frozenCanvas.height=0;
  tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
  if(lineRuntime){lineRuntime.terminate();lineRuntime=null}
  if(offlineClient){offlineClient.reset();offlineClient=null}
@@ -13671,8 +13706,10 @@ function stop(){
  captureWidth=800;usedDocumentUpscale=false;
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
  window.__inkCameraWords=[];
+ delete output.dataset.camera;
  output.textContent=window.__inkLastGuess||"Draw something";
  output.dataset.muted=String(!window.__inkLastGuess);
+ window.__inkLeaveCameraMode?.();
 }
 function runs(values,minimum=1,gap=0){
  const spans=[];let start=-1,last=-1;
@@ -14003,7 +14040,7 @@ function schedule(id,delay=100){
  if(frameCallback&&typeof video.cancelVideoFrameCallback==="function")
   video.cancelVideoFrameCallback(frameCallback);
  frameCallback=0;
- if(!active||id!==epoch)return;
+ if(!active||id!==epoch||frozen||document.hidden)return;
  // Prefer a new camera frame to a fixed polling delay. The fallback keeps
  // static canvas streams and older browsers working without frozen reads.
  if(typeof video.requestVideoFrameCallback==="function"){
@@ -14024,17 +14061,17 @@ function schedule(id,delay=100){
  }else timer=setTimeout(()=>scan(id),delay);
 }
 async function scan(id){
- if(!active||id!==epoch||reading)return;
- // On macOS, the optional locally running Apple Vision companion bypasses
- // all expensive browser-side RGB segmentation and character-by-character
- // inference. Video remains native-rate; OCR processes only fresh frames.
+ if(!active||id!==epoch||reading||frozen||document.hidden)return;
+ const revision=freezeRevision;
+ // The bundled offline WASM OCR runs without a companion or network.
+ // Process only the newest live frame; discard completed reads when paused.
  if(offlineClient){
   if(video.readyState<2||!video.videoWidth){schedule(id,70);return}
   reading=true;
   const started=performance.now();
   try{
    const payload=await offlineClient.recognize(video);
-   if(!active||id!==epoch)return;
+   if(!active||id!==epoch||frozen||document.hidden||revision!==freezeRevision)return;
    if(payload){
     const current=offlineClient.track(payload,Date.now());
     window.__inkCameraText=current.text;
@@ -14051,6 +14088,7 @@ async function scan(id){
     offlineFailures=0;
    }
   }catch(error){
+   if(frozen||document.hidden||revision!==freezeRevision)return;
    offlineFailures++;
    if(offlineFailures>=4){
     offlineClient.reset();offlineClient=null;
@@ -14059,7 +14097,7 @@ async function scan(id){
    }
   }finally{
    reading=false;
-   if(active&&id===epoch)schedule(id,30);
+   if(active&&id===epoch&&!frozen&&!document.hidden)schedule(id,30);
   }
   return;
  }
@@ -14148,7 +14186,7 @@ async function scan(id){
   if(window.__inkTextnessReady&&proposed.length){
    const scores=await window.__inkCameraVerifyText(
      proposed.slice(0,14).map(textnessInput));
-   if(!active||id!==epoch)return;
+   if(!active||id!==epoch||frozen||document.hidden||revision!==freezeRevision)return;
    verified=proposed.slice(0,14).filter((item,i)=>
      Number.isFinite(scores?.[i])&&scores[i]>=.88);
   }
@@ -14162,7 +14200,7 @@ async function scan(id){
    scanOrder;
   if(window.__inkCameraLineReady&&lineRuntime){
    const sequenceWords=await readNativeLines(scanOrder,verified,id);
-   if(!active||id!==epoch)return;
+   if(!active||id!==epoch||frozen||document.hidden||revision!==freezeRevision)return;
    const state=tracker.update(sequenceWords,Date.now());
    window.__inkCameraWords=state.words;
    window.__inkCameraText=state.text;
@@ -14187,7 +14225,7 @@ async function scan(id){
   const images=selected.flatMap(item=>item.line.letters.map(
     box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
-  if(!active||id!==epoch)return;
+  if(!active||id!==epoch||frozen||document.hidden||revision!==freezeRevision)return;
   const found=decode(selected,predictions,verified,Date.now());
   const state=tracker.update(found,Date.now());
   window.__inkCameraWords=state.words;
@@ -14201,17 +14239,21 @@ async function scan(id){
  }catch(error){
   // A transient failed read must not wipe out words already recognized.
   const stable=tracker.snapshot();
-  if(active&&id===epoch&&!stable.text)show("Camera is having trouble reading this frame.");
-  if(stable.text)show(stable.text,false);
+  if(active&&id===epoch&&!frozen&&!document.hidden&&revision===freezeRevision&&!stable.text)show("Camera is having trouble reading this frame.");
+  if(stable.text&&!frozen&&!document.hidden&&revision===freezeRevision)show(stable.text,false);
  }finally{
   reading=false;
-  if(active&&id===epoch)schedule(id,110);
+  if(active&&id===epoch&&!frozen&&!document.hidden)schedule(id,110);
  }
 }
 async function start(){
  if(active)return;
- active=true;const id=++epoch;pass=0;tracker.reset();cache.clear();
+ active=true;frozen=false;freezeRevision++;
+ board.classList.remove("camera-frozen");window.__inkCameraFrozen=false;
+ const id=++epoch;pass=0;tracker.reset();cache.clear();
  window.__inkCameraActive=true;
+ window.__inkEnterCameraMode?.();
+ output.dataset.camera="true";
  window.__inkCameraText="";window.__inkCameraWords=[];
  window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0,fusedWordCandidates:0,documentUpscaled:false};
  board.classList.add("camera-active");button.setAttribute("aria-pressed","true");
@@ -14254,9 +14296,30 @@ async function start(){
   stop();output.textContent=reason;output.dataset.muted="true";
  }
 }
+window.__inkStopCamera=stop;
 button.addEventListener("click",()=>active?stop():start());
+window.addEventListener("keydown",e=>{
+ if(!active||e.repeat||e.ctrlKey||e.metaKey||e.altKey||
+    e.key.toLowerCase()!=="c")return;
+ const target=e.target;
+ if(target&&(target.isContentEditable||
+    target instanceof HTMLInputElement||
+    target instanceof HTMLTextAreaElement))return;
+ e.preventDefault();
+ toggleFreeze();
+});
 window.addEventListener("pagehide",()=>{if(active)stop()});
-document.addEventListener("visibilitychange",()=>{if(document.hidden&&active)stop()});
+// Switching tabs must NOT stop the camera or deselect the tool.
+// Suspend heavy recognition while hidden; resume without a new permission
+// prompt when the tab becomes visible again.
+document.addEventListener("visibilitychange",()=>{
+ if(!active)return;
+ if(document.hidden)cancelCameraSchedule();
+ else if(!frozen){
+  if(video.paused)video.play().catch(()=>{});
+  schedule(epoch,40);
+ }
+});
 })();
 </script>
 
