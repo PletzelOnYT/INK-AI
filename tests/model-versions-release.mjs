@@ -29,17 +29,12 @@ for(const [n,p] of [["V3","models/ink-cnn-v3.json"],["V5","models/ink-cnn-v5.jso
  assert.deepEqual(m.input,[1,32,32],n+" wrong input");
 }
 assert.ok(c5.independent_pen_v3.overall>c3.independent_pen_v3.overall,"V5 must improve unseen writer score");
-const graphR=read("docs/recognition-vertical-bars.svg"),graphC=read("docs/completion-vertical-bars.svg");
-for(const [chart,title] of [[graphR,"Recognizer"],[graphC,"Completer"]]){
- assert.ok(chart.includes('id="ink-gold"'),title+" missing gold");
- assert.ok(chart.includes('id="ink-silver"'),title+" missing silver");
- assert.ok(chart.includes('id="ink-bronze"'),title+" missing bronze");
- assert.equal((chart.match(/data-rank="[123]"/g)||[]).length,3,title+" must show three ranked checkpoints");
-}
-const generator=read("scripts/update_model_graphs.py");
-for(const name of ["Sequence V1","Sequence V2","Prefix V1","Domain V2","PenLift V3","Domain V3","Domain V4","Natural V4","Lift V5","Domain V6","Domain V7"])
- assert.ok(generator.includes(name)||(/Domain V[3467]/.test(name)&&generator.includes('f"Domain V{version}"')),
-  "Completer version not tracked for evaluation: "+name);
+const manifest=json("docs/current-models.json");
+assert.ok(manifest.recognizer.weights==="models/ink-cnn-v5.json");
+assert.ok(manifest.completer.weights==="models/ink-stroke-prefix-domain-v2.json");
+assert.ok(c5.eligible===true&&c5.deployable===true&&c5.browser_integration_passed===true);
+assert.ok(!read("README.md").includes("vertical-bars.svg"),
+ "README should describe deployed models, not show leaderboard graphs");
 const rejected=["stroke-prefix-domain-v3-metrics.json","stroke-prefix-domain-v4-metrics.json","penlift-v3-metrics.json","stroke-natural-v4-metrics.json","recurrent-lift-v5-metrics.json","stroke-prefix-domain-v6-metrics.json"];
 for(const file of rejected){
  const m=json("models/"+file);assert.equal(m.eligible,false,"Rejected experimental weights must not be treated as released: "+file);
@@ -57,4 +52,4 @@ if(exists(v7Metrics)){
  assert.ok(!graphC.includes("V7 released"),"V7 cannot be released without metrics");
  console.log("V7: waiting for trained writer-disjoint and browser-tested weights; released V2 remains default");
 }
-console.log("PASS: release-gated models, dynamic top-three podium rankings and V7 integration");
+console.log("PASS: released model selection, absence of charts, CNN weights and V7 release gates");
