@@ -253,7 +253,9 @@
     context.drawImage(video,ox,oy,sw,sh,0,0,width,height);
     const result=await engine.recognize(canvas,width,height,
      nativeFocus?{fastRegion:true,documentMode:scan%4===0}:
-      {skipOptionalDetail:scan%12!==7});
+      // Below 1500px there is no spare native detail for a fast ROI.
+      // Preserve the proven perspective and page-layout recovery there.
+      {skipOptionalDetail:nativeW>=1500&&scan%12!==7});
     let accepted=checkedPayload(result,width,height);
     // Primary path remains the bundled Tesseract LSTM, which handles
     // printed and joined text better. On weak/partial reads, also run the
