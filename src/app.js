@@ -29,7 +29,7 @@ window.__inkShapeOverride="";
 window.__inkTopCandidates=[];
 window.__inkAssistEnabled=false;
 window.__inkGhostPoints=0;
-function display(text,muted=false){guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
+function display(text,muted=false){if(window.__inkCameraActive)return;guess.textContent=text;guess.dataset.muted=muted?"true":"false"}
 function chooseTool(next){
  if(next!=="pen"&&next!=="eraser")return;
  tool=next;canvas.dataset.tool=next;
