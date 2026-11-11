@@ -20,7 +20,12 @@ assert.match(read("src/camera_tracking.js"),/captured\.map\(t=>t\.text\)/);
 assert.match(app,/window\.__inkCameraRecognize=async images/);
 assert.match(camera,/rgba\(255,255,255,0\.30\)/);
 assert.match(camera,/hg\.fill\(\);hg\.stroke\(\)/);
-assert.match(camera,/paint\(candidateBoxes,frame\)/);
+assert.match(camera,/paint\(fresh,frame\)/);
+assert.match(camera,/Core\.looksLikeTextLine\(letters\)/);
+assert.match(camera,/Core\.looksLikeWord\(text,confidence\)/);
+assert.match(camera,/const accepted=tracker\.snapshot\(\)\.words\.filter/);
+assert.doesNotMatch(camera,/paint\(fresh,frame\);[\s\S]*const predictions=/,
+ "Do not draw unverified candidate rectangles before OCR");
 assert.match(shell,/id="cameraHighlights"/);
 assert.match(shell,/id="cameraVideo"/);
 assert.match(css,/\.board\.camera-active #cameraHighlights\{display:block\}/);
