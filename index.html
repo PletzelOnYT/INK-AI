@@ -23783,7 +23783,10 @@ poison
    const y0=Math.floor(sy),y1=Math.min(height-1,y0+1),fy=sy-y0;
    const v=(sample(x0,y0)*(1-fx)+sample(x1,y0)*fx)*(1-fy)+
      (sample(x0,y1)*(1-fx)+sample(x1,y1)*fx)*fy;
-   result[(oy+y)*32+(ox+x)]=v;
+   // Thin real pencil strokes must survive reducing a large glyph to 32px.
+   // Preserve sampled ink without drawing synthetic character templates.
+   const nearest=scale<1?sample(Math.round(sx),Math.round(sy)):0;
+   result[(oy+y)*32+(ox+x)]=Math.max(v,nearest*.94);
   }
   return result;
  }
