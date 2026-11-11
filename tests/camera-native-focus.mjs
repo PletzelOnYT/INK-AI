@@ -25,7 +25,7 @@ vm.runInNewContext(source,{window,document,
 const client=await window.InkOfflineCamera.connect();
 const video={videoWidth:1920,videoHeight:1080};
 const readsOut=[];
-for(let i=0;i<7;i++)readsOut.push(await client.recognize(video));
+for(let i=0;i<8;i++)readsOut.push(await client.recognize(video));
 assert.ok(reads.every(x=>x.width<=1280),
  "A full 1920px neural pass must not block camera responsiveness");
 assert.equal(reads[0].width,1280,"First pass discovers words over entire preview");
@@ -37,10 +37,13 @@ assert.equal(reads[3].options.fastRegion,undefined);
 const xy=readsOut.map(x=>[Math.round(x.words[0].box.x0),
  Math.round(x.words[0].box.y0)]);
 assert.deepEqual(xy[0],[15,18]);
-assert.ok(xy[1][0]>650&&xy[1][1]>360,JSON.stringify(xy));
-assert.ok(xy[2][0]<30&&xy[2][1]>360,JSON.stringify(xy));
-assert.ok(xy[4][0]>650&&xy[4][1]<50,JSON.stringify(xy));
-assert.ok(xy[5][0]<30&&xy[5][1]<50,JSON.stringify(xy));
+assert.ok(xy[1][0]>300&&xy[1][0]<370&&xy[1][1]>180,JSON.stringify(xy));
+assert.ok(xy[2][0]>650&&xy[2][1]>360,JSON.stringify(xy));
+assert.ok(xy[4][0]<30&&xy[4][1]>360,JSON.stringify(xy));
+assert.ok(xy[5][0]>650&&xy[5][1]<50,JSON.stringify(xy));
+assert.ok(xy[7][0]<30&&xy[7][1]<50,JSON.stringify(xy));
+assert.equal(reads[1].options.layoutRescue,true,"First focused scan should recover multiline center text");
+assert.equal(reads[1].options.clockProbe,true,"Central analog clock gets a real probe");
 assert.ok(readsOut.every(x=>x.width===1920&&x.height===1080),
  "All results must use stable native preview coordinates");
 assert.ok(draws.some(args=>args.length===9),
