@@ -253,7 +253,7 @@
     context.drawImage(video,ox,oy,sw,sh,0,0,width,height);
     const result=await engine.recognize(canvas,width,height,
      nativeFocus?{fastRegion:true,documentMode:scan%4===0}:
-      {skipOptionalDetail:scan%4!==1});
+      {skipOptionalDetail:scan%12!==7});
     let accepted=checkedPayload(result,width,height);
     // Primary path remains the bundled Tesseract LSTM, which handles
     // printed and joined text better. On weak/partial reads, also run the
@@ -262,7 +262,8 @@
     const reliable=hasReliableText(accepted);
     const tryHandwriting=!nativeFocus&&Handwriting?.recognize&&
      window.__inkHandwritingReady===true&&
-     ((!reliable&&scan%6===1)||(reliable&&scan%12===1));
+     ((!reliable&&(scan===2||scan%6===4))||
+      (reliable&&scan%12===4));
     if(tryHandwriting){
      const started=performance.now();
      handAttempts++;
