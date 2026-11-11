@@ -5,6 +5,7 @@
  // Keep native 1080p detail when available: downsampling a room clock to
  // 1280px made its digits too small for the pretrained LSTM OCR.
  const outputWidth=1920;
+ const regularWidth=1280;
  const canvas=document.createElement("canvas");
  const context=canvas.getContext("2d",{alpha:false});
  const Evidence=window.InkTextEvidence;
@@ -160,24 +161,43 @@
   if(!window.InkOfflineOCR?.create)return null;
   const engine=await window.InkOfflineOCR.create();
   const tracker=createTracker();
+  let scan=0,weakScans=0,detailFrames=0,lastDetailBurst=-100,previousWidth=0;
   return {
    engine:"offline-tesseract-wasm",
    async recognize(video){
-    const width=Math.min(outputWidth,video.videoWidth);
+    ++scan;
+    // Ordinary text stays at a responsive 1280px. Only repeated weak OCR
+    // activates short native-1080p bursts, for small distant letters/digits.
+    const highResPossible=video.videoWidth>=1600;
+    if(highResPossible&&detailFrames===0&&weakScans>=2&&
+       scan-lastDetailBurst>=8){
+     detailFrames=5;lastDetailBurst=scan;
+    }
+    const highRes=highResPossible&&detailFrames>0;
+    if(detailFrames>0)detailFrames--;
+    const width=Math.min(highRes?outputWidth:regularWidth,video.videoWidth);
     const height=Math.max(1,Math.round(video.videoHeight*width/video.videoWidth));
+    if(previousWidth&&previousWidth!==width)tracker.reset();
+    previousWidth=width;
     if(canvas.width!==width||canvas.height!==height){
      canvas.width=width;canvas.height=height;
     }
     context.drawImage(video,0,0,width,height);
-    // No queue of old video frames: each call awaits one existing worker.
+    // Only the latest live frame is recognized by the bundled neural worker.
     const result=await engine.recognize(canvas,width,height);
-    window.__inkCameraDetailRecovery={used:!!result.detailUpscaled,
-      enhancement:result.enhancement||null,
-      captureWidth:width,captureHeight:height};
-    return checkedPayload(result,width,height);
+    const accepted=checkedPayload(result,width,height);
+    if(accepted.words.length){
+     weakScans=0;
+     if(highRes)detailFrames=Math.max(detailFrames,4);
+    }else weakScans=Math.min(12,weakScans+1);
+    window.__inkCameraDetailRecovery={
+      used:!!result.detailUpscaled,enhancement:result.enhancement||null,
+      captureWidth:width,captureHeight:height,highResolution:highRes
+    };
+    return accepted;
    },
    track:tracker.update,
-   reset:tracker.reset,
+   reset(){tracker.reset();weakScans=0;detailFrames=0;previousWidth=0},
    paint
   };
  }
