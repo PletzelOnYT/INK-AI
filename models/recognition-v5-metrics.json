@@ -86,7 +86,7 @@
         "l": 0.75,
         "i": 0.85,
         "j": 0.8,
-        "t": 1.0
+        "t": 1
       },
       "hard_counts": {
         "1": 20,
@@ -183,7 +183,7 @@
           "l": 0.75,
           "i": 0.85,
           "j": 0.85,
-          "t": 1.0
+          "t": 1
         },
         "hard_counts": {
           "1": 20,
@@ -289,7 +289,7 @@
           "l": 0.75,
           "i": 0.85,
           "j": 0.8,
-          "t": 1.0
+          "t": 1
         },
         "hard_counts": {
           "1": 20,
@@ -342,7 +342,7 @@
           "l": 0.75,
           "i": 0.85,
           "j": 0.8,
-          "t": 1.0
+          "t": 1
         },
         "hard_counts": {
           "1": 20,
@@ -395,7 +395,7 @@
           "l": 0.75,
           "i": 0.85,
           "j": 0.8,
-          "t": 1.0
+          "t": 1
         },
         "hard_counts": {
           "1": 20,
@@ -432,7 +432,7 @@
       },
       "eligible": true,
       "objective": 0.823159,
-      "elapsed_s": 63.0
+      "elapsed_s": 63
     },
     {
       "epoch": 6,
@@ -448,7 +448,7 @@
           "l": 0.75,
           "i": 0.85,
           "j": 0.8,
-          "t": 1.0
+          "t": 1
         },
         "hard_counts": {
           "1": 20,
@@ -501,7 +501,7 @@
           "l": 0.75,
           "i": 0.85,
           "j": 0.8,
-          "t": 1.0
+          "t": 1
         },
         "hard_counts": {
           "1": 20,
@@ -554,7 +554,7 @@
           "l": 0.75,
           "i": 0.85,
           "j": 0.8,
-          "t": 1.0
+          "t": 1
         },
         "hard_counts": {
           "1": 20,
@@ -607,7 +607,7 @@
           "l": 0.75,
           "i": 0.85,
           "j": 0.8,
-          "t": 1.0
+          "t": 1
         },
         "hard_counts": {
           "1": 20,
@@ -660,5 +660,16 @@
     "i",
     "j",
     "t"
-  ]
+  ],
+  "browser_integration_passed": true,
+  "deployable": true,
+  "browser_acceptance": {
+    "workflow_run_id": 43051178363,
+    "job_id": 130628587612,
+    "actual_offline_chrome": "passed",
+    "actual_cnn_inference": "passed",
+    "camera_mode_regression": "passed",
+    "independent_writer_benchmark": "passed",
+    "note": "Recorded workflow passed real browser validation; only the git rebase publication step failed because preview index.html was left unstaged. Commit publishing logic repaired."
+  }
 }
