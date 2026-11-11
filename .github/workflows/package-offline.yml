@@ -8,6 +8,7 @@ on:
       - "src/app.js"
       - "src/camera_ocr.js"
       - "src/camera_text_evidence.js"
+      - "src/camera_document_layout.js"
       - "src/camera_offline_bridge.js"
       - "src/camera_offline_engine_entry.mjs"
       - "scripts/build_offline_ocr.mjs"
