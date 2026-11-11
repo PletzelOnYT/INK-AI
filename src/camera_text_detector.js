@@ -27,7 +27,7 @@
     }
    }
    const w=maxX-minX+1,h=maxY-minY+1;
-   if(w<2||h<6||h>Math.min(65,height*.16)||
+   if(w<2||h<6||h>Math.min(65,height*(allowShort?.30:.16))||
       w>Math.max(70,h*2.4)||area<5||area/(w*h)<.07||
       area/(w*h)>.86||w/h<.065||w/h>2.4)continue;
    comps.push({x0:minX,y0:minY,x1:maxX,y1:maxY,
