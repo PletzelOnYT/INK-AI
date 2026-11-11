@@ -13,7 +13,8 @@ assert.ok(!/Tesseract|tesseract\.js|cdn\.jsdelivr|createWorker\(["']eng/.test(ca
 assert.ok(!/\bfetch\s*\(|\bXMLHttpRequest\b/.test(camera),
  "Camera must not upload frames or fetch external text models");
 assert.match(camera,/__inkCameraRecognize\(misses\.map\(i=>images\[i\]\)\)/);
-assert.match(camera,/Core\.anglesForPass\(pass\+\+,preferred\)/);
+assert.match(camera,/Math\.atan\(dominant\.slope\)/);
+assert.match(camera,/const retries=\[-20,20,-40,40,-60,60,-85,85\]/);
 assert.match(camera,/tracker\.update\(found,Date\.now\(\)\)/);
 assert.match(camera,/schedule\(id,110\)/);
 assert.match(read("src/camera_tracking.js"),/captured\.map\(t=>t\.text\)/);
