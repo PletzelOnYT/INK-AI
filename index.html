@@ -13066,7 +13066,7 @@ const cache=new Map();
 const dictionaryByLength=new Map();
 const vocabulary=document.getElementById("inkEnglishWords")?.textContent||"";
 for(const word of vocabulary.toLowerCase().split(/\s+/)){
- if(!/^[a-z]{3,24}$/.test(word))continue;
+ if(!/^[a-z]{2,24}$/.test(word))continue;
  if(!dictionaryByLength.has(word.length))dictionaryByLength.set(word.length,[]);
  dictionaryByLength.get(word.length).push(word);
 }
@@ -13206,7 +13206,7 @@ function detectedWordRegions(selected){
  const regions=[];
  for(const {line,frame} of selected){
   const letters=line.letters;
-  if(letters.length<4)continue;
+  if(letters.length<2)continue;
   const height=line.medianHeight||
     Math.max(10,letters.reduce((n,c)=>n+(c.y1-c.y0+1),0)/letters.length);
   let group=[];
@@ -13296,7 +13296,7 @@ function decode(lines,predictions,verified,now=Date.now()){
   }
   finish();
   for(const segment of groups){
-   if(segment.length<3||segment.length>24)continue;
+   if(segment.length<2||segment.length>32)continue;
    const box={x0:Math.min(...segment.map(x=>x.box.x0)),
     y0:Math.min(...segment.map(x=>x.box.y0)),
     x1:Math.max(...segment.map(x=>x.box.x1)),
@@ -13331,7 +13331,7 @@ function decode(lines,predictions,verified,now=Date.now()){
    for(const prediction of selected){
     const top=prediction?.top?.[0],second=prediction?.top?.[1];
     if(!top||!/[A-Za-z]/.test(top.char)||top.char.length!==1||
-       top.confidence<.73||
+       top.confidence<(selected.length===2?.80:.73)||
        top.confidence-(second?.confidence||0)<.24){failed=true;break}
     text+=top.char;confidence+=top.confidence;
    }
