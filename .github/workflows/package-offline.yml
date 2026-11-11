@@ -6,6 +6,7 @@ on:
       - "index.html"
       - "src/index.shell.html"
       - "src/app.js"
+      - "src/camera_ocr.js"
       - "src/app.css"
       - "src/stroke_worker.js"
       - "scripts/build_standalone.py"
@@ -24,13 +25,23 @@ on:
       - "data/english-words.txt"
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/build_standalone.py
+      - name: Update downloadable index.html
+        run: |
+          cp dist/ink-ai-standalone.html index.html
+          if ! git diff --quiet -- index.html; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add index.html
+            git commit -m "Build updated standalone index.html"
+            git push origin HEAD:main
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: ink-ai-standalone
