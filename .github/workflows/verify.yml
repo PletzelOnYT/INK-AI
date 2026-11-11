@@ -119,6 +119,7 @@ jobs:
         run: |
           python3 -m pip install --quiet selenium
           command -v google-chrome || command -v chromium
+          python3 tests/camera-no-false-text-browser.py
           python3 tests/camera-colors-browser.py
           python3 tests/browser-smoke.py
           python3 tests/assist-manual-g-browser.py
