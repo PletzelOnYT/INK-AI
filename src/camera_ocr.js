@@ -11,6 +11,7 @@ const base=document.createElement("canvas"),bg=base.getContext("2d",{willReadFre
 const rotated=document.createElement("canvas"),rg=rotated.getContext("2d",{willReadFrequently:true});
 const hg=overlay.getContext("2d");
 const tracker=Core.createTracker();
+const glyphTracker=Core.createGlyphEvidenceTracker();
 const regionTracker=Core.createRegionTracker();
 const sceneMonitor=Core.createSceneMonitor();
 const sceneCanvas=document.createElement("canvas");
@@ -31,7 +32,7 @@ window.__inkCameraActive=false;
 window.__inkCameraText="";
 window.__inkCameraWords=[];
 window.__inkCameraEngine="ink-print-cnn-rotated";
-window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0};
+window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0,fusedWordCandidates:0};
 function show(text,muted=true){
  if(!active)return;
  if(output.textContent!==text)output.textContent=text;
@@ -46,7 +47,7 @@ function stop(){
  if(stream)stream.getTracks().forEach(t=>t.stop());
  stream=null;video.pause();video.srcObject=null;
  board.classList.remove("camera-active");button.setAttribute("aria-pressed","false");
- tracker.reset();regionTracker.reset();sceneMonitor.reset();cache.clear();
+ tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
  clearMarks();window.__inkCameraActive=false;window.__inkCameraText="";
  window.__inkCameraWords=[];
  output.textContent=window.__inkLastGuess||"Draw something";
@@ -231,8 +232,8 @@ async function classify(images){
  }
  return output;
 }
-function decode(lines,predictions,verified){
- const words=[];let offset=0;
+function decode(lines,predictions,verified,now=Date.now()){
+ const candidates=[];let offset=0;
  for(const {line,frame} of lines){
   const letters=line.letters;
   const preds=predictions.slice(offset,offset+letters.length);
@@ -251,46 +252,52 @@ function decode(lines,predictions,verified){
   finish();
   for(const segment of groups){
    if(segment.length<3||segment.length>24)continue;
-   const selected=segment.map(x=>x.prediction);
-   let text="",confidence=0;
-   const corrected=Core.decodePrintedWord(selected,dictionaryByLength.get(segment.length));
-   if(corrected){
-    text=corrected.text;confidence=corrected.confidence;
-   }else{
-    let failed=false;
-    for(const {prediction} of segment){
-     const top=prediction?.top?.[0],second=prediction?.top?.[1];
-     if(!top||!/[A-Za-z]/.test(top.char)||top.char.length!==1||
-        top.confidence<.58||
-        top.confidence-(second?.confidence||0)<.22){failed=true;break}
-     text+=top.char;confidence+=top.confidence;
-    }
-    if(failed)continue;
-    confidence/=segment.length;
-   }
-   if(!Core.looksLikeWord(text,confidence))continue;
    const box={x0:Math.min(...segment.map(x=>x.box.x0)),
     y0:Math.min(...segment.map(x=>x.box.y0)),
     x1:Math.max(...segment.map(x=>x.box.x1)),
     y1:Math.max(...segment.map(x=>x.box.y1))};
-   const transformed=project(box,frame);
-   if(!Core.visibility(transformed.points,base.width,base.height))continue;
+   const projected=project(box,frame);
+   if(!Core.visibility(projected.points,base.width,base.height))continue;
    if(window.__inkTextnessReady){
-    // The character CNN must not read a neighboring line/cabinet that was
-    // never accepted as text by the independently trained scene CNN.
-    const a=transformed.box,area=Math.max(1,(a.x1-a.x0)*(a.y1-a.y0));
-    const supported=verified.some(region=>{
-     const b=region.box;
-     const overlap=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0))*
-       Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
+    const p=projected.box,area=Math.max(1,(p.x1-p.x0)*(p.y1-p.y0));
+    if(!verified.some(region=>{
+     const r=region.box;
+     const overlap=Math.max(0,Math.min(p.x1,r.x1)-Math.max(p.x0,r.x0))*
+       Math.max(0,Math.min(p.y1,r.y1)-Math.max(p.y0,r.y0));
      return overlap/area>=.48;
-    });
-    if(!supported)continue;
+    }))continue;
    }
-   words.push({text,confidence,box:transformed.box,
-     polygon:transformed.points,angle:frame.view.angle});
+   candidates.push({box:projected.box,polygon:projected.points,
+    angle:frame.view.angle,predictions:segment.map(x=>x.prediction)});
   }
  }
+ const fused=glyphTracker.update(candidates,now),words=[];
+ for(const item of fused){
+  const selected=item.predictions;
+  let text="",confidence=0;
+  // The lexicon may only correct a word when the original neural
+  // probabilities support that correction. No invented confidence boost.
+  const corrected=Core.decodePrintedWord(selected,
+    dictionaryByLength.get(selected.length));
+  if(corrected){
+   text=corrected.text;confidence=corrected.confidence;
+  }else{
+   let failed=false;
+   for(const prediction of selected){
+    const top=prediction?.top?.[0],second=prediction?.top?.[1];
+    if(!top||!/[A-Za-z]/.test(top.char)||top.char.length!==1||
+       top.confidence<.73||
+       top.confidence-(second?.confidence||0)<.24){failed=true;break}
+    text+=top.char;confidence+=top.confidence;
+   }
+   if(failed)continue;
+   confidence/=selected.length;
+  }
+  if(!Core.looksLikeWord(text,confidence))continue;
+  words.push({text,confidence,box:item.box,polygon:item.polygon,
+   angle:item.angle,evidenceFrames:item.frames});
+ }
+ window.__inkCameraStats.fusedWordCandidates=fused.length;
  return words;
 }
 function schedule(id,delay=100){
@@ -334,7 +341,7 @@ async function scan(id){
   const signature=sceneContext.getImageData(0,0,sceneCanvas.width,sceneCanvas.height);
   const scene=sceneMonitor.update(signature.data,Date.now());
   if(scene.changed){
-   tracker.reset();regionTracker.reset();
+   tracker.reset();regionTracker.reset();glyphTracker.reset();
    stats.sceneChanges++;
    window.__inkCameraText="";window.__inkCameraWords=[];
   }
@@ -418,7 +425,7 @@ async function scan(id){
     box=>characterImage(box,item.frame)));
   const predictions=images.length?await classify(images):[];
   if(!active||id!==epoch)return;
-  const found=decode(selected,predictions,verified);
+  const found=decode(selected,predictions,verified,Date.now());
   const state=tracker.update(found,Date.now());
   window.__inkCameraWords=state.words;
   window.__inkCameraText=state.text;
@@ -442,7 +449,7 @@ async function start(){
  active=true;const id=++epoch;pass=0;tracker.reset();cache.clear();
  window.__inkCameraActive=true;
  window.__inkCameraText="";window.__inkCameraWords=[];
- window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0};
+ window.__inkCameraStats={scans:0,lastScanMs:null,cacheHits:0,lastAngles:[],modelReady:false,detectedLines:0,highlightedRegions:0,sceneChanges:0,fusedWordCandidates:0};
  board.classList.add("camera-active");button.setAttribute("aria-pressed","true");
  show("Requesting camera access…");
  try{
