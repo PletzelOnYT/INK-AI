@@ -81,6 +81,9 @@ jobs:
           node tests/camera-scene-detector.mjs
           node tests/camera-tracking.mjs
           node tests/camera-local-ocr.mjs
+          node tests/completer-input-regression.mjs
+          node tests/completer-fast-quality.mjs
+          node tests/completer-v6-runtime.mjs
           node tests/completer-prefix-cache.mjs
           node tests/neural-preference-learning.mjs
           node tests/completion-cnn-evidence.mjs
@@ -96,7 +99,9 @@ jobs:
       - name: Switch to new generated offline HTML for remaining regressions
         run: cp dist/ink-ai-standalone.html index.html
       - name: Verify Python training code compiles
-        run: python3 -m py_compile src/train.py src/train_stroke_sequence.py src/train_recognition_v3.py src/train_prefix_completion.py src/train_camera_line_ctc.py
+        run: python3 -m py_compile src/train.py src/train_stroke_sequence.py src/train_recognition_v3.py src/train_prefix_completion.py src/train_camera_line_ctc.py src/train_completer_v6.py
+      - name: Validate V6 centered-input independent training guards
+        run: python3 tests/completer-v6-prefix.py
       - name: Extract and syntax-check the embedded JavaScript and worker
         run: |
           python3 - <<'PY'
@@ -110,6 +115,9 @@ jobs:
           PY
           node --check /tmp/ink-check.js
           node tests/worker-smoke.mjs
+          node tests/completer-input-regression.mjs
+          node tests/completer-fast-quality.mjs
+          node tests/completer-v6-runtime.mjs
           node tests/completer-prefix-cache.mjs
           node tests/recognition-v2-metrics.mjs
           node tests/recognition-v3-metrics.mjs
