@@ -1,6 +1,6 @@
 # Real Chrome offline OCR acceptance
 
-**NOT PASSED:** build or browser OCR needs repair. Do not claim production accuracy.
+**PASS:** local standalone HTML read a generated label while completely offline.
 
 Test fixture: printed NY THREADS and Torrey Pines High School, generated in Chrome.
 No webcam image, cloud OCR, or external recognition request was used.
@@ -16,13 +16,10 @@ Bundling pretrained English OCR: 5199098 bytes
 
   dist/ink-offline-ocr.js  16.8mb ⚠️
 
-⚡ Done in 142ms
-Built completely offline OCR engine: 17658253 bytes
+⚡ Done in 168ms
+Built completely offline OCR engine: 17658324 bytes
 Bundled GRU: models/ink-stroke-prefix-domain-v2.json
-Built independent offline INK AI: /home/runner/work/INK-AI/INK-AI/dist/ink-ai-standalone.html 19371129 bytes
-Traceback (most recent call last):
-  File "/home/runner/work/INK-AI/INK-AI/tests/camera-bundled-ocr-browser.py", line 45, in <module>
-    assert result.get("ok"),result.get("error")
-           ~~~~~~~~~~^^^^^^
-AssertionError: NetworkError: Failed to execute 'importScripts' on 'WorkerGlobalScope': The script at 'blob:null/1a7661c0-e1e9-49a2-80b4-df0df78a68ea#core.js' failed to load.
+Built independent offline INK AI: /home/runner/work/INK-AI/INK-AI/dist/ink-ai-standalone.html 19371200 bytes
+OFFLINE OCR RESULT: {'elapsedMs': 266.8999999999942, 'engine': 'bundled-tesseract-wasm', 'lines': 2, 'text': 'NY THREADS\nTorrey Pines High School', 'words': 6}
+PASS: GitHub index.html reads real printed text while completely offline
 ~~~
