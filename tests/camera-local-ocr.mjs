@@ -20,7 +20,7 @@ assert.match(read("src/camera_tracking.js"),/captured\.map\(t=>t\.text\)/);
 assert.match(app,/window\.__inkCameraRecognize=async images/);
 assert.match(camera,/rgba\(255,255,255,0\.30\)/);
 assert.match(camera,/hg\.fill\(\);hg\.stroke\(\)/);
-assert.match(camera,/paint\(fresh,frame\)/);
+assert.match(camera,/paint\(regions,frame\)/);
 assert.match(camera,/Detector\.detect\(image,w,h\)/);
 assert.match(camera,/regionTracker\.update\(detectedWordRegions\(selected\)/);
 assert.match(camera,/Core\.decodePrintedWord\(selected,dictionaryByLength\.get/);
