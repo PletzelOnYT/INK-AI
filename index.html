@@ -13255,6 +13255,43 @@ var InkOfflineOCR=(()=>{var RI=Object.create;var _=Object.defineProperty;var NI=
  const outputWidth=1280;
  const canvas=document.createElement("canvas");
  const context=canvas.getContext("2d",{alpha:false});
+ const Evidence=window.InkTextEvidence;
+ function checkedPayload(payload,width,height){
+  if(!payload||!Array.isArray(payload.lines))return {
+   width,height,lines:[],words:[],engine:"bundled-tesseract-wasm"};
+  // In a real browser all OCR outputs must be supported by visible ink-like
+  // edges, not only a language model's guess. Word boxes are evaluated
+  // independently so a real label isn't hidden by a false adjacent token.
+  if(!Evidence?.evidence||!context.getImageData)return payload;
+  const lines=[];
+  let rejected=0,accepted=0;
+  for(const line of payload.lines){
+   if(!Array.isArray(line?.words)||!line.words.length)continue;
+   const supported=[];
+   for(const word of line.words){
+    if(!Evidence.plausibleWord(word,line.words.length,width,height)){
+     rejected++;continue;
+    }
+    const confidence=Number(word.confidence);
+    if(!Number.isFinite(confidence)||confidence<.32){rejected++;continue}
+    const metrics=Evidence.evidence(context,word.box,width,height);
+    if(!metrics.ok||metrics.score<.43){rejected++;continue}
+    supported.push({...word,visualQuality:metrics.score});
+    accepted++;
+   }
+   if(!supported.length)continue;
+   const text=supported.map(word=>word.text).join(" ").trim();
+   const quality=supported.reduce((sum,w)=>sum+w.visualQuality,0)/supported.length;
+   const measuredConfidence=supported.reduce((sum,w)=>sum+w.confidence,0)/supported.length;
+   // A low-confidence word can still be read on the second camera frame,
+   // but won't appear instantly merely because it looks like a common word.
+   const confidence=Math.min(Number(line.confidence)||0,
+    Math.min(1,measuredConfidence+.16));
+   lines.push({...line,text,words:supported,visualQuality:quality,confidence});
+  }
+  window.__inkCameraEvidence={accepted,rejected};
+  return {...payload,lines,words:lines.flatMap(line=>line.words)};
+ }
  const px=box=>(box.x0+box.x1)/2;
  const py=box=>(box.y0+box.y1)/2;
  function proximity(a,b){
@@ -13293,10 +13330,20 @@ var InkOfflineOCR=(()=>{var RI=Object.create;var _=Object.defineProperty;var NI=
        tracked.text="";tracked.words=[];
       }
      }
-     // Correct high-confidence recognition appears on its FIRST frame.
-     // Uncertain text requires two consistent results to avoid hallucination.
+     // A genuine high-confidence printed phrase should appear on the
+     // first read. A suspicious single-word result over a wall/shoulder
+     // must repeat at the same position in a new frame before display.
      const confidence=Number(line.confidence)||0;
-     if(confidence>=.72||tracked.votes>=2){
+     const quality=Number(line.visualQuality);
+     const hasPixels=Number.isFinite(quality);
+     const chars=cleaned.replace(/[^\p{L}\p{N}]/gu,"").length;
+     const multiWord=line.words.length>=2;
+     const strongVisual=hasPixels&&quality>=.79;
+     const instant=confidence>=.84&&strongVisual&&
+       (multiWord||(chars>=5&&quality>=.87));
+     const verified=tracked.votes>=2&&confidence>=.48&&
+       (!hasPixels||quality>=.43);
+     if(instant||verified||(!hasPixels&&confidence>=.88)){
       tracked.text=cleaned;
       tracked.words=line.words.filter(w=>w.box&&
        typeof w.text==="string"&&Number(w.confidence)>=.25);
@@ -13304,8 +13351,8 @@ var InkOfflineOCR=(()=>{var RI=Object.create;var _=Object.defineProperty;var NI=
      }
      tracked.key=key;tracked.box=line.box;tracked.lastSeen=now;
     }
-    regions=regions.filter(t=>now-t.lastSeen<=1600);
-    const active=regions.filter(t=>t.text&&now-t.lastSeen<=1600);
+    regions=regions.filter(t=>now-t.lastSeen<=1050);
+    const active=regions.filter(t=>t.text&&now-t.lastSeen<=1050);
     active.sort((a,b)=>{
      const ya=py(a.box),yb=py(b.box);
      if(Math.abs(ya-yb)>Math.max(12,(a.box.y1-a.box.y0)*.5))
@@ -13365,14 +13412,15 @@ var InkOfflineOCR=(()=>{var RI=Object.create;var _=Object.defineProperty;var NI=
     }
     context.drawImage(video,0,0,width,height);
     // No queue of old video frames: each call awaits one existing worker.
-    return engine.recognize(canvas,width,height);
+    const result=await engine.recognize(canvas,width,height);
+    return checkedPayload(result,width,height);
    },
    track:tracker.update,
    reset:tracker.reset,
    paint
   };
  }
- window.InkOfflineCamera={connect,createTracker,paint};
+ window.InkOfflineCamera={connect,createTracker,paint,checkedPayload};
 })();
 
 "use strict";
