@@ -1,0 +1,74 @@
+name: Learn human pen-lifts with recurrent motion distillation V5
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/train_recurrent_lift_v5.py"
+      - "tests/recurrent-lift-v5-unit.py"
+      - ".github/workflows/train-recurrent-lift-v5.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: ink-ai-human-pen-lift-v5
+  cancel-in-progress: false
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 145
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Check training code and multi-stroke evidence gate
+        run: |
+          python -m py_compile src/train_recurrent_lift_v5.py
+          python tests/recurrent-lift-v5-unit.py
+          python tests/pen-lift-head-unit.py
+      - name: Fine-tune actual recurrent weights on recorded human pen lifts
+        run: python -u src/train_recurrent_lift_v5.py --epochs 8 --per-epoch 17500 --batch 96
+      - name: Verify independently measured pen-up and stroke geometry
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path("models/recurrent-lift-v5-metrics.json").read_text())
+          assert m["independent_writer_glyphs"]>=1000
+          if m["eligible"]:
+            model=json.loads(Path("models/ink-stroke-lift-aware-v5.json").read_text())
+            assert model["training"]["recurrent_lift_v5"]
+            assert m["candidate"]["independent"]["pen_lift_f1"]>=.15
+            assert m["candidate"]["independent"]["pen_lift_precision"]>=.15
+            print("V5 quality-gated candidate, browser testing required")
+          else:
+            assert not Path("models/ink-stroke-lift-aware-v5.json").exists()
+            print("V5 rejected: proven V2 remains default")
+          PY
+      - name: Commit real held-out metrics and only accepted research weights
+        run: |
+          git config user.name "ink-ai-training[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/recurrent-lift-v5-metrics.json
+          if test -s models/ink-stroke-lift-aware-v5.json; then
+            git add models/ink-stroke-lift-aware-v5.json
+          fi
+          git commit -m "Evaluate recurrent pen-lift generalization on unseen writers"
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: recurrent-lift-v5-evidence
+          path: |
+            models/recurrent-lift-v5-metrics.json
+            models/ink-stroke-lift-aware-v5.json
+          if-no-files-found: ignore
