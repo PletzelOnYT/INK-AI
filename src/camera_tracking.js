@@ -79,19 +79,16 @@ function looksLikeTextLine(letters){
 // The CNN is a character classifier, not a text/no-text detector. Its
 // probability alone cannot establish that a cabinet edge is a letter.
 function looksLikeWord(text,confidence){
- const word=String(text||"");
- if(!Number.isFinite(confidence))return false;
- if(/^[A-Za-z]{4,32}$/.test(word)){
-  // Common printed words contain vowels; this rejects most strings made
-  // from spurious geometric edges, including "JmzS".
-  return /[aeiouy]/i.test(word)&&confidence>=.70;
- }
- if(/^[A-Za-z]{3}$/.test(word))
-  return confidence>=.70&&/[aeiouy]/i.test(word);
- if(/^[0-9]{4,12}$/.test(word))return confidence>=.91;
- if(/^[A-Za-z0-9]{7,32}$/.test(word)&&/[A-Za-z]/.test(word)&&/[0-9]/.test(word))
-  return confidence>=.95;
- return false;
+ // Text can be an abbreviation, a brand name, a serial identifier, or a
+ // dictionary word. Requiring vowels or dictionary membership rejects valid
+ // labels such as NY, BMW, THREADS, XZ, and model numbers.
+ const word=String(text||"").trim();
+ if(!/^[A-Za-z0-9]{2,32}$/.test(word)||
+    !Number.isFinite(confidence))return false;
+ if(word.length===2)return confidence>=.79;
+ if(/^[0-9]+$/.test(word))return confidence>=.83;
+ if(/[0-9]/.test(word))return confidence>=.90;
+ return confidence>=.74;
 }
 // Text-region highlights are tracked separately from neural transcription.
 // Geometry must be present on successive scans; a missed frame does not flicker.
@@ -125,7 +122,7 @@ function createRegionTracker(){
 // character has genuine CNN support. Never inflate a model probability to
 // manufacture a confident-looking English word.
 function decodePrintedWord(predictions,words){
- if(!Array.isArray(predictions)||predictions.length<3||predictions.length>24)return null;
+ if(!Array.isArray(predictions)||predictions.length<2||predictions.length>32)return null;
  const n=predictions.length;
  const options=predictions.map(p=>(p?.top||[]).filter(t=>t&&
    /^[a-zA-Z0-9]$/.test(t.char)&&Number.isFinite(t.confidence)));
@@ -192,7 +189,7 @@ function createGlyphEvidenceTracker(){
   for(const item of items||[]){
    if(!item?.box||!item?.polygon||!Array.isArray(item.predictions))continue;
    const n=item.predictions.length;
-   if(n<3||n>24)continue;
+   if(n<2||n>32)continue;
    let region=regions.find(t=>t.length===n&&near(t.box,item.box)&&!visited.has(t));
    if(!region){
     region={uid:++nextId,length:n,box:item.box,polygon:item.polygon,
@@ -224,7 +221,7 @@ function createTracker(){
   for(const item of detections||[]){
    const text=String(item?.text||"");
    const normalized=normalize(text);
-   if(!/^[a-z]{3,28}$/.test(normalized)||
+   if(!/^[a-z0-9]{2,32}$/.test(normalized)||
       !Number.isFinite(item?.confidence)||item.confidence<.54||
       !item.box||!item.polygon)continue;
    let track=tracks.find(t=>!visited.has(t)&&near(t.box,item.box)&&
