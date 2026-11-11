@@ -1,5 +1,9 @@
-# Local Mac Vision helper compilation output
+# Transient OCR packaging files — actual output is the root index.html
 .ink-build/
+.ocr-build/
+node_modules/
+dist/ink-offline-ocr.js
+package-lock.json
 .DS_Store
 __pycache__/
 *.pyc
