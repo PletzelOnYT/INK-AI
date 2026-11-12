@@ -21,6 +21,7 @@ on:
       - "tests/camera-detail-core.mjs"
       - "tests/camera-detail-browser.py"
       - "tests/camera-fast-focus-browser.py"
+      - "tests/camera-overlay-motion-browser.py"
       - "tests/camera-form-browser.py"
       - "tests/camera-no-false-text-browser.py"
       - "tests/camera-offline-bridge.mjs"
@@ -65,6 +66,7 @@ jobs:
           python3 -m pip install --quiet selenium
           python3 tests/camera-detail-browser.py
           python3 tests/camera-fast-focus-browser.py
+          python3 tests/camera-overlay-motion-browser.py
           python3 tests/camera-shirt-poster-browser.py
           python3 tests/camera-analog-clock-browser.py
           python3 tests/camera-form-browser.py
