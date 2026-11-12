@@ -24048,30 +24048,51 @@ poison
   // the wall stays unchanged, falsely making stale boxes look "stationary".
   function wordPatchChange(next,dx,dy){
    if(!reference||!next||!words.length)return {valid:false,mean:255};
-   let sum=0,changed=0,count=0;
+   let signed=0,total=0,count=0,refEdge=0,matchedEdges=0;
+   const observations=[];
    const scaleX=referenceW/sourceW,scaleY=referenceH/sourceH;
    for(const word of words.slice(0,10)){
     const box=word.box;
     if(!box||!Number.isFinite(box.x0+box.x1+box.y0+box.y1))continue;
-    const x0=Math.max(1,Math.round(box.x0*scaleX));
-    const y0=Math.max(1,Math.round(box.y0*scaleY));
-    const x1=Math.min(referenceW-2,Math.round(box.x1*scaleX));
-    const y1=Math.min(referenceH-2,Math.round(box.y1*scaleY));
+    const x0=Math.max(2,Math.round(box.x0*scaleX));
+    const y0=Math.max(2,Math.round(box.y0*scaleY));
+    const x1=Math.min(referenceW-3,Math.round(box.x1*scaleX));
+    const y1=Math.min(referenceH-3,Math.round(box.y1*scaleY));
     if(x1-x0<3||y1-y0<3)continue;
-    const stepx=Math.max(1,Math.floor((x1-x0)/28));
-    const stepy=Math.max(1,Math.floor((y1-y0)/12));
+    const stepx=Math.max(1,Math.floor((x1-x0)/26));
+    const stepy=Math.max(1,Math.floor((y1-y0)/10));
     for(let y=y0;y<=y1;y+=stepy)for(let x=x0;x<=x1;x+=stepx){
      const xx=x+dx,yy=y+dy;
-     if(xx<0||yy<0||xx>=referenceW||yy>=referenceH)continue;
-     const diff=Math.abs(reference[y*referenceW+x]-
-       next[yy*referenceW+xx]);
-     sum+=diff;changed+=Number(diff>35);count++;
+     if(xx<2||yy<2||xx>=referenceW-2||yy>=referenceH-2)continue;
+     const a=reference[y*referenceW+x],b=next[yy*referenceW+xx];
+     const diff=b-a;
+     signed+=diff;total+=Math.abs(diff);count++;
+     const edgeA=gradient(reference,referenceW,referenceH,x,y);
+     if(edgeA>30){
+      refEdge++;
+      if(gradient(next,referenceW,referenceH,xx,yy)>23)
+       matchedEdges++;
+     }
+     observations.push(diff);
     }
    }
-   const mean=count?sum/count:255;
-   const fraction=count?changed/count:1;
-   return {valid:count>=12&&mean<19&&fraction<.25,
-    mean,changedFraction:fraction,samples:count};
+   if(count<12)return {valid:false,mean:255,samples:count};
+   // Webcam auto-exposure often brightens every pixel in the label by
+   // 15-30 intensity levels. Subtract that shared exposure shift before
+   // testing the actual character shape and strokes.
+   const bias=signed/count,mean=total/count;
+   let residual=0,largeChanges=0;
+   for(const d of observations){
+    const corrected=Math.abs(d-bias);
+    residual+=corrected;
+    if(corrected>42)largeChanges++;
+   }
+   const residualMean=residual/count,changedFraction=largeChanges/count;
+   const edgeAgreement=refEdge?matchedEdges/refEdge:0;
+   const valid=mean<49&&residualMean<25&&changedFraction<.36&&
+    (refEdge<5?residualMean<14:edgeAgreement>=.34);
+   return {valid,mean,residualMean,changedFraction,edgeAgreement,
+    exposureShift:bias,samples:count};
   }
   return {
    capture,
