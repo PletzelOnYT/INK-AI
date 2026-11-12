@@ -24,15 +24,17 @@ try:
         const feed=document.createElement("canvas");
         feed.width=960;feed.height=540;
         const g=feed.getContext("2d");
-        const fixture={x:70,y:85,phase:"old"};
+        const fixture={x:70,y:85,phase:"old",exposure:0};
         const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
         function draw(){
+          g.filter=fixture.exposure?"brightness(1.12)":"none";
           g.fillStyle="#d6d0c1";g.fillRect(0,0,960,540);
           g.fillStyle="#286331";g.fillRect(fixture.x,fixture.y,255,275);
           g.fillStyle="#e9e7db";
           g.fillRect(fixture.x+12,fixture.y+32,231,135);
           g.fillStyle="#145c88";g.font="bold 29px Arial";
           g.fillText("PELLEGRINO",fixture.x+23,fixture.y+91);
+          g.filter="none";
         }
         draw();
         const loop=setInterval(draw,50);
@@ -91,6 +93,13 @@ try:
         if(initially.marked<12)
           throw Error("Original text box was not on the bottle: "+
             JSON.stringify(initially));
+        // Exposure fluctuations must not make valid white boxes disappear.
+        fixture.exposure=1;
+        await sleep(430);
+        const exposure=overlayStats(70,85);
+        if(exposure.marked<12)
+          throw Error("Camera auto-exposure incorrectly hid recognized white boxes: "+
+            JSON.stringify(exposure));
         // Move bottle far away, but keep transcript text for clarity.
         // Old rectangles must be hidden, not painted on the arm/wall.
         fixture.phase="blank";fixture.x=575;fixture.y=190;
@@ -113,7 +122,7 @@ try:
         if(stale.marked>3)
           throw Error("Old box remains after recognition at new position: "+
             JSON.stringify(stale));
-        done({ok:true,initially,afterMove,newPosition,
+        done({ok:true,initially,exposure,afterMove,newPosition,
           stale,elapsedMs:Math.round(performance.now()-started)});
       })().catch(e=>done({ok:false,error:String(e.stack||e)}));
     """)
