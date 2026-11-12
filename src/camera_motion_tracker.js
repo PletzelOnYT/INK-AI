@@ -99,15 +99,35 @@
    return {pixels:greyPixels(ctx.getImageData(0,0,w,h),w,h),
     width:w,height:h,sourceW:sw,sourceH:sh};
   }
-  function staticMatch(next){
-   if(!reference||!next||reference.length!==next.length)return false;
-   let changed=0,count=0,total=0;
-   const stride=Math.max(1,Math.floor(next.length/600));
-   for(let i=0;i<next.length;i+=stride){
-    const delta=Math.abs(next[i]-reference[i]);
-    total+=delta;changed+=Number(delta>26);count++;
+  // Confirm alignment inside EACH recognized word. Comparing the entire
+  // room is unsafe: a moving bottle can occupy only 4% of the frame while
+  // the wall stays unchanged, falsely making stale boxes look "stationary".
+  function wordPatchChange(next,dx,dy){
+   if(!reference||!next||!words.length)return {valid:false,mean:255};
+   let sum=0,changed=0,count=0;
+   const scaleX=referenceW/sourceW,scaleY=referenceH/sourceH;
+   for(const word of words.slice(0,10)){
+    const box=word.box;
+    if(!box||!Number.isFinite(box.x0+box.x1+box.y0+box.y1))continue;
+    const x0=Math.max(1,Math.round(box.x0*scaleX));
+    const y0=Math.max(1,Math.round(box.y0*scaleY));
+    const x1=Math.min(referenceW-2,Math.round(box.x1*scaleX));
+    const y1=Math.min(referenceH-2,Math.round(box.y1*scaleY));
+    if(x1-x0<3||y1-y0<3)continue;
+    const stepx=Math.max(1,Math.floor((x1-x0)/28));
+    const stepy=Math.max(1,Math.floor((y1-y0)/12));
+    for(let y=y0;y<=y1;y+=stepy)for(let x=x0;x<=x1;x+=stepx){
+     const xx=x+dx,yy=y+dy;
+     if(xx<0||yy<0||xx>=referenceW||yy>=referenceH)continue;
+     const diff=Math.abs(reference[y*referenceW+x]-
+       next[yy*referenceW+xx]);
+     sum+=diff;changed+=Number(diff>35);count++;
+    }
    }
-   return total/Math.max(1,count)<8&&changed/Math.max(1,count)<.13;
+   const mean=count?sum/count:255;
+   const fraction=count?changed/count:1;
+   return {valid:count>=12&&mean<19&&fraction<.25,
+    mean,changedFraction:fraction,samples:count};
   }
   return {
    capture,
@@ -131,24 +151,17 @@
     }
     let result=matchTranslation(reference,frame.pixels,
      referenceW,referenceH,anchors);
-    // A poor optical-flow score is not proof that the paper disappeared.
-    // Camera auto-exposure, motion blur and clothing folds can disrupt
-    // gradients even when the printed words are still visible.
-    if(!result.valid&&staticMatch(frame.pixels))
-     result={valid:true,dx:0,dy:0,error:0,stationary:true};
+    const movedPatch=wordPatchChange(frame.pixels,result.dx,result.dy);
+    if(result.valid&&!movedPatch.valid)
+     result={...result,valid:false,reason:"word-pixels-changed"};
     if(!result.valid){
-     let change=0,changed=0,count=0;
-     for(let i=0;i<reference.length;i+=Math.max(1,
-       Math.floor(reference.length/900))){
-      const diff=Math.abs(reference[i]-frame.pixels[i]);
-      change+=diff;
-      changed+=Number(diff>35);
-      count++;
-     }
-     const difference=change/Math.max(1,count);
-     const changedFraction=changed/Math.max(1,count);
-     result={...result,sceneChanged:difference>34&&
-      changedFraction>.46,difference,changedFraction};
+     const samePatch=wordPatchChange(frame.pixels,0,0);
+     if(samePatch.valid)
+      result={valid:true,dx:0,dy:0,error:0,stationary:true,
+       wordDifference:samePatch.mean};
+     else
+      result={...result,dx:0,dy:0,sceneChanged:true,
+       wordDifference:samePatch.mean,reason:"word-pixels-changed"};
     }
     last={...result,dx:result.dx*sourceW/referenceW,
      dy:result.dy*sourceH/referenceH};
