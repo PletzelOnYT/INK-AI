@@ -21,9 +21,8 @@ sceneCanvas.width=24;sceneCanvas.height=14;
 const sceneContext=sceneCanvas.getContext("2d",{willReadFrequently:true});
 const cache=new Map();
 let lineRuntime=null,lineInit=null,offlineClient=null,offlineFailures=0;
-const motion=window.InkCameraMotion?.create?.()||null;
-let latestOCRState=null,motionRAF=0,lastMotionPaint=0;
-let motionUncertainSince=0,hardSceneFrames=0,lastGoodMotion=null;
+let motionRAF=0,lastMotionPaint=0;
+let overlayTracks=[];
 window.__inkCameraLineReady=false;
 async function loadNativeLineOCR(){
  if(lineInit||!window.InkLineRuntime)return lineInit;
@@ -71,10 +70,10 @@ function show(text,muted=true){
  output.dataset.muted=String(muted);
 }
 function clearMarks(){hg.clearRect(0,0,overlay.width,overlay.height)}
-// Track only OCR-verified rectangles between slow neural inference calls.
+// OCR transcript history and VERIFIED highlight positions are independent.
+// A bottle may move while its old words remain in the transcript.
 function shiftVerifiedState(state,dx,dy){
- if(!state?.words)return state;
- return {...state,words:state.words.map(word=>{
+ return {...state,words:(state.words||[]).map(word=>{
   const box=word.box?{x0:word.box.x0+dx,y0:word.box.y0+dy,
    x1:word.box.x1+dx,y1:word.box.y1+dy}:undefined;
   const points=Array.isArray(word.points)?word.points.map(p=>
@@ -82,40 +81,77 @@ function shiftVerifiedState(state,dx,dy){
   return {...word,...(box?{box}:{}),...(points?{points}:{})};
  })};
 }
+function overlapArea(a,b){
+ if(!a||!b)return 0;
+ const w=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0));
+ const h=Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0));
+ return w*h/Math.max(1,Math.min(
+  (a.x1-a.x0)*(a.y1-a.y0),(b.x1-b.x0)*(b.y1-b.y0)));
+}
+function registerVerifiedBoxes(sourceFrame,payload,now){
+ if(!sourceFrame||!window.InkCameraMotion?.create||!payload?.words?.length)
+  return;
+ const fresh=payload.words.filter(w=>w?.box&&w.text&&
+  Number.isFinite(w.box.x0+w.box.x1+w.box.y0+w.box.y1));
+ if(!fresh.length)return;
+ // A fresh OCR observation replaces the previous box for the same word,
+ // without discarding unrelated labels from another crop quadrant.
+ overlayTracks=overlayTracks.filter(track=>!track.words.some(old=>
+  fresh.some(word=>String(old.text).toLowerCase()===
+   String(word.text).toLowerCase()&&
+   overlapArea(word.box,old.box)>.25)));
+ const reader=window.InkCameraMotion.create();
+ reader.setReference(sourceFrame,fresh,payload.width,payload.height);
+ overlayTracks.push({reader,words:fresh,seenAt:now,bad:0,
+  state:{sourceWidth:payload.width,sourceHeight:payload.height,
+   words:fresh}});
+ overlayTracks=overlayTracks.slice(-12);
+}
+function renderVerifiedBoxes(now){
+ if(!offlineClient||!video.videoWidth)return;
+ const visible=[],keep=[];
+ let uncertain=0;
+ for(const track of overlayTracks){
+  if(now-track.seenAt>6500)continue;
+  try{
+   const position=track.reader.update(video,now);
+   if(position.valid){
+    track.bad=0;
+    for(const word of shiftVerifiedState(track.state,
+      position.dx,position.dy).words)
+     visible.push({word,seenAt:track.seenAt});
+    keep.push(track);
+   }else{
+    track.bad++;uncertain++;
+    // Never show a box on unverified pixels. Allow one dropped frame
+    // before retiring its reference entirely.
+    if(track.bad<2)keep.push(track);
+   }
+  }catch(_){/* Failed validation never authorizes stale rectangles. */}
+ }
+ overlayTracks=keep;
+ visible.sort((a,b)=>b.seenAt-a.seenAt);
+ const distinct=[];
+ for(const {word} of visible){
+  if(distinct.some(old=>
+   String(old.text).toLowerCase()===String(word.text).toLowerCase()&&
+   overlapArea(old.box,word.box)>.3))continue;
+  distinct.push(word);
+ }
+ offlineClient.paint(overlay,video,board,{
+  sourceWidth:video.videoWidth,sourceHeight:video.videoHeight,
+  words:distinct});
+ window.__inkCameraOverlayStats={
+  anchoredRegions:overlayTracks.length,visibleBoxes:distinct.length,
+  unverifiedTracks:uncertain};
+}
 function motionTick(now){
  motionRAF=0;
  if(!active)return;
- if(!frozen&&!document.hidden&&offlineClient&&latestOCRState&&motion&&
+ if(!frozen&&!document.hidden&&offlineClient&&
     video.readyState>=2&&now-lastMotionPaint>=85){
   lastMotionPaint=now;
-  try{
-   const position=motion.update(video,now);
-   window.__inkCameraMotionStats={...position,at:now};
-   if(position.valid){
-    motionUncertainSince=0;hardSceneFrames=0;lastGoodMotion=position;
-    offlineClient.paint(overlay,video,board,
-      shiftVerifiedState(latestOCRState,position.dx,position.dy));
-   }else{
-    // Never erase all highlight boxes because a SINGLE optical-flow
-    // comparison failed. Lighting/exposure changes often cause that.
-    if(!motionUncertainSince)motionUncertainSince=now;
-    hardSceneFrames=position.sceneChanged?hardSceneFrames+1:0;
-    if(hardSceneFrames>=3){
-     latestOCRState=null;motion?.reset();
-     offlineClient.clearTranscript?.();
-     window.__inkCameraText="";window.__inkCameraWords=[];
-     show("Scanning the new scene…",true);
-     clearMarks();hardSceneFrames=0;motionUncertainSince=0;
-     lastGoodMotion=null;
-    }else if(now-motionUncertainSince>2400){
-     // Unverified locations expire only after a grace period; the OCR
-     // transcript can persist until fresh recognition proves replacement.
-     clearMarks();
-    }
-    // Until then, keep the LAST painted, verified box instead of
-    // alternating between a visible and an empty overlay each 85 ms.
-   }
-  }catch(_){/* OCR continues if an optional tracking sample fails. */}
+  renderVerifiedBoxes(now);
  }
  motionRAF=requestAnimationFrame(motionTick);
 }
@@ -154,8 +190,7 @@ function toggleFreeze(){
 
 function stop(){
  if(motionRAF&&typeof cancelAnimationFrame==="function")cancelAnimationFrame(motionRAF);
- motionRAF=0;lastMotionPaint=0;latestOCRState=null;motion?.reset();
- motionUncertainSince=0;hardSceneFrames=0;lastGoodMotion=null;
+ motionRAF=0;lastMotionPaint=0;overlayTracks=[];
  active=false;epoch++;freezeRevision++;
  cancelCameraSchedule();
  if(stream)stream.getTracks().forEach(t=>t.stop());
@@ -169,7 +204,7 @@ function stop(){
  tracker.reset();regionTracker.reset();glyphTracker.reset();sceneMonitor.reset();cache.clear();
  if(lineRuntime){lineRuntime.terminate();lineRuntime=null}
  if(offlineClient){offlineClient.reset();offlineClient=null}
- latestOCRState=null;motion?.reset();
+ overlayTracks=[];
  offlineFailures=0;window.__inkCameraEngine="ink-print-cnn-rotated";
  lineInit=null;window.__inkCameraLineReady=false;
  captureWidth=800;usedDocumentUpscale=false;
@@ -540,7 +575,10 @@ async function scan(id){
   const started=performance.now();
   // Reference pixels are sampled before OCR, not from a newer webcam frame.
   let sourceFrame=null;
-  try{sourceFrame=motion?.capture(video)||null}catch(_){}
+  try{
+   if(window.InkCameraMotion?.create)
+    sourceFrame=window.InkCameraMotion.create().capture(video);
+  }catch(_){}
   try{
    const payload=await offlineClient.recognize(video);
    if(!active||id!==epoch||frozen||document.hidden||revision!==freezeRevision)return;
@@ -557,12 +595,10 @@ async function scan(id){
       motion:window.__inkCameraMotionStats||null};
     window.__inkCameraText=current.text;
     window.__inkCameraWords=current.words;
-    latestOCRState=current;
-    motionUncertainSince=0;hardSceneFrames=0;
-    if(motion&&sourceFrame)
-     motion.setReference(sourceFrame,current.words,
-      video.videoWidth,video.videoHeight);
-    offlineClient.paint(overlay,video,board,current);
+    // Only words seen in THIS frame become fresh visual anchors.
+    // Historic transcript boxes can never be reanchored to current pixels.
+    registerVerifiedBoxes(sourceFrame,payload,performance.now());
+    renderVerifiedBoxes(performance.now());
     if(current.text)show(current.text,false);
     else show("Point the camera at printed or handwritten text.");
     const metrics=window.__inkCameraStats;
